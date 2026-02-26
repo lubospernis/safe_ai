@@ -148,14 +148,18 @@ def download_zip(
 # ---------------------------------------------------------------------------
 
 
-def connect_motherduck(token: str, database: str, proxy_url: str = "") -> duckdb.DuckDBPyConnection:
-    """Open an authenticated connection to MotherDuck."""
-    conn_str = f"md:{database}?motherduck_token={token}"
+def connect_motherduck(database: str, proxy_url: str = "") -> duckdb.DuckDBPyConnection:
+    """Open an authenticated connection to MotherDuck.
+
+    Authentication is handled via the MOTHERDUCK_TOKEN environment variable,
+    which DuckDB reads automatically — the token is never embedded in the
+    connection string.
+    """
     log.info("Connecting to MotherDuck database '%s' …", database)
     duckdb_cfg: dict = {}
     if proxy_url:
         duckdb_cfg["http_proxy"] = proxy_url
-    conn = duckdb.connect(conn_str, config=duckdb_cfg)
+    conn = duckdb.connect(f"md:{database}", config=duckdb_cfg)
     log.info("Connected.")
     return conn
 
@@ -361,7 +365,7 @@ def run() -> None:  # noqa: C901 (complexity is intentional — one clear flow)
     # ------------------------------------------------------------------
     # 1. Connect to MotherDuck and verify DDL
     # ------------------------------------------------------------------
-    conn = connect_motherduck(token, md_cfg["database"], proxy_url)
+    conn = connect_motherduck(md_cfg["database"], proxy_url)
     ensure_schema_and_tables(conn, cfg)
 
     # ------------------------------------------------------------------

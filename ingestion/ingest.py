@@ -148,37 +148,10 @@ def download_zip(
 # ---------------------------------------------------------------------------
 
 
-def connect_motherduck(
-    token: str, database: str, proxy_url: str = "", extension_local_path: str = ""
-) -> duckdb.DuckDBPyConnection:
-    """Open an authenticated connection to MotherDuck.
-
-    If *extension_local_path* is set, the motherduck extension is installed
-    from that local file (useful when the network extension CDN is unreachable).
-    Otherwise a normal network install is attempted.
-    """
-    log.info("Pre-installing motherduck extension …")
-    try:
-        setup = duckdb.connect(":memory:")
-        if extension_local_path:
-            local_path = str(Path(extension_local_path).expanduser())
-            log.info("Installing from local file: %s", local_path)
-            setup.execute(f"INSTALL '{local_path}'")
-        else:
-            if proxy_url:
-                setup.execute(f"SET http_proxy='{proxy_url}'")
-                log.info("DuckDB proxy: %s", proxy_url)
-            setup.execute("INSTALL motherduck")
-        setup.close()
-        log.info("Extension installed/verified.")
-    except Exception as pre_err:
-        # Swallow — likely already installed; the main connect will surface any real error.
-        log.debug("Pre-install step: %s", pre_err)
-
+def connect_motherduck(token: str, database: str, proxy_url: str = "") -> duckdb.DuckDBPyConnection:
+    """Open an authenticated connection to MotherDuck."""
     conn_str = f"md:{database}?motherduck_token={token}"
     log.info("Connecting to MotherDuck database '%s' …", database)
-    # Pass proxy via config= so it is active before the motherduck extension
-    # initialises and makes its first outbound call to api.motherduck.com.
     duckdb_cfg: dict = {}
     if proxy_url:
         duckdb_cfg["http_proxy"] = proxy_url
@@ -384,12 +357,11 @@ def run() -> None:  # noqa: C901 (complexity is intentional — one clear flow)
     schema = md_cfg["schema"]
     table = md_cfg["table"]
     log_table = md_cfg["log_table"]
-    ext_path: str = md_cfg.get("extension_local_path", "").strip()
 
     # ------------------------------------------------------------------
     # 1. Connect to MotherDuck and verify DDL
     # ------------------------------------------------------------------
-    conn = connect_motherduck(token, md_cfg["database"], proxy_url, ext_path)
+    conn = connect_motherduck(token, md_cfg["database"], proxy_url)
     ensure_schema_and_tables(conn, cfg)
 
     # ------------------------------------------------------------------

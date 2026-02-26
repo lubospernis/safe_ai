@@ -1,0 +1,26 @@
+ingestion:
+  # Primary download URL for the ECB SAFE microdata zip.
+  # Updated automatically if a 404 is encountered and a new URL is scraped.
+  zip_url: "https://www.ecb.europa.eu/stats/ecb_surveys/safe/shared/pdf/ecb.SAFE_microdata.zip"
+
+  # Fallback page to scrape for a .zip link when zip_url returns 404.
+  fallback_scrape_url: "https://www.ecb.europa.eu/stats/ecb_surveys/safe/html/data.en.html"
+
+  # HTTP request timeout in seconds.
+  request_timeout_seconds: 60
+
+  # User-Agent sent with every HTTP request.
+  user_agent: "safe-ai-ingestion/1.0 (research pipeline; contact: ops@example.com)"
+
+motherduck:
+  # MotherDuck database name.  The token is read from the MOTHERDUCK_TOKEN env var.
+  database: "safe_ai"
+
+  # Schema that holds all raw / landing tables.
+  schema: "raw"
+
+  # Table that receives the loaded microdata rows.
+  table: "safe_microdata"
+
+  # Table that records every ingest run (success, skip, or error).
+  log_table: "ingestion_log"

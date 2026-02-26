@@ -1,0 +1,114 @@
+name: ECB SAFE Microdata — Ingestion
+
+on:
+  # Run on the 1st of every month at 06:00 UTC
+  schedule:
+    - cron: "0 6 1 * *"
+
+  # Allow one-click manual runs from the Actions tab (with optional override)
+  workflow_dispatch:
+    inputs:
+      zip_url_override:
+        description: >
+          Optional: override the zip URL from config.yaml for this run only.
+          Leave blank to use the value already in config.yaml.
+        required: false
+        default: ""
+        type: string
+
+      dry_run:
+        description: "Dry run — print what would happen but do not write to MotherDuck."
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+permissions:
+  contents: write   # allows the workflow to commit an updated config.yaml
+
+concurrency:
+  group: ecb-safe-ingestion
+  cancel-in-progress: false   # never kill a running ingest mid-download
+
+jobs:
+  ingest:
+    name: Ingest ECB SAFE Microdata
+    runs-on: ubuntu-latest
+
+    steps:
+      # ------------------------------------------------------------------ #
+      # 1. Checkout                                                          #
+      # ------------------------------------------------------------------ #
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Fetch full history so we can commit back config.yaml if the URL changes
+          fetch-depth: 0
+
+      # ------------------------------------------------------------------ #
+      # 2. Python setup                                                      #
+      # ------------------------------------------------------------------ #
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install --upgrade pip && pip install -r requirements.txt
+
+      # ------------------------------------------------------------------ #
+      # 3. (Optional) Override zip_url in config.yaml                       #
+      # ------------------------------------------------------------------ #
+      - name: Apply zip_url override
+        if: ${{ github.event.inputs.zip_url_override != '' }}
+        env:
+          OVERRIDE_URL: ${{ github.event.inputs.zip_url_override }}
+        run: |
+          python - <<'EOF'
+          import os, yaml
+          from pathlib import Path
+          cfg_path = Path("ingestion/config.yaml")
+          with cfg_path.open() as fh:
+              cfg = yaml.safe_load(fh)
+          cfg["ingestion"]["zip_url"] = os.environ["OVERRIDE_URL"]
+          with cfg_path.open("w") as fh:
+              yaml.dump(cfg, fh, default_flow_style=False, allow_unicode=True)
+          print("zip_url overridden to:", os.environ["OVERRIDE_URL"])
+          EOF
+
+      # ------------------------------------------------------------------ #
+      # 4. Run the ingestion engine                                          #
+      # ------------------------------------------------------------------ #
+      - name: Run ingestion
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+        run: python ingestion/ingest.py
+
+      - name: Dry-run mode — skip actual ingest
+        if: ${{ github.event.inputs.dry_run == 'true' }}
+        run: |
+          echo "DRY RUN — ingestion skipped."
+          echo "Would have run: python ingestion/ingest.py"
+          cat ingestion/config.yaml
+
+      # ------------------------------------------------------------------ #
+      # 5. Commit back an updated config.yaml (if the URL was scraped)      #
+      # ------------------------------------------------------------------ #
+      - name: Commit updated config.yaml
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet ingestion/config.yaml; then
+            echo "config.yaml unchanged — nothing to commit."
+          else
+            git add ingestion/config.yaml
+            git commit -m "chore(ingestion): update zip_url after 404 fallback [skip ci]"
+            git push
+            echo "config.yaml committed and pushed."
+          fi

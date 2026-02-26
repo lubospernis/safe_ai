@@ -1,0 +1,11 @@
+# dlt secrets — never commit credentials
+.dlt/secrets.toml
+
+# dlt pipeline state and local DuckDB files
+*.duckdb
+*.duckdb.wal
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/

@@ -1,0 +1,38 @@
+name: ECB SAFE Microdata — dlt Ingestion
+
+on:
+  schedule:
+    - cron: "0 6 1 * *"   # 1st of every month at 06:00 UTC
+
+  workflow_dispatch:       # manual trigger from the Actions tab
+
+concurrency:
+  group: safe-microdata-ingestion
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    name: Run dlt pipeline
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install --upgrade pip && pip install -r requirements.txt
+
+      - name: Run dlt pipeline
+        env:
+          # dlt maps DESTINATION__MOTHERDUCK__CREDENTIALS__PASSWORD
+          # → destination.motherduck.credentials.password in secrets.toml
+          DESTINATION__MOTHERDUCK__CREDENTIALS__PASSWORD: ${{ secrets.MOTHERDUCK_TOKEN }}
+          # Required by MotherDuck's internal HTTPS component
+          HOME: /home/runner
+        run: python pipeline.py

@@ -1,0 +1,10 @@
+[sources.safe_microdata_source]
+zip_url             = "https://www.ecb.europa.eu/stats/ecb_surveys/safe/shared/pdf/ecb.SAFE_microdata.zip"
+fallback_scrape_url = "https://www.ecb.europa.eu/stats/ecb_surveys/safe/html/data.en.html"
+request_timeout     = 60
+
+[destination.motherduck.credentials]
+database = "safe_ai"
+
+[load]
+workers = 3

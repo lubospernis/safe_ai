@@ -84,10 +84,13 @@ def save_zip_url(url: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def build_session(user_agent: str, timeout: int) -> requests.Session:
+def build_session(user_agent: str, timeout: int, proxy_url: str = "") -> requests.Session:
     session = requests.Session()
     session.headers.update({"User-Agent": user_agent})
     session.request_timeout = timeout  # stored for callers to reuse
+    if proxy_url:
+        session.proxies.update({"http": proxy_url, "https": proxy_url})
+        log.info("requests proxy: %s", proxy_url)
     return session
 
 
@@ -145,11 +148,41 @@ def download_zip(
 # ---------------------------------------------------------------------------
 
 
-def connect_motherduck(token: str, database: str) -> duckdb.DuckDBPyConnection:
-    """Open an authenticated connection to MotherDuck."""
+def connect_motherduck(
+    token: str, database: str, proxy_url: str = "", extension_local_path: str = ""
+) -> duckdb.DuckDBPyConnection:
+    """Open an authenticated connection to MotherDuck.
+
+    If *extension_local_path* is set, the motherduck extension is installed
+    from that local file (useful when the network extension CDN is unreachable).
+    Otherwise a normal network install is attempted.
+    """
+    log.info("Pre-installing motherduck extension …")
+    try:
+        setup = duckdb.connect(":memory:")
+        if extension_local_path:
+            local_path = str(Path(extension_local_path).expanduser())
+            log.info("Installing from local file: %s", local_path)
+            setup.execute(f"INSTALL '{local_path}'")
+        else:
+            if proxy_url:
+                setup.execute(f"SET http_proxy='{proxy_url}'")
+                log.info("DuckDB proxy: %s", proxy_url)
+            setup.execute("INSTALL motherduck")
+        setup.close()
+        log.info("Extension installed/verified.")
+    except Exception as pre_err:
+        # Swallow — likely already installed; the main connect will surface any real error.
+        log.debug("Pre-install step: %s", pre_err)
+
     conn_str = f"md:{database}?motherduck_token={token}"
     log.info("Connecting to MotherDuck database '%s' …", database)
-    conn = duckdb.connect(conn_str)
+    # Pass proxy via config= so it is active before the motherduck extension
+    # initialises and makes its first outbound call to api.motherduck.com.
+    duckdb_cfg: dict = {}
+    if proxy_url:
+        duckdb_cfg["http_proxy"] = proxy_url
+    conn = duckdb.connect(conn_str, config=duckdb_cfg)
     log.info("Connected.")
     return conn
 
@@ -345,16 +378,18 @@ def run() -> None:  # noqa: C901 (complexity is intentional — one clear flow)
 
     zip_url: str = ing["zip_url"]
     timeout: int = int(ing["request_timeout_seconds"])
-    session = build_session(ing["user_agent"], timeout)
+    proxy_url: str = ing.get("proxy_url", "").strip()
+    session = build_session(ing["user_agent"], timeout, proxy_url)
 
     schema = md_cfg["schema"]
     table = md_cfg["table"]
     log_table = md_cfg["log_table"]
+    ext_path: str = md_cfg.get("extension_local_path", "").strip()
 
     # ------------------------------------------------------------------
     # 1. Connect to MotherDuck and verify DDL
     # ------------------------------------------------------------------
-    conn = connect_motherduck(token, md_cfg["database"])
+    conn = connect_motherduck(token, md_cfg["database"], proxy_url, ext_path)
     ensure_schema_and_tables(conn, cfg)
 
     # ------------------------------------------------------------------

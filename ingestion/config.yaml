@@ -10,11 +10,15 @@ ingestion:
   request_timeout_seconds: 60
 
   # User-Agent sent with every HTTP request.
-  user_agent: "safe-ai-ingestion/1.0 (research pipeline; contact: ops@example.com)"
+  user_agent: "safe-ai-ingestion/1.0 (research pipeline; contact: lubos.pernis@gmail.com)"
+
+  # Corporate HTTP/HTTPS proxy (leave blank or omit if not needed).
+  proxy_url: "http://proxy.nbs.sk:3128"
 
 motherduck:
   # MotherDuck database name.  The token is read from the MOTHERDUCK_TOKEN env var.
   database: "safe_ai"
+
 
   # Schema that holds all raw / landing tables.
   schema: "raw"

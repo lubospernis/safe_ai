@@ -3,8 +3,6 @@ zip_url             = "https://www.ecb.europa.eu/stats/ecb_surveys/safe/shared/p
 fallback_scrape_url = "https://www.ecb.europa.eu/stats/ecb_surveys/safe/html/data.en.html"
 request_timeout     = 60
 
-[destination.motherduck.credentials]
-database = "safe_ai"
 
 [load]
 workers = 3

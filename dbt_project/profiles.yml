@@ -1,0 +1,10 @@
+safe_ai:
+  target: prod
+  outputs:
+    prod:
+      type: duckdb
+      path: "md:safe_ai"
+      extensions:
+        - motherduck
+      settings:
+        motherduck_token: "{{ env_var('MOTHERDUCK_TOKEN') }}"

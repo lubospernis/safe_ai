@@ -1,0 +1,8 @@
+version: 2
+
+sources:
+  - name: raw
+    database: my_db
+    schema: raw
+    tables:
+      - name: safe_microdata

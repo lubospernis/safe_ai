@@ -1,0 +1,50 @@
+name: ECB SAFE — dbt Transformations
+
+on:
+  # Triggers automatically when the ingestion workflow finishes successfully.
+  workflow_run:
+    workflows: ["ECB SAFE Microdata — dlt Ingestion"]
+    types:
+      - completed
+
+  # Also allow manual runs from the Actions tab.
+  workflow_dispatch:
+
+jobs:
+  transform:
+    name: Run dbt models
+    runs-on: ubuntu-latest
+
+    # For workflow_run triggers, skip if the upstream run failed.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: dbt_project/requirements.txt
+
+      - name: Install dbt
+        run: pip install -r dbt_project/requirements.txt
+
+      - name: Pre-cache MotherDuck extension
+        run: |
+          DUCKDB_VERSION=$(python -c "import duckdb; print(duckdb.__version__)")
+          EXT_DIR="$HOME/.duckdb/extensions/v${DUCKDB_VERSION}/linux_amd64"
+          mkdir -p "$EXT_DIR"
+          curl -fsSL \
+            "https://extensions.duckdb.org/v${DUCKDB_VERSION}/linux_amd64/motherduck.duckdb_extension.gz" \
+            | gunzip > "$EXT_DIR/motherduck.duckdb_extension"
+          echo "MotherDuck extension v${DUCKDB_VERSION} cached."
+
+      - name: Run dbt models
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+        run: |
+          cd dbt_project
+          dbt run --profiles-dir . --project-dir .

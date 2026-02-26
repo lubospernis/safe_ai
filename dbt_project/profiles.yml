@@ -3,7 +3,7 @@ safe_ai:
   outputs:
     prod:
       type: duckdb
-      path: "md:safe_ai"
+      path: "md:my_db"
       extensions:
         - motherduck
       settings:

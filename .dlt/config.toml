@@ -4,5 +4,8 @@ fallback_scrape_url = "https://www.ecb.europa.eu/stats/ecb_surveys/safe/html/dat
 request_timeout     = 60
 
 
+[destination.motherduck.credentials]
+database = "my_db"
+
 [load]
 workers = 3

@@ -44,7 +44,7 @@ jobs:
 
       - name: Run dbt models
         env:
-          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+          motherduck_token: ${{ secrets.MOTHERDUCK_TOKEN }}
         run: |
           cd dbt_project
           dbt run --profiles-dir . --project-dir .

@@ -4,7 +4,12 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:duckdb.org)",
       "WebFetch(domain:motherduck.com)",
-      "WebFetch(domain:dlthub.com)"
+      "WebFetch(domain:dlthub.com)",
+      "mcp__claude_ai_MotherDuck__list_databases",
+      "mcp__claude_ai_MotherDuck__list_tables",
+      "mcp__claude_ai_MotherDuck__list_columns",
+      "mcp__claude_ai_MotherDuck__query",
+      "Bash(python3 -c \":*)"
     ]
   }
 }

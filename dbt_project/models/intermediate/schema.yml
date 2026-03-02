@@ -1,0 +1,65 @@
+version: 2
+
+models:
+
+  - name: int_safe__q0b_pressingness
+    description: >
+      Long-format model for Q0B: "How pressing are the following problems for your firm?"
+      (scale 1–10, where 1 = not pressing at all, 10 = extremely pressing).
+      One row per firm (permid) × wave × problem category (7 categories).
+      All problem categories and firm characteristics are decoded to human-readable labels.
+      Non-responses (-1, -2, 99) are retained and flagged via is_nonresponse.
+
+    config:
+      tags: ["safe", "ecb", "survey", "intermediate", "q0b"]
+
+    columns:
+      - name: permid
+        description: Unique anonymised enterprise identifier. Stable across all waves.
+      - name: wave_number
+        description: Survey wave (1–37). 1 = 2009H1, 37 = 2025Q4.
+      - name: problem_id
+        description: >
+          Problem category code (1–7).
+          1=Finding customers, 2=Competition, 3=Access to finance,
+          4=Costs of production or labour,
+          5=Availability of skilled staff or experienced managers,
+          6=Regulation, 7=Other.
+      - name: problem_label
+        description: Human-readable label for the problem category (decoded from problem_id).
+      - name: pressingness_score
+        description: >
+          How pressing the problem is on a scale 1 (not pressing at all) to 10
+          (extremely pressing). Non-response codes: -1 = not applicable,
+          -2 = don't know, 99 = not asked.
+      - name: is_nonresponse
+        description: True when pressingness_score is a non-response code (-1, -2, 99).
+      - name: q0b_open
+        description: >
+          Free-text specification for problem_id = 7 (Other). NULL for all other categories.
+          Interviewers classify responses into: 11=taxes, 12=cash flow/liquidity,
+          13=bureaucracy, 14=exchange rate fluctuations,
+          15=political instability/economic crisis, 17=coronavirus,
+          18=war in Ukraine, 19=rising inflation.
+      - name: country_code
+        description: ISO 3166-1 alpha-2 country code of the respondent enterprise.
+      - name: country_name
+        description: Full English country name.
+      - name: firm_size_code
+        description: "Firm size code: 1=micro (1–9), 2=small (10–49), 3=medium (50–249), 4=large (250+)."
+      - name: firm_size_label
+        description: Human-readable firm size label (micro / small / medium / large).
+      - name: sector_code
+        description: "NACE sector code: 2=construction, 4=trade, 5=transport, 12=industry, 13=other services."
+      - name: sector_label
+        description: Human-readable sector label.
+      - name: survey_year
+        description: Calendar year of the survey wave.
+      - name: survey_period
+        description: "Survey half-year or quarter (e.g. H1, H2, Q1, Q2, Q3, Q4)."
+      - name: survey_period_label
+        description: "Human-readable period label (e.g. '2024 Q3')."
+      - name: weight_common
+        description: >
+          Main ECB calibration weight. Use for all standard weighted analysis.
+          NULL for firms where the weight was not assigned.

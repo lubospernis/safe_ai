@@ -15,3 +15,6 @@ models:
   safe_ai:
     +materialized: table
     +schema: safe
+    +persist_docs:
+      relation: true
+      columns: true

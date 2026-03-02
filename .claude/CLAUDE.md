@@ -1,7 +1,13 @@
-When learning how to implement the dbt project and also run queries, consult these files:
+## SAFE Survey Reference Files
 
-1. How the questionnaire actually looks like:  https://www.ecb.europa.eu/stats/accesstofinancesofenterprises/pdf/questionnaire/ecb.safeq202602.en.pdf 
+CRITICAL: Before writing ANY descriptions, labels, or mappings for survey variables (question IDs, answer codes, sub-items), you MUST read the annex.xlsx first. Do NOT rely on prior knowledge — the actual codes differ from common assumptions.
 
-2. User guide (most important): https://www.ecb.europa.eu/stats/pdf/surveys/sme/ecb.safemi.en.pdf
+1. **Questionnaire worksheet (MUST CHECK FIRST for any variable descriptions)**:
+   `/Users/lubospernis/Documents/safe_ai/collateral/annex.xlsx`
+   — The "Questionnaire" sheet has the authoritative question text, sub-item labels, and answer codes for every variable. Always extract the relevant rows before writing descriptions.
 
-3. Questionnaire worksheet in this excel actionally shows what the questions, items and answer code is:  /Users/lubospernis/Documents/safe_ai/collateral/annex.xlsx
+2. How the questionnaire looks to respondents:
+   https://www.ecb.europa.eu/stats/accesstofinancesofenterprises/pdf/questionnaire/ecb.safeq202602.en.pdf
+
+3. User guide / methodology (most important for understanding the data):
+   https://www.ecb.europa.eu/stats/pdf/surveys/sme/ecb.safemi.en.pdf

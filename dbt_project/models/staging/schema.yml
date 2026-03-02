@@ -4,8 +4,10 @@ models:
   - name: stg_safe__microdata
     description: >
       Staging model for the ECB/EC Survey on Access to Finance of Enterprises (SAFE)
-      micro dataset. Casts raw string columns to appropriate types, corrects column
-      naming, and documents every variable against the official methodology.
+      micro dataset. Casts raw string columns to appropriate types and corrects column
+      naming. Documents firm demographics, survey weights, firm health flags, and ECB
+      composite indicators. Question-level documentation (Q0–Q34, QA/QB series) is
+      found primarily in the intermediate layer models.
 
       Reference: "Methodological information on the survey and user guide for the
       anonymised micro dataset", ECB, February 2026 (ecb.safemi.en.pdf).
@@ -344,3 +346,105 @@ models:
         description: >
           COMPONENT H (3-month). Same as ind_bank_willingness_6m but derived from
           three-month reference period responses. Source variable: ind_h_g1.
+
+      # -----------------------------------------------------------------------
+      # SECTION Q0B — PRESSINGNESS OF PROBLEMS (scale 1–10)
+      # -----------------------------------------------------------------------
+      # Q0B: "How pressing are the following problems for your firm on a scale
+      # from 1 to 10, where 1 means 'not pressing at all' and 10 means
+      # 'extremely pressing'?"
+      # Seven problem categories are rated independently. Item 7 ("other") has
+      # an associated open-text field (q0b_7_open).
+      #
+      # Response values:
+      #   1–10 = pressingness score (1 = not pressing, 10 = extremely pressing)
+      #   -1   = not applicable
+      #   -2   = don't know / refused
+      #   99   = not asked (routing — firm skipped this block)
+      #
+      # The _grouped variants (q0b_*_g1) are sparsely populated and NULL in most
+      # recent waves; do not use for current analysis.
+      # -----------------------------------------------------------------------
+      - name: q0b_1
+        description: >
+          Pressingness of FINDING CUSTOMERS / DEMAND on a scale 1 (not pressing at all)
+          to 10 (extremely pressing). Source variable: q0b_1.
+      - name: q0b_1_grouped
+        description: >
+          Grouped/recoded version of q0b_1. Sparsely populated; NULL in most recent waves.
+          Source variable: q0b_1_g1.
+      - name: q0b_2
+        description: >
+          Pressingness of COMPETITION on a scale 1 (not pressing at all) to 10
+          (extremely pressing). Source variable: q0b_2.
+      - name: q0b_2_grouped
+        description: >
+          Grouped/recoded version of q0b_2. Sparsely populated; NULL in most recent waves.
+          Source variable: q0b_2_g1.
+      - name: q0b_3
+        description: >
+          Pressingness of ACCESS TO FINANCE (bank loans, trade credit, equity, debt
+          securities, other external financing) on a scale 1 (not pressing at all) to 10
+          (extremely pressing). Source variable: q0b_3.
+      - name: q0b_3_grouped
+        description: >
+          Grouped/recoded version of q0b_3. Sparsely populated; NULL in most recent waves.
+          Source variable: q0b_3_g1.
+      - name: q0b_4
+        description: >
+          Pressingness of COSTS OF PRODUCTION OR LABOUR on a scale 1 (not pressing at all)
+          to 10 (extremely pressing). Source variable: q0b_4.
+      - name: q0b_4_grouped
+        description: >
+          Grouped/recoded version of q0b_4. Sparsely populated; NULL in most recent waves.
+          Source variable: q0b_4_g1.
+      - name: q0b_5
+        description: >
+          Pressingness of AVAILABILITY OF SKILLED STAFF OR EXPERIENCED MANAGERS on a scale
+          1 (not pressing at all) to 10 (extremely pressing). Source variable: q0b_5.
+      - name: q0b_5_grouped
+        description: >
+          Grouped/recoded version of q0b_5. Sparsely populated; NULL in most recent waves.
+          Source variable: q0b_5_g1.
+      - name: q0b_6
+        description: >
+          Pressingness of REGULATION (e.g. European and national laws, industrial
+          regulations) on a scale 1 (not pressing at all) to 10 (extremely pressing).
+          Source variable: q0b_6.
+      - name: q0b_6_grouped
+        description: >
+          Grouped/recoded version of q0b_6. Sparsely populated; NULL in most recent waves.
+          Source variable: q0b_6_g1.
+      - name: q0b_7
+        description: >
+          Pressingness of OTHER PROBLEMS (firm-specified) on a scale 1 (not pressing at all)
+          to 10 (extremely pressing). Interviewers classify open responses into coded
+          categories (11=taxes, 12=cash flow/liquidity, 13=bureaucracy,
+          14=exchange rate fluctuations, 15=political instability/economic crisis,
+          17=coronavirus, 18=war in Ukraine, 19=rising inflation). Most respondents
+          receive 99 (not asked) as this item is only administered to a sub-sample.
+          Source variable: q0b_7.
+      - name: q0b_7_grouped
+        description: >
+          Grouped/recoded version of q0b_7. Sparsely populated; NULL in most recent waves.
+          Source variable: q0b_7_g1.
+      - name: q0b_7_open
+        description: >
+          Free-text specification of the "other" problem category for respondents who
+          rated q0b_7. VARCHAR; NULL when the respondent did not specify an "other" problem.
+          Source variable: q0b_7_open.
+
+      # -----------------------------------------------------------------------
+      # SECTION Q0 / Q0C — SCREENER AND ROUTING
+      # -----------------------------------------------------------------------
+      - name: q0
+        description: >
+          Screener / routing question. Identifies whether the firm uses external
+          financing. Used to route respondents into the main financing questions.
+          Source variable: q0.
+      - name: q0c
+        description: >
+          Follow-up to Q0B. Asks the respondent to identify the SINGLE most pressing
+          problem from the Q0B list. Integer code corresponding to the sub-item
+          (1–7) rated as most pressing. NULL if Q0B was not asked or respondent
+          could not identify one. Source variable: q0c.

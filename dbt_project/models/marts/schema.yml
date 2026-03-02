@@ -1,0 +1,67 @@
+version: 2
+
+models:
+
+  - name: mart_safe__q0b_pressingness
+    description: >
+      Weighted aggregated pressingness scores for Q0B by country × wave × problem × firm size.
+      All codes are decoded to human-readable labels so that AI tools querying MotherDuck
+      do not need a separate codebook.
+      Source: ECB SAFE survey Q0B ("How pressing are the following problems for your firm?"
+      on a scale 1–10). Non-responses excluded from aggregations.
+
+    config:
+      tags: ["safe", "ecb", "survey", "mart", "q0b"]
+
+    columns:
+      - name: country_code
+        description: ISO 3166-1 alpha-2 country code of the respondent enterprise.
+      - name: country_name
+        description: Full English country name.
+      - name: wave_number
+        description: Survey wave (1–37). 1 = 2009H1, 37 = 2025Q4.
+      - name: survey_year
+        description: Calendar year of the survey wave.
+      - name: survey_period
+        description: "Survey half-year or quarter (e.g. H1, H2, Q1, Q2, Q3, Q4)."
+      - name: survey_period_label
+        description: "Human-readable period label (e.g. '2024 Q3')."
+      - name: problem_id
+        description: >
+          Problem category code (1–7).
+          1=Finding customers, 2=Competition, 3=Access to finance,
+          4=Costs of production or labour,
+          5=Availability of skilled staff or experienced managers,
+          6=Regulation, 7=Other.
+      - name: problem_label
+        description: >
+          Human-readable label for the problem category.
+          Values: Finding customers | Competition | Access to finance |
+          Costs of production or labour | Availability of skilled staff or experienced managers |
+          Regulation | Other.
+      - name: firm_size_code
+        description: "Firm size code: 1=micro (1–9 employees), 2=small (10–49), 3=medium (50–249), 4=large (250+)."
+      - name: firm_size_label
+        description: Human-readable firm size label (micro / small / medium / large).
+      - name: n_respondents
+        description: Count of firms that provided a valid (non-missing) response to this problem category.
+      - name: n_nonresponse
+        description: Count of non-responses (-1, -2, 99) excluded from the aggregations.
+      - name: total_weight
+        description: Sum of weight_common across all valid respondents in this group.
+      - name: avg_pressingness_wtd
+        description: >
+          Weighted average pressingness score (1–10 scale), using weight_common.
+          Higher = more pressing. Rounded to 2 decimal places.
+      - name: avg_pressingness_unwtd
+        description: >
+          Unweighted average pressingness score (1–10 scale) for reference.
+          Rounded to 2 decimal places.
+      - name: pct_high_pressing
+        description: >
+          Percentage (0–100) of valid weighted responses with pressingness score >= 7.
+          Represents firms rating the problem as highly pressing.
+      - name: pct_low_pressing
+        description: >
+          Percentage (0–100) of valid weighted responses with pressingness score <= 3.
+          Represents firms rating the problem as not very pressing.

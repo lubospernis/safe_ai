@@ -4,7 +4,7 @@ models:
 
   - name: mart_safe__q0b_pressingness
     description: >
-      Weighted aggregated pressingness scores for Q0B by country × wave × problem × firm size.
+      Weighted aggregated pressingness scores for Q0B by country × wave × problem.
       All codes are decoded to human-readable labels so that AI tools querying MotherDuck
       do not need a separate codebook.
       Source: ECB SAFE survey Q0B ("How pressing are the following problems for your firm?"

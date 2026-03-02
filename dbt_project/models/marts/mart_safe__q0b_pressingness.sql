@@ -32,6 +32,7 @@ valid as (
 
     select * from int_q0b
     where  weight_common is not null and is_nonresponse = false
+    -- and employee_band_code BETWEEN 1 AND 3
 
 ),
 

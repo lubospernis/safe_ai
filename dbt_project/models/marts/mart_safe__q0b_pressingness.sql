@@ -31,8 +31,7 @@ with int_q0b as (
 valid as (
 
     select * from int_q0b
-    where is_nonresponse = false
-      and weight_common is not null
+    where  weight_common is not null
 
 ),
 
@@ -48,9 +47,6 @@ aggregated as (
         reference_period,
         problem_id,
         problem_label,
-        employee_band_code,
-        firm_size_en,
-
         count(*)                                                as n_respondents,
         sum(case when is_nonresponse then 1 else 0 end)        as n_nonresponse,
         sum(weight_common)                                      as total_weight,
@@ -82,4 +78,4 @@ aggregated as (
 )
 
 select * from aggregated
-order by wave_number, country_code, problem_id, employee_band_code
+order by wave_number, country_code, problem_id

@@ -28,7 +28,15 @@ def main() -> None:
         dataset_name="raw",
     )
 
-    load_info = pipeline.run(safe_microdata_source())
+    source = safe_microdata_source()
+
+    # Materialize to check if there's actually data before running replace
+    data = source
+    if not data:
+        #logger.info("Source yielded no rows — skipping pipeline run to protect target table.")
+        return
+    
+    load_info = pipeline.run(data, write_disposition="replace")
     print(load_info)
 
 

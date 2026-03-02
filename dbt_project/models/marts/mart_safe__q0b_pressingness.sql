@@ -31,7 +31,7 @@ with int_q0b as (
 valid as (
 
     select * from int_q0b
-    where  weight_common is not null
+    where  weight_common is not null and is_nonresponse = false
 
 ),
 

@@ -13,6 +13,5 @@ clean-targets: ["target", "dbt_packages"]
 
 models:
   safe_ai:
-    safe:
-      +materialized: table
-      +schema: safe
+    +materialized: table
+    +schema: safe

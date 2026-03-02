@@ -31,7 +31,7 @@ def main() -> None:
     source = safe_microdata_source()
 
     # Materialize to check if there's actually data before running replace
-    data = source
+    data = list(source)
     if not data:
         #logger.info("Source yielded no rows — skipping pipeline run to protect target table.")
         return

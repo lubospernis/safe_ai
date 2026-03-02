@@ -1,0 +1,346 @@
+version: 2
+
+models:
+  - name: stg_safe__microdata
+    description: >
+      Staging model for the ECB/EC Survey on Access to Finance of Enterprises (SAFE)
+      micro dataset. Casts raw string columns to appropriate types, corrects column
+      naming, and documents every variable against the official methodology.
+
+      Reference: "Methodological information on the survey and user guide for the
+      anonymised micro dataset", ECB, February 2026 (ecb.safemi.en.pdf).
+
+      Two reference period variants exist throughout this model:
+        - _6m  : derived from the six-month reference period questionnaire,
+                 used in Q1 and Q3 (long) waves and the long subsample of mixed waves.
+        - _3m  : derived from the three-month reference period questionnaire,
+                 used in Q2 and Q4 (short) waves and the short subsample of mixed waves.
+      For short waves (Q2/Q4), all _6m columns will be NULL.
+      For long waves (Q1/Q3), both may be populated depending on which subsample
+      the firm was assigned to.
+
+    config:
+      tags: ["safe", "ecb", "survey", "staging"]
+
+    columns:
+
+      # -----------------------------------------------------------------------
+      # IDENTIFIERS & PANEL
+      # -----------------------------------------------------------------------
+      - name: permid
+        description: >
+          Unique anonymised enterprise identifier. Stable across all waves and
+          used for panel tracking. Source variable: permid.
+      - name: wave_number
+        description: >
+          Survey wave identifier. 1-n, where 1 = 2009H1, 2 = 2009H2, ..., 37 = 2025Q4. Source variable: wave.
+      - name: interview_date
+        description: >
+          Date of interview completion. Format: YYYY-MM-DD. Source variable: intdate.
+
+
+      # -----------------------------------------------------------------------
+      # SECTION 1: FIRM DEMOGRAPHICS
+      # -----------------------------------------------------------------------
+      - name: country_code
+        description: >
+          Two-character ISO 3166-1 alpha-2 country code of the respondent enterprise.
+          Assigned from the sample register (Orbis from 2024Q1, Dun & Bradstreet prior),
+          not directly asked of respondents. Source variable: D0.
+          ECB quarterly waves cover: AT, BE, DE, ES, FI, FR, GR, IE, IT, NL, PT, SK.
+          Smallest countries (EE, CY, LV, LT, LU, MT, SI, HR) only appear in
+          Common (Q3) rounds.
+
+      - name: employee_band_code
+        description: >
+          Categorical size class based on number of employees. Source variable: D1_rec,
+          recoded from the numerical D1. Firms with 0 employees or sole owner-operators
+          are screened out.
+          Values:
+            1 = 1–9 employees (micro)
+            2 = 10–49 employees (small)
+            3 = 50–249 employees (medium)
+            4 = 250+ employees (large)
+            9 = Don't know / NA → interview terminated
+
+      - name: enterprise_type_code
+        description: >
+          Legal/organisational type of the enterprise. Source variable: D2.
+          Non-profit enterprises (code 3) are screened out of the survey.
+          For branches (code 5), only respondents knowledgeable about the whole
+          enterprise's finances are retained.
+          Values:
+            2 = Autonomous profit-oriented enterprise (incl. partnerships, cooperatives)
+            3 = Non-profit enterprise → TERMINATED
+            4 = Subsidiary of another enterprise
+            5 = Branch of another enterprise
+            9 = Don't know / NA
+
+      - name: sector_code
+        description: >
+          Main economic activity of the enterprise. Source variable: D3_rec,
+          recoded from D3 open/categorical response. Agriculture (8), public
+          administration (9), financial services (10), and unclassifiable responses
+          (11) are screened out for fresh sample firms.
+          NACE Rev. 2 groupings:
+            2  = Construction (F)
+            12 = Industry (B+C+D+E: mining, manufacturing, energy, water)
+            4  = Wholesale or retail trade (G)
+            5  = Transport (H)
+            13 = Other services (I+J+L+M+N+R+S: hotels, IT, professional, admin, etc.)
+            99 = Don't know / NA
+
+      - name: turnover_code
+        description: >
+          Annual turnover bracket for the reference year (2024 for 2025 waves).
+          Includes all locations in the respondent's country and abroad.
+          Source variable: D4. For non-euro-area countries amounts are converted
+          from euro to national currency.
+          Values:
+            5 = Up to €500,000
+            6 = More than €500,000 and up to €1 million
+            7 = More than €1 million and up to €2 million
+            2 = More than €2 million and up to €10 million
+            3 = More than €10 million and up to €50 million
+            4 = More than €50 million
+            9 = Don't know / NA
+
+      - name: firm_age_code
+        description: >
+          Age of the enterprise in categorical brackets, calculated as the survey
+          year minus the year of first registration. In cases of acquisition, age
+          refers to the acquiring enterprise; in mergers, to the largest entity.
+          Source variable: D5_rec, recoded from numerical D5.
+          Values:
+            1 = 10 years or more
+            2 = 5 years or more, but less than 10 years
+            3 = 2 years or more, but less than 5 years
+            4 = Less than 2 years
+            9 = Don't know / NA
+
+      - name: ownership_code
+        description: >
+          Ownership structure: who holds the largest stake in the enterprise.
+          Source variable: D6.
+          Values:
+            1 = Public shareholders (enterprise listed on stock market)
+            2 = Family or entrepreneurs (more than one owner)
+            3 = Other enterprises or business associates
+            4 = Venture capital or business angels
+            5 = Single owner (natural person, incl. sole proprietor)
+            7 = Other
+            9 = Don't know / NA
+
+      - name: group_membership_raw
+        description: >
+          Raw string indicator of group membership. Source variable: D6b.
+          This is an EC-specific or older-wave variable and is sparsely populated
+          in recent ECB-only quarterly waves. Treat with caution; validate coverage
+          before use in analysis.
+
+      - name: export_share_raw
+        description: >
+          Numerical percentage of total annual turnover accounted for by exports
+          of goods and services (sales to non-residents). Range: 0–100.
+          -99 indicates Don't know / NA, in which case export_share_code is populated
+          instead. Source variable: D7.
+
+      - name: export_share_code
+        description: >
+          Categorical export share bracket, populated when the numerical D7 response
+          was Don't know / NA. Source variable: D7_rec.
+          Values:
+            1 = 0% (enterprise did not export)
+            2 = Less than 25%
+            3 = Between 25% and 50%
+            4 = More than 50%
+            9 = Don't know / NA
+
+      # -----------------------------------------------------------------------
+      # SURVEY WEIGHTS
+      # -----------------------------------------------------------------------
+      - name: weight_common
+        description: >
+          Main calibration weight. Use this for all standard analysis replicating
+          ECB published results. Calibrated using Eurostat Structural Business
+          Statistics (SBS) employment figures, stratified by size class, economic
+          activity and country. Excludes education (P) and health (Q) sectors from
+          calibration targets (revised in 2014H1). Source variable: wgtcommon.
+
+      - name: weight_enterprise
+        description: >
+          EC-specific calibration weight for EC-only questions
+          (Q0, Q1, Q12, Q13, Q14, Q16, Q17, Q19, Q20, Q21, Q22, Q24, Q25).
+          Only populated for the 2009H1 round EC subsample (~3,079 firms).
+          NULL for all subsequent rounds. Source variable: wgtentr.
+
+      - name: weight_old_common
+        description: >
+          Legacy common weight used before the 2014H1 methodology revision.
+          Calculated using post-stratification for rounds 2009H1–H2 and calibration
+          for rounds 2010H1–2013H2. Retained solely to replicate results published
+          prior to 2014H1. Do not use for current analysis. Source variable: wgtoldcommon.
+
+      - name: weight_old_enterprise
+        description: >
+          Legacy EC-specific weight pre-2014H1 revision. Same historical replication
+          purpose as weight_old_common. NULL for all post-2014H1 rows.
+          Source variable: wgtoldentr.
+
+      # -----------------------------------------------------------------------
+      # FIRM HEALTH FLAGS
+      # -----------------------------------------------------------------------
+      - name: profitable_6m
+        description: >
+          Binary flag identifying financially resilient firms over the six-month
+          reference period. A firm is flagged as profitable if it simultaneously
+          reports: higher turnover (Q2a), higher profits (Q2e), lower or no interest
+          expenses (Q2d), and lower or no debt-to-assets ratio (Q2j) — or responds
+          Don't Know to any of those conditions while meeting the rest.
+          Source variable: profitable. See ECB SAFE report June 2018 box for definition.
+          Values: 1 = profitable / resilient, 0 = not, NULL = insufficient data.
+
+      - name: profitable_3m
+        description: >
+          Same definition as profitable_6m but derived from three-month reference
+          period responses. Populated for Q2/Q4 waves and the short subsample of
+          Q1/Q3 waves. Source variable: profitable_g1.
+
+      - name: vulnerable_6m
+        description: >
+          Binary flag identifying financially distressed firms over the six-month
+          reference period. A firm is flagged as vulnerable if it simultaneously
+          reports: lower turnover (Q2a), decreasing profits (Q2e), higher interest
+          expenses (Q2d), and higher or unchanged debt-to-assets ratio (Q2j) — or
+          responds Don't Know to any of those while meeting the rest.
+          A firm cannot be both profitable and vulnerable simultaneously.
+          Source variable: vulnerable. See ECB SAFE report June 2018 box for definition.
+          Values: 1 = vulnerable / distressed, 0 = not, NULL = insufficient data.
+
+      - name: vulnerable_3m
+        description: >
+          Same definition as vulnerable_6m but derived from three-month reference
+          period responses. Source variable: vulnerable_g1.
+
+      # -----------------------------------------------------------------------
+      # ECB COMPOSITE INDICATORS
+      # -----------------------------------------------------------------------
+      - name: ind_financing_conditions_6m
+        description: >
+          COMPONENT A (6-month). Primary ECB financing conditions indicator.
+          Measures price terms and conditions of bank loans, covering changes in
+          interest rates (Q10a) and other loan costs such as fees and commissions
+          (Q10b). Derived from factor analysis re-estimated at each wave using all
+          available historical data (updated methodology: ECB Economic Bulletin,
+          Issue 8, 2021). Rescaled to [–100, +100] by dividing by theoretical maximum.
+          Positive = improvement in conditions; negative = deterioration.
+          NULL if firm has no banking relationship or did not answer Q10.
+          Source variable: ind_a.
+
+      - name: ind_financing_conditions_3m
+        description: >
+          COMPONENT A (3-month). Same as ind_financing_conditions_6m but derived
+          from three-month reference period responses. Source variable: ind_a_g1.
+
+      - name: ind_nonprice_conditions_6m
+        description: >
+          COMPONENT B (6-month). Non-price terms and conditions of bank loans.
+          Covers changes in collateral requirements (Q10e), available loan size
+          (Q10c), and available loan maturity (Q10d). Second principal component
+          of the factor analysis. Rescaled to [–100, +100].
+          Source variable: ind_b.
+
+      - name: ind_nonprice_conditions_3m
+        description: >
+          COMPONENT B (3-month). Same as ind_nonprice_conditions_6m but derived
+          from three-month reference period responses. Source variable: ind_b_g1.
+
+      - name: ind_financial_position_6m
+        description: >
+          COMPONENT C (6-month). Financial position of the firm. Covers changes in
+          profits (Q2e), credit history (Q11e), and own capital (Q11d). Third
+          principal component of the factor analysis. Rescaled to [–100, +100].
+          Source variable: ind_c.
+
+      - name: ind_financial_position_3m
+        description: >
+          COMPONENT C (3-month). Same as ind_financial_position_6m but derived
+          from three-month reference period responses. Source variable: ind_c_g1.
+
+      - name: ind_financing_demand_6m
+        description: >
+          COMPONENT D (6-month). External financing needs / demand indicator.
+          Derived from changes in financing needs across instrument types (Q5).
+          Rescaled to [–100, +100]. Positive = increased demand for external finance.
+          Source variable: ind_d.
+
+      - name: ind_financing_demand_3m
+        description: >
+          COMPONENT D (3-month). Same as ind_financing_demand_6m but derived
+          from three-month reference period responses. Source variable: ind_d_g1.
+
+      - name: ind_financing_gap_narrow_6m
+        description: >
+          COMPONENT F (6-month). Narrow financing gap flag (firm-level binary).
+          A firm has a financing gap if it applied for external finance and the
+          outcome was one of: rejected (Q7B=4), received less than 75% of the
+          amount requested (Q7B=6), or refused the offer because the cost was
+          too high (Q7B=3). Does NOT include discouraged borrowers — see
+          ind_fgap_broad_6m for that. Source variable: ind_f.
+
+      - name: ind_financing_gap_narrow_3m
+        description: >
+          COMPONENT F (3-month). Same as ind_financing_gap_narrow_6m but derived
+          from three-month reference period responses. Source variable: ind_f_g1.
+
+      - name: ind_fgap_6m
+        description: >
+          Standardised financing gap indicator (6-month). Normalised/standardised
+          version of the narrow financing gap, used in the ECB's published financing
+          gap time series. See methodology Section 6.3 for construction details.
+          Source variable: ind_fgap.
+
+      - name: ind_fgap_3m
+        description: >
+          Standardised financing gap indicator (3-month). Same as ind_fgap_6m
+          but derived from three-month reference period responses.
+          Source variable: ind_fgap_g1.
+
+      - name: ind_fgap_broad_6m
+        description: >
+          Broad financing gap indicator (6-month). Extends the narrow financing gap
+          to also include discouraged borrowers: firms that did not apply for external
+          finance because they feared rejection (Q7A=2). This captures latent unmet
+          financing needs not visible in application-based measures.
+          Source variable: ind_fgap_broad.
+
+      - name: ind_fgap_broad_3m
+        description: >
+          Broad financing gap indicator (3-month). Same as ind_fgap_broad_6m but
+          derived from three-month reference period responses.
+          Source variable: ind_fgap_broad_g1.
+
+      - name: ind_credit_supply_6m
+        description: >
+          COMPONENT G (6-month). Credit supply conditions composite. Covers bank
+          willingness to provide credit (Q11f) and availability of bank loans and
+          credit lines (Q9a, Q9f). Rescaled to [–100, +100]. Positive = improving
+          supply conditions. Source variable: ind_g.
+
+      - name: ind_credit_supply_3m
+        description: >
+          COMPONENT G (3-month). Same as ind_credit_supply_6m but derived from
+          three-month reference period responses. Source variable: ind_g_g1.
+
+      - name: ind_bank_willingness_6m
+        description: >
+          COMPONENT H (6-month). Bank willingness to lend indicator. Derived
+          primarily from Q11f (willingness of banks to provide credit to the
+          enterprise). Rescaled to [–100, +100]. Positive = banks more willing
+          to lend. NULL if firm has no banking relationship.
+          Source variable: ind_h.
+
+      - name: ind_bank_willingness_3m
+        description: >
+          COMPONENT H (3-month). Same as ind_bank_willingness_6m but derived from
+          three-month reference period responses. Source variable: ind_h_g1.

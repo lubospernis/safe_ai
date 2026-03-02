@@ -40,16 +40,14 @@ staged as (
         -- Raw codes kept as integers; labels added in intermediate layer
         --------------------------------------------------------------------------
         nullif(trim(d0), '')                                        as country_code,
-        try_cast(nullif(trim(d1_rec), '') as integer)               as firm_size_code,
-        try_cast(nullif(trim(d2), '') as integer)                   as employee_band_code,
+        try_cast(nullif(trim(d1_rec), '') as integer)               as employee_band_code,
+        try_cast(nullif(trim(d2), '') as integer)                   as enterprise_type_code,
         try_cast(nullif(trim(d3_rec), '') as integer)               as sector_code,
-        try_cast(nullif(trim(d4), '') as integer)                   as firm_age_code,
-        try_cast(nullif(trim(d5_rec), '') as integer)               as ownership_code,
-        try_cast(nullif(trim(d6), '') as integer)                   as autonomy_raw,
-        try_cast(nullif(trim(d6_rec), '') as integer)               as autonomy_code,
-        nullif(trim(d6b), '')                                       as group_membership_raw,
-        try_cast(nullif(trim(d7), '') as integer)                   as turnover_raw,
-        try_cast(nullif(trim(d7_rec), '') as integer)               as turnover_code,
+        try_cast(nullif(trim(d4), '') as integer)                   as turnover_code,
+        try_cast(nullif(trim(d5_rec), '') as integer)               as firm_age_code,
+        try_cast(nullif(trim(d6), '') as integer)                   as ownership_code,
+        nullif(trim(d7), '')                                        as export_share_raw,
+        try_cast(nullif(trim(d7_rec), '') as integer)               as export_share_code,
 
         --------------------------------------------------------------------------
         -- SURVEY WEIGHTS
@@ -92,10 +90,10 @@ staged as (
         --------------------------------------------------------------------------
         -- FIRM HEALTH FLAGS
         --------------------------------------------------------------------------
-        try_cast(nullif(trim(profitable), '') as integer)           as profitable_code,
-        try_cast(nullif(trim(profitable_g1), '') as integer)        as profitable_grouped,
-        try_cast(nullif(trim(vulnerable), '') as integer)           as vulnerable_code,
-        try_cast(nullif(trim(vulnerable_g1), '') as integer)        as vulnerable_grouped,
+        try_cast(nullif(trim(profitable), '') as integer)           as profitable_6m,
+        try_cast(nullif(trim(profitable_g1), '') as integer)        as profitable_3m,
+        try_cast(nullif(trim(vulnerable), '') as integer)           as vulnerable_6m,
+        try_cast(nullif(trim(vulnerable_g1), '') as integer)        as vulnerable_3m,
 
         --------------------------------------------------------------------------
         -- SECTION Q0 — SCREENER / ROUTING

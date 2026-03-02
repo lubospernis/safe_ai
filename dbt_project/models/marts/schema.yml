@@ -16,7 +16,7 @@ models:
     columns:
       - name: country_code
         description: ISO 3166-1 alpha-2 country code of the respondent enterprise.
-      - name: country_name
+      - name: country_name_en
         description: Full English country name.
       - name: wave_number
         description: Survey wave (1–37). 1 = 2009H1, 37 = 2025Q4.
@@ -43,9 +43,9 @@ models:
           Values: Finding customers | Competition | Access to finance |
           Costs of production or labour | Availability of skilled staff or experienced managers |
           Regulation | Other.
-      - name: firm_size_code
+      - name: employee_band_code
         description: "Firm size code: 1=micro (1–9 employees), 2=small (10–49), 3=medium (50–249), 4=large (250+)."
-      - name: firm_size_label
+      - name: firm_size_en
         description: Human-readable firm size label (micro / small / medium / large).
       - name: n_respondents
         description: Count of firms that provided a valid (non-missing) response to this problem category.

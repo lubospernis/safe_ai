@@ -40,7 +40,7 @@ aggregated as (
 
     select
         country_code,
-        country_name,
+        country_name_en,
         wave_number,
         survey_year,
         survey_period,
@@ -48,8 +48,8 @@ aggregated as (
         reference_period,
         problem_id,
         problem_label,
-        firm_size_code,
-        firm_size_label,
+        employee_band_code,
+        firm_size_en,
 
         count(*)                                                as n_respondents,
         sum(case when is_nonresponse then 1 else 0 end)        as n_nonresponse,
@@ -82,4 +82,4 @@ aggregated as (
 )
 
 select * from aggregated
-order by wave_number, country_code, problem_id, firm_size_code
+order by wave_number, country_code, problem_id, employee_band_code

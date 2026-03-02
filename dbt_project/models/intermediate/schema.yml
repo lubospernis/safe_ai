@@ -49,15 +49,15 @@ models:
           18=war in Ukraine, 19=rising inflation.
       - name: country_code
         description: ISO 3166-1 alpha-2 country code of the respondent enterprise.
-      - name: country_name
+      - name: country_name_en
         description: Full English country name.
-      - name: firm_size_code
+      - name: employee_band_code
         description: "Firm size code: 1=micro (1–9), 2=small (10–49), 3=medium (50–249), 4=large (250+)."
-      - name: firm_size_label
+      - name: firm_size_en
         description: Human-readable firm size label (micro / small / medium / large).
       - name: sector_code
         description: "NACE sector code: 2=construction, 4=trade, 5=transport, 12=industry, 13=other services."
-      - name: sector_label
+      - name: sector_en
         description: Human-readable sector label.
       - name: survey_year
         description: Calendar year of the survey wave.

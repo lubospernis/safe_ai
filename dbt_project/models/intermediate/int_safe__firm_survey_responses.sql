@@ -27,26 +27,40 @@ with_period as (
             when interview_date is not null then year(interview_date)
         end                                                         as survey_year,
 
-        -- H1 = fieldwork Feb–Apr; H2 = fieldwork Aug–Oct
-        -- Quarterly (waves 31+): Q1=Jan-Apr, Q2=May-Jul, Q3=Aug-Oct, Q4=Nov-Dec
+        -- Biannual (waves 1–29): H1 = fieldwork Feb–Apr; H2 = fieldwork Aug–Oct
+        -- Quarterly (waves 30+): Q1=Feb-Mar, Q2=May-Jun, Q3=Aug-Oct, Q4=Nov-Dec
         case
-            when wave_number = 1 then 'H1'
+            when wave_number = 1     then 'H1'
             when interview_date is null then null
-            when month(interview_date) between 1  and 4  then 'H1'
-            when month(interview_date) between 5  and 7  then 'Q2'
-            when month(interview_date) between 8  and 10 then 'H2'
-            when month(interview_date) between 11 and 12 then 'Q4'
+            when wave_number < 30 then
+                case
+                    when month(interview_date) between 2 and 4  then 'H1'
+                    when month(interview_date) between 8 and 10 then 'H2'
+                end
+            else
+                case
+                    when month(interview_date) between 1 and 4  then 'Q1'
+                    when month(interview_date) between 5 and 7  then 'Q2'
+                    when month(interview_date) between 8 and 10 then 'Q3'
+                    when month(interview_date) between 11 and 12 then 'Q4'
+                end
         end                                                         as survey_period,
 
         case
             when wave_number = 1 then '2009H1'
             when interview_date is null then null
+            when wave_number < 30 then
+                cast(year(interview_date) as varchar)
+                || case
+                    when month(interview_date) between 2 and 4  then 'H1'
+                    when month(interview_date) between 8 and 10 then 'H2'
+                end
             else
                 cast(year(interview_date) as varchar)
                 || case
-                    when month(interview_date) between 1  and 4  then 'H1'
-                    when month(interview_date) between 5  and 7  then 'Q2'
-                    when month(interview_date) between 8  and 10 then 'H2'
+                    when month(interview_date) between 1 and 4  then 'Q1'
+                    when month(interview_date) between 5 and 7  then 'Q2'
+                    when month(interview_date) between 8 and 10 then 'Q3'
                     when month(interview_date) between 11 and 12 then 'Q4'
                 end
         end                                                         as survey_period_label

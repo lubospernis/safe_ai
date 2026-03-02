@@ -45,6 +45,7 @@ aggregated as (
         survey_year,
         survey_period,
         survey_period_label,
+        reference_period,
         problem_id,
         problem_label,
         firm_size_code,

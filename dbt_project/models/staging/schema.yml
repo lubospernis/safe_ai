@@ -362,58 +362,58 @@ models:
       #   -2   = don't know / refused
       #   99   = not asked (routing — firm skipped this block)
       #
-      # The _grouped variants (q0b_*_g1) are sparsely populated and NULL in most
-      # recent waves; do not use for current analysis.
+      # The _3m variants (q0b_*_3m, source: q0b_*_g1) are the 3-month reference
+      # period versions. Only populated in wave 30 (2024H1) and wave 37 (2025Q4).
       # -----------------------------------------------------------------------
       - name: q0b_1
         description: >
           Pressingness of FINDING CUSTOMERS / DEMAND on a scale 1 (not pressing at all)
           to 10 (extremely pressing). Source variable: q0b_1.
-      - name: q0b_1_grouped
+      - name: q0b_1_3m
         description: >
-          Grouped/recoded version of q0b_1. Sparsely populated; NULL in most recent waves.
+          3-month reference period version of q0b_1 (from q0b_1_g1). Populated only in mixed waves (wave 30 / 2024H1) and quarterly waves (e.g. wave 37 / 2025Q4).
           Source variable: q0b_1_g1.
       - name: q0b_2
         description: >
           Pressingness of COMPETITION on a scale 1 (not pressing at all) to 10
           (extremely pressing). Source variable: q0b_2.
-      - name: q0b_2_grouped
+      - name: q0b_2_3m
         description: >
-          Grouped/recoded version of q0b_2. Sparsely populated; NULL in most recent waves.
+          3-month reference period version of q0b_2 (from q0b_2_g1). Populated only in mixed waves (wave 30 / 2024H1) and quarterly waves (e.g. wave 37 / 2025Q4).
           Source variable: q0b_2_g1.
       - name: q0b_3
         description: >
           Pressingness of ACCESS TO FINANCE (bank loans, trade credit, equity, debt
           securities, other external financing) on a scale 1 (not pressing at all) to 10
           (extremely pressing). Source variable: q0b_3.
-      - name: q0b_3_grouped
+      - name: q0b_3_3m
         description: >
-          Grouped/recoded version of q0b_3. Sparsely populated; NULL in most recent waves.
+          3-month reference period version of q0b_3 (from q0b_3_g1). Populated only in mixed waves (wave 30 / 2024H1) and quarterly waves (e.g. wave 37 / 2025Q4).
           Source variable: q0b_3_g1.
       - name: q0b_4
         description: >
           Pressingness of COSTS OF PRODUCTION OR LABOUR on a scale 1 (not pressing at all)
           to 10 (extremely pressing). Source variable: q0b_4.
-      - name: q0b_4_grouped
+      - name: q0b_4_3m
         description: >
-          Grouped/recoded version of q0b_4. Sparsely populated; NULL in most recent waves.
+          3-month reference period version of q0b_4 (from q0b_4_g1). Populated only in mixed waves (wave 30 / 2024H1) and quarterly waves (e.g. wave 37 / 2025Q4).
           Source variable: q0b_4_g1.
       - name: q0b_5
         description: >
           Pressingness of AVAILABILITY OF SKILLED STAFF OR EXPERIENCED MANAGERS on a scale
           1 (not pressing at all) to 10 (extremely pressing). Source variable: q0b_5.
-      - name: q0b_5_grouped
+      - name: q0b_5_3m
         description: >
-          Grouped/recoded version of q0b_5. Sparsely populated; NULL in most recent waves.
+          3-month reference period version of q0b_5 (from q0b_5_g1). Populated only in mixed waves (wave 30 / 2024H1) and quarterly waves (e.g. wave 37 / 2025Q4).
           Source variable: q0b_5_g1.
       - name: q0b_6
         description: >
           Pressingness of REGULATION (e.g. European and national laws, industrial
           regulations) on a scale 1 (not pressing at all) to 10 (extremely pressing).
           Source variable: q0b_6.
-      - name: q0b_6_grouped
+      - name: q0b_6_3m
         description: >
-          Grouped/recoded version of q0b_6. Sparsely populated; NULL in most recent waves.
+          3-month reference period version of q0b_6 (from q0b_6_g1). Populated only in mixed waves (wave 30 / 2024H1) and quarterly waves (e.g. wave 37 / 2025Q4).
           Source variable: q0b_6_g1.
       - name: q0b_7
         description: >
@@ -424,9 +424,9 @@ models:
           17=coronavirus, 18=war in Ukraine, 19=rising inflation). Most respondents
           receive 99 (not asked) as this item is only administered to a sub-sample.
           Source variable: q0b_7.
-      - name: q0b_7_grouped
+      - name: q0b_7_3m
         description: >
-          Grouped/recoded version of q0b_7. Sparsely populated; NULL in most recent waves.
+          3-month reference period version of q0b_7 (from q0b_7_g1). Populated only in mixed waves (wave 30 / 2024H1) and quarterly waves (e.g. wave 37 / 2025Q4).
           Source variable: q0b_7_g1.
       - name: q0b_7_open
         description: >

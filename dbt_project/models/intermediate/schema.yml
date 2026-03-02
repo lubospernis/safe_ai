@@ -16,6 +16,12 @@ models:
     columns:
       - name: permid
         description: Unique anonymised enterprise identifier. Stable across all waves.
+      - name: reference_period
+        description: >
+          Survey reference period for this response. '6m' = six-month questionnaire
+          (source q0b_*); '3m' = three-month questionnaire (source q0b_*_g1, renamed
+          q0b_*_3m in staging). The 3m variant is only populated in wave 30 (2024H1)
+          and wave 37 (2025Q4).
       - name: wave_number
         description: Survey wave (1–37). 1 = 2009H1, 37 = 2025Q4.
       - name: problem_id

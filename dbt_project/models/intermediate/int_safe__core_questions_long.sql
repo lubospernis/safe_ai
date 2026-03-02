@@ -562,25 +562,25 @@ unpivoted as (
     select permid, wave_number, 'q0', '',  q0,  null, null, null
     from stg where q0 is not null
     union all
-    select permid, wave_number, 'q0b', '1', q0b_1, null, q0b_1_grouped, null
+    select permid, wave_number, 'q0b', '1', q0b_1, null, q0b_1_3m, null
     from stg where q0b_1 is not null
     union all
-    select permid, wave_number, 'q0b', '2', q0b_2, null, q0b_2_grouped, null
+    select permid, wave_number, 'q0b', '2', q0b_2, null, q0b_2_3m, null
     from stg where q0b_2 is not null
     union all
-    select permid, wave_number, 'q0b', '3', q0b_3, null, q0b_3_grouped, null
+    select permid, wave_number, 'q0b', '3', q0b_3, null, q0b_3_3m, null
     from stg where q0b_3 is not null
     union all
-    select permid, wave_number, 'q0b', '4', q0b_4, null, q0b_4_grouped, null
+    select permid, wave_number, 'q0b', '4', q0b_4, null, q0b_4_3m, null
     from stg where q0b_4 is not null
     union all
-    select permid, wave_number, 'q0b', '5', q0b_5, null, q0b_5_grouped, null
+    select permid, wave_number, 'q0b', '5', q0b_5, null, q0b_5_3m, null
     from stg where q0b_5 is not null
     union all
-    select permid, wave_number, 'q0b', '6', q0b_6, null, q0b_6_grouped, null
+    select permid, wave_number, 'q0b', '6', q0b_6, null, q0b_6_3m, null
     from stg where q0b_6 is not null
     union all
-    select permid, wave_number, 'q0b', '7', q0b_7, null, q0b_7_grouped, null
+    select permid, wave_number, 'q0b', '7', q0b_7, null, q0b_7_3m, null
     from stg where q0b_7 is not null
     union all
     select permid, wave_number, 'q0c', '', q0c, null, null, null

@@ -8,7 +8,7 @@
   Long-format model for Q0B: "How pressing are the following problems for your firm?"
   (scale 1–10, where 1 = not pressing at all, 10 = extremely pressing)
 
-  One row per firm (permid) × wave × problem category (7 categories).
+  One row per firm (permid) × wave × problem category × reference period.
 
   Problem categories (from ECB SAFE questionnaire annex):
     1 = Finding customers
@@ -17,7 +17,12 @@
     4 = Costs of production or labour
     5 = Availability of skilled staff or experienced managers
     6 = Regulation
-    7 = Other (please specify — see q0b_7_open)
+    7 = Other (please specify — see q0b_open)
+
+  Reference period:
+    '6m' = six-month questionnaire (source: q0b_*)
+    '3m' = three-month questionnaire (source: q0b_*_3m / raw: q0b_*_g1)
+           Only populated in wave 30 (2024H1) and wave 37 (2025Q4).
 
   Non-response codes:
     -1  = Not applicable
@@ -55,66 +60,57 @@ firm as (
 
 unpivoted as (
 
-    select permid, wave_number,
-        1                               as problem_id,
-        'Finding customers'             as problem_label,
-        q0b_1                           as pressingness_score,
-        null::varchar                   as q0b_open
+    -- -------------------------------------------------------------------------
+    -- 6-month reference period (q0b_*)
+    -- -------------------------------------------------------------------------
+    select permid, wave_number, '6m' as reference_period,
+        1 as problem_id, 'Finding customers' as problem_label,
+        q0b_1 as pressingness_score, null::varchar as q0b_open
     from stg where q0b_1 is not null
-
     union all
-
-    select permid, wave_number,
-        2,
-        'Competition',
-        q0b_2,
-        null::varchar
+    select permid, wave_number, '6m', 2, 'Competition', q0b_2, null::varchar
     from stg where q0b_2 is not null
-
     union all
-
-    select permid, wave_number,
-        3,
-        'Access to finance',
-        q0b_3,
-        null::varchar
+    select permid, wave_number, '6m', 3, 'Access to finance', q0b_3, null::varchar
     from stg where q0b_3 is not null
-
     union all
-
-    select permid, wave_number,
-        4,
-        'Costs of production or labour',
-        q0b_4,
-        null::varchar
+    select permid, wave_number, '6m', 4, 'Costs of production or labour', q0b_4, null::varchar
     from stg where q0b_4 is not null
-
     union all
-
-    select permid, wave_number,
-        5,
-        'Availability of skilled staff or experienced managers',
-        q0b_5,
-        null::varchar
+    select permid, wave_number, '6m', 5, 'Availability of skilled staff or experienced managers', q0b_5, null::varchar
     from stg where q0b_5 is not null
-
     union all
-
-    select permid, wave_number,
-        6,
-        'Regulation',
-        q0b_6,
-        null::varchar
+    select permid, wave_number, '6m', 6, 'Regulation', q0b_6, null::varchar
     from stg where q0b_6 is not null
-
     union all
-
-    select permid, wave_number,
-        7,
-        'Other',
-        q0b_7,
-        q0b_7_open
+    select permid, wave_number, '6m', 7, 'Other', q0b_7, q0b_7_open
     from stg where q0b_7 is not null
+
+    -- -------------------------------------------------------------------------
+    -- 3-month reference period (q0b_*_3m / source: q0b_*_g1)
+    -- Populated in wave 30 (2024H1) and wave 37 (2025Q4) only
+    -- -------------------------------------------------------------------------
+    union all
+    select permid, wave_number, '3m', 1, 'Finding customers', q0b_1_3m, null::varchar
+    from stg where q0b_1_3m is not null
+    union all
+    select permid, wave_number, '3m', 2, 'Competition', q0b_2_3m, null::varchar
+    from stg where q0b_2_3m is not null
+    union all
+    select permid, wave_number, '3m', 3, 'Access to finance', q0b_3_3m, null::varchar
+    from stg where q0b_3_3m is not null
+    union all
+    select permid, wave_number, '3m', 4, 'Costs of production or labour', q0b_4_3m, null::varchar
+    from stg where q0b_4_3m is not null
+    union all
+    select permid, wave_number, '3m', 5, 'Availability of skilled staff or experienced managers', q0b_5_3m, null::varchar
+    from stg where q0b_5_3m is not null
+    union all
+    select permid, wave_number, '3m', 6, 'Regulation', q0b_6_3m, null::varchar
+    from stg where q0b_6_3m is not null
+    union all
+    select permid, wave_number, '3m', 7, 'Other', q0b_7_3m, null::varchar
+    from stg where q0b_7_3m is not null
 
 ),
 
@@ -123,6 +119,7 @@ final as (
     select
         u.permid,
         u.wave_number,
+        u.reference_period,
         u.problem_id,
         u.problem_label,
         u.pressingness_score,

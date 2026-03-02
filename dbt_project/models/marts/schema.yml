@@ -26,6 +26,10 @@ models:
         description: "Survey half-year or quarter (e.g. H1, H2, Q1, Q2, Q3, Q4)."
       - name: survey_period_label
         description: "Human-readable period label (e.g. '2024 Q3')."
+      - name: reference_period
+        description: >
+          Survey reference period. '6m' = six-month questionnaire; '3m' = three-month
+          questionnaire (only in wave 30 / 2024H1 and wave 37 / 2025Q4).
       - name: problem_id
         description: >
           Problem category code (1–7).

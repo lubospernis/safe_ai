@@ -18,7 +18,7 @@ Config (via .dlt/config.toml  [sources.safe_microdata_source])
 """
 
 from __future__ import annotations
-
+import sys
 import csv
 import logging
 import tempfile
@@ -109,9 +109,11 @@ def _safe_microdata(
     # ------------------------------------------------------------------ #
     if etag and etag == state.get("etag"):
         logger.info("ETag unchanged — no new data, skipping load.")
+        sys.exit(0)
         return
     if not etag and last_modified and last_modified == state.get("last_modified"):
         logger.info("Last-Modified unchanged — no new data, skipping load.")
+        sys.exit(0)
         return
 
     # ------------------------------------------------------------------ #

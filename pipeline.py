@@ -11,7 +11,6 @@ The pipeline reads config from .dlt/config.toml and credentials from
 import logging
 
 import dlt
-from psycopg import logger
 
 from safe_microdata import safe_microdata_source
 
@@ -34,7 +33,7 @@ def main() -> None:
     # Materialize to check if there's actually data before running replace
     data = list(source)
     if not data:
-        logger.info("Source yielded no rows — skipping pipeline run to protect target table.")
+        #logger.info("Source yielded no rows — skipping pipeline run to protect target table.")
         return
     
     load_info = pipeline.run(data, write_disposition="replace")

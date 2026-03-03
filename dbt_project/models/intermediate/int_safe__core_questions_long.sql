@@ -67,8 +67,8 @@ unpivoted as (
     --   j=Debt compared to assets
     -- This is the full Q2 column set; data q1 holds only sub-items a–d.
     --------------------------------------------------------------------------
-    union all
-    select permid, wave_number, 'q2', 'a', q2_a, null, q2_a_3m, null
+    
+    select permid, wave_number, 'q2' as question_id, 'a' as sub_item, q2_a as response_raw, null as response_rec, q2_a_3m as response_3m, null as response_3m_rec
     from stg where q2_a is not null
     union all
     select permid, wave_number, 'q2', 'b', q2_b, null, q2_b_3m, null

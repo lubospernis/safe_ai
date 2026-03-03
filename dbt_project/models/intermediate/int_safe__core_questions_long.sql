@@ -95,119 +95,83 @@ unpivoted as (
     select permid, wave_number, 'q2', 'j', q2_j, q2_j_rec, q2_j_3m, q2_j_3m_rec
     from stg where (q2_j is not null or q2_j_3m is not null)
 
-    --------------------------------------------------------------------------
-    -- Q3 (annex Q3): Debt compared to assets — decreased/unchanged/increased
-    --   over past 6 months (single response, no sub-items).
-    --   Note: from later waves this item was folded into Q2 (as Q2_j).
-    --------------------------------------------------------------------------
-    union all
-    select permid, wave_number, 'q3', '', q3, null, null, null
-    from stg where q3 is not null
 
     --------------------------------------------------------------------------
-    -- Q4 (annex Q4): Financing sources relevant/used — whether each source was
-    --   used or considered (1=relevant/used, 2=not used, 3=not relevant).
+    -- Q4rec (annex Q4): Financing sources — combined relevance/usage recode.
+    --
+    --   Q4 asks per instrument: "Is this source relevant to your enterprise?"
+    --     3 = Yes, relevant
+    --     7 = Not relevant
+    --     9 = DK
+    --   If relevant (code 3), a follow-up (Q4A in raw: q4a_*) asks:
+    --     "Have you used it in the past 6 months?"
+    --     1 = Yes (used)
+    --     2 = No (relevant but not used)
+    --     99 = DK on follow-up
+    --
+    --   The recode (q4_*_rec / q4_*_3m_rec) collapses both into one variable:
+    --     1  = Used in the past 6 months  (Q4=3 AND Q4A=1)
+    --     2  = Relevant but not used       (Q4=3 AND Q4A=2)
+    --     7  = Not relevant                (Q4=7)
+    --     9  = DK (at Q4 level)            (Q4=9)
+    --     99 = DK (at Q4A follow-up level) (Q4=3, Q4A=99)
+    --
+    --   Non-response codes: 9, 99
+    --
     --   Sub-items (verified from annex.xlsx Q4):
-    --   a=Retained earnings or sale of assets
-    --   b=Grants or subsidised bank loans
-    --   c=Credit line, bank overdraft or credit cards overdraft
-    --   d=Bank loan (excl. subsidised loans, overdrafts and credit lines)
-    --   e=Trade credit
-    --   f=Other loan (family, friends, related enterprise, shareholders)
-    --   g=(legacy, empty in current questionnaire)
-    --   h=Debt securities issued
-    --   i=(legacy, empty in current questionnaire)
-    --   j=Equity capital
-    --   k=(legacy, empty in current questionnaire)
-    --   l=(legacy, empty in current questionnaire)
-    --   m=Leasing or hire-purchase
-    --   p=Other sources of financing (subordinated debt, peer-to-peer, crowdfunding, etc.)
-    --   r=Factoring
+    --     a = Retained earnings or sale of assets
+    --     b = Grants or subsidised bank loans
+    --     c = Credit line, bank overdraft or credit cards overdraft
+    --     d = Bank loan (excl. subsidised loans, overdrafts and credit lines)
+    --     e = Trade credit
+    --     f = Other loan (family, friends, related enterprise, shareholders)
+    --     g = (legacy combined leasing+factoring, pre-2014H1 only)
+    --     h = Debt securities issued
+    --     i = (legacy mezzanine, removed)
+    --     j = Equity capital
+    --     m = Leasing or hire-purchase
+    --     p = Other sources (subordinated debt, peer-to-peer, crowdfunding, etc.)
+    --     r = Factoring
+    --
+    --   response_raw  = q4_*_rec  (6-month questionnaire)
+    --   response_3m   = q4_*_3m_rec (3-month questionnaire, waves 30–37 only)
     --------------------------------------------------------------------------
     union all
-    select permid, wave_number, 'q4', 'a', q4_a, q4_a_rec, null, q4_a_3m_rec
-    from stg where q4_a is not null
+    select permid, wave_number, 'q4rec', 'a', q4_a_rec, null, q4_a_3m_rec, null
+    from stg where (q4_a_rec is not null or q4_a_3m_rec is not null)
     union all
-    select permid, wave_number, 'q4', 'b', q4_b, q4_b_rec, null, q4_b_3m_rec
-    from stg where q4_b is not null
+    select permid, wave_number, 'q4rec', 'b', q4_b_rec, null, q4_b_3m_rec, null
+    from stg where (q4_b_rec is not null or q4_b_3m_rec is not null)
     union all
-    select permid, wave_number, 'q4', 'c', q4_c, q4_c_rec, null, q4_c_3m_rec
-    from stg where q4_c is not null
+    select permid, wave_number, 'q4rec', 'c', q4_c_rec, null, q4_c_3m_rec, null
+    from stg where (q4_c_rec is not null or q4_c_3m_rec is not null)
     union all
-    select permid, wave_number, 'q4', 'd', q4_d, q4_d_rec, null, q4_d_3m_rec
-    from stg where q4_d is not null
+    select permid, wave_number, 'q4rec', 'd', q4_d_rec, null, q4_d_3m_rec, null
+    from stg where (q4_d_rec is not null or q4_d_3m_rec is not null)
     union all
-    select permid, wave_number, 'q4', 'e', q4_e, q4_e_rec, null, q4_e_3m_rec
-    from stg where q4_e is not null
+    select permid, wave_number, 'q4rec', 'e', q4_e_rec, null, q4_e_3m_rec, null
+    from stg where (q4_e_rec is not null or q4_e_3m_rec is not null)
     union all
-    select permid, wave_number, 'q4', 'f', q4_f, q4_f_rec, null, q4_f_3m_rec
-    from stg where q4_f is not null
+    select permid, wave_number, 'q4rec', 'f', q4_f_rec, null, q4_f_3m_rec, null
+    from stg where (q4_f_rec is not null or q4_f_3m_rec is not null)
     union all
-    select permid, wave_number, 'q4', 'g', q4_g, q4_g_rec, null, q4_g_3m_rec
-    from stg where q4_g is not null
+    select permid, wave_number, 'q4rec', 'g', q4_g_rec, null, q4_g_3m_rec, null
+    from stg where (q4_g_rec is not null or q4_g_3m_rec is not null)
     union all
-    select permid, wave_number, 'q4', 'h', q4_h, q4_h_rec, null, q4_h_3m_rec
-    from stg where q4_h is not null
+    select permid, wave_number, 'q4rec', 'h', q4_h_rec, null, q4_h_3m_rec, null
+    from stg where (q4_h_rec is not null or q4_h_3m_rec is not null)
     union all
-    select permid, wave_number, 'q4', 'i', q4_i, null, null, null
-    from stg where q4_i is not null
+    select permid, wave_number, 'q4rec', 'j', q4_j_rec, null, q4_j_3m_rec, null
+    from stg where (q4_j_rec is not null or q4_j_3m_rec is not null)
     union all
-    select permid, wave_number, 'q4', 'j', q4_j, q4_j_rec, null, q4_j_3m_rec
-    from stg where q4_j is not null
+    select permid, wave_number, 'q4rec', 'm', q4_m_rec, null, q4_m_3m_rec, null
+    from stg where (q4_m_rec is not null or q4_m_3m_rec is not null)
     union all
-    select permid, wave_number, 'q4', 'k', q4_k, null, null, null
-    from stg where q4_k is not null
+    select permid, wave_number, 'q4rec', 'p', q4_p_rec, null, q4_p_3m_rec, null
+    from stg where (q4_p_rec is not null or q4_p_3m_rec is not null)
     union all
-    select permid, wave_number, 'q4', 'l', q4_l, null, null, null
-    from stg where q4_l is not null
-    union all
-    select permid, wave_number, 'q4', 'm', q4_m, q4_m_rec, null, q4_m_3m_rec
-    from stg where q4_m is not null
-    union all
-    select permid, wave_number, 'q4', 'p', q4_p, q4_p_rec, null, q4_p_3m_rec
-    from stg where q4_p is not null
-    union all
-    select permid, wave_number, 'q4', 'r', q4_r, q4_r_rec, null, q4_r_3m_rec
-    from stg where q4_r is not null
-
-    --------------------------------------------------------------------------
-    -- Q4A (annex Q4A): Change in availability of each financing source over
-    --   past 6 months (improved/unchanged/deteriorated).
-    --   Sub-items mirror the Q4 instrument list (same letter codes).
-    --------------------------------------------------------------------------
-    union all
-    select permid, wave_number, 'q4a', 'a', q4a_a, null, q4a_a_3m, null
-    from stg where (q4a_a is not null or q4a_a_3m is not null)
-    union all
-    select permid, wave_number, 'q4a', 'b', q4a_b, null, q4a_b_3m, null
-    from stg where (q4a_b is not null or q4a_b_3m is not null)
-    union all
-    select permid, wave_number, 'q4a', 'c', q4a_c, null, q4a_c_3m, null
-    from stg where (q4a_c is not null or q4a_c_3m is not null)
-    union all
-    select permid, wave_number, 'q4a', 'd', q4a_d, null, q4a_d_3m, null
-    from stg where (q4a_d is not null or q4a_d_3m is not null)
-    union all
-    select permid, wave_number, 'q4a', 'e', q4a_e, null, q4a_e_3m, null
-    from stg where (q4a_e is not null or q4a_e_3m is not null)
-    union all
-    select permid, wave_number, 'q4a', 'f', q4a_f, null, q4a_f_3m, null
-    from stg where (q4a_f is not null or q4a_f_3m is not null)
-    union all
-    select permid, wave_number, 'q4a', 'h', q4a_h, null, q4a_h_3m, null
-    from stg where (q4a_h is not null or q4a_h_3m is not null)
-    union all
-    select permid, wave_number, 'q4a', 'j', q4a_j, null, q4a_j_3m, null
-    from stg where (q4a_j is not null or q4a_j_3m is not null)
-    union all
-    select permid, wave_number, 'q4a', 'm', q4a_m, null, q4a_m_3m, null
-    from stg where (q4a_m is not null or q4a_m_3m is not null)
-    union all
-    select permid, wave_number, 'q4a', 'p', q4a_p, null, q4a_p_3m, null
-    from stg where (q4a_p is not null or q4a_p_3m is not null)
-    union all
-    select permid, wave_number, 'q4a', 'r', q4a_r, null, q4a_r_3m, null
-    from stg where (q4a_r is not null or q4a_r_3m is not null)
+    select permid, wave_number, 'q4rec', 'r', q4_r_rec, null, q4_r_3m_rec, null
+    from stg where (q4_r_rec is not null or q4_r_3m_rec is not null)
 
     --------------------------------------------------------------------------
     -- Q5 (annex Q5): Change in need for external financing over past 6 months
@@ -729,9 +693,16 @@ final as (
         u.response_3m_rec,
 
         -- Non-response flag based on whichever response column is populated.
-        -- Covers: -1 (N/A), -2 (don't know), -99 (refused),
-        --         7 (not asked - routing), 99 (not asked - routing)
-        coalesce(u.response_raw, u.response_3m) in (-1, -2, -99, 7, 99) as is_nonresponse
+        -- For most questions: -1 (N/A), -2 (don't know), -99 (refused),
+        --   7 (not asked/routing), 99 (not asked/routing).
+        -- Exception — q4rec: code 7 = "not relevant" is a valid substantive answer;
+        --   only 9 and 99 are non-response.
+        case
+            when u.question_id = 'q4rec'
+                then coalesce(u.response_raw, u.response_3m) in (9, 99)
+            else
+                coalesce(u.response_raw, u.response_3m) in (-1, -2, -99, 7, 99)
+        end                                                             as is_nonresponse
 
     from unpivoted u
     left join firm f using (permid, wave_number)

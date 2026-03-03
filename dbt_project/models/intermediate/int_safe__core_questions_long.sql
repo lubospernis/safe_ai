@@ -8,7 +8,7 @@
   Unpivots core survey questions into long format.
   Sections and question IDs included:
     Section 2 (Business situation): q2
-    Section 3 (Financing):          q4rec, q5, q6a, q7a, q7b, q32
+    Section 3 (Financing):          q4rec, q5, q6a, q7a, q7b
     Section 4 (Availability):       q9, q10, q11, q23
     Section 5 (Expectations):       q26, q31, q33, q34
 
@@ -441,17 +441,7 @@ unpivoted as (
     select permid, wave_number, 'q23', 'j', q23_j, q23_j_rec, q23_j_3m, q23_j_3m_rec
     from stg where (q23_j is not null or q23_j_3m is not null)
 
-    --------------------------------------------------------------------------
-    -- Q32 (annex Q32, Section 3): Main reason bank loans are not relevant.
-    --   1=Insufficient collateral/guarantee, 2=Interest/price too high,
-    --   3=Reduced control, 4=No bank loans available, 5=Other,
-    --   6=Too much paperwork, 8=Do not need this type, 9=DK (single response)
-    --------------------------------------------------------------------------
-    union all
-    select permid, wave_number, 'q32', '', q32, null, null, null
-    from stg where q32 is not null
-
-    --------------------------------------------------------------------------
+     --------------------------------------------------------------------------
     -- Q26 (annex Q26): Expected change in turnover and fixed investments
     --   over the next two quarters.
     --   1=will increase, 2=will remain unchanged, 3=will decrease, 9=DK

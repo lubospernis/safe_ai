@@ -78,8 +78,7 @@ models:
       financing need), q6a (purpose of financing), q7a/q7b (loan applications/outcomes),
       q9 (availability), q10 (bank loan terms), q11 (availability factors), q23 (expected
       availability), q26 (expected turnover/investment), q31 (inflation expectations),
-      q32 (bank loan irrelevance reason), q33 (inflation risk direction), q34 (expected
-      price/wage changes). Non-responses are retained and flagged via is_nonresponse.
+      q33 (inflation risk direction), q34 (expected price/wage changes). Non-responses are retained and flagged via is_nonresponse.
       Includes all firm sizes — apply employee_band_code filter in downstream models.
 
     config:
@@ -115,7 +114,7 @@ models:
       - name: question_id
         description: >
           Question identifier. Values: q2, q4rec, q5, q6a, q7a, q7b, q9, q10, q11, q23,
-          q26, q31, q32, q33, q34.
+          q26, q31, q33, q34.
       - name: sub_item
         description: Sub-item code within the question (e.g. 'a', 'b', '1', '2').
       - name: response_raw

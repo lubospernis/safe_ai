@@ -266,10 +266,12 @@ unpivoted as (
     --   3=Did not apply — sufficient internal funds,
     --   4=Did not apply — other reasons, 9=DK/NA
     -- Q7B (annex Q7B): Outcome of application (for applicants only)
-    --   1=Received all applied for, 2=Got part (old), 3=Refused — too costly,
-    --   4=Rejected by lender, 5=Received most (new), 6=Received limited part (new),
-    --   8=Still pending, 9=DK
-    --   Sub-items for both Q7A and Q7B:
+    --   1=Received everything, 2=Got part (old code, pre-2010H1),
+    --   3=Refused — cost too high, 4=Rejected by lender,
+    --   5=Received 75% and above (new, from 2010H1),
+    --   6=Received below 75% (new, from 2010H1),
+    --   8=Still pending (added later), 9=DK
+    --   Sub-items for both Q7A and Q7B (verified from annex.xlsx):
     --   a=Bank loan (excl. overdraft and credit lines)
     --   b=Trade credit
     --   c=Other external financing
@@ -318,7 +320,7 @@ unpivoted as (
     --   b=Trade credit
     --   c=Equity capital
     --   d=Debt securities issued
-    --   e=(legacy, empty in current questionnaire)
+    --   e=Other (removed in later rounds — same note as Q5_e)
     --   f=Credit line, bank overdraft or credit cards overdraft
     --   g=Leasing or hire-purchase
     --   h=Other loan (family, friends, related enterprise, shareholders)
@@ -381,16 +383,16 @@ unpivoted as (
     --------------------------------------------------------------------------
     -- Q11 (annex Q11): Factors affecting availability of external financing —
     --   improved, unchanged or deteriorated over past 6 months?
-    --   1=Improved, 2=Unchanged, 3=Deteriorated, 9=DK
-    --   a=General economic outlook
+    --   1=Improved, 2=Unchanged, 3=Deteriorated, 7=Not applicable, 9=DK
+    --   a=General economic outlook (insofar as it affects availability of ext. financing)
     --   b=Access to public financial support, including guarantees
     --   c=Enterprise-specific outlook (sales, profitability, business plan)
     --   d=Enterprise's own capital
     --   e=Enterprise's credit history
-    --   f=Willingness of banks to provide credit
+    --   f=Willingness of banks to provide credit to your enterprise
     --   g=Willingness of business partners to provide trade credit
-    --   h=Willingness of investors to invest in the enterprise
-    --   i=(used for sub-item with grouped coding)
+    --   h=Willingness of investors to invest in your enterprise
+    --   i=(no annex definition; exists in data; likely a grouped/derived code)
     --   j=Willingness to extend credit to customers (accounts receivable)
     --------------------------------------------------------------------------
     union all
@@ -422,16 +424,27 @@ unpivoted as (
     from stg where (q11_i is not null or q11_i_3m is not null)
 
     --------------------------------------------------------------------------
-    -- Q12 (annex Q12, EC-only): Size of last loan of any kind obtained in
-    --   past 2 years (single response). Replaced by Q8A from 2014H1 onwards.
-    -- Q13 (annex Q13, EC-only): Provider of last loan (single response).
+    -- Q12 (annex Q12, EC-only): Size of last loan obtained in past 2 years
+    --   (single response). Replaced by Q8A from 2014H1 onwards.
+    --   1=did not take a loan, 2=<€25k, 3=€25k–€99k, 4=€100k–€1M (old),
+    --   5=>€1M, 6=€100k–€249k (new split), 7=€250k–€1M (new split), 9=DK
+    -- Q13 (annex Q13, EC-only): Provider of last loan.
+    --   1=Bank, 2=Private individual (family/friend), 3=Other, 9=DK
     --   Removed from later rounds.
     -- Q14 (annex Q14, EC-only): Purpose of last loan (single response).
-    --   Replaced by Q6A from 2014H1 onwards.
-    -- Q16 (annex Q16, EC-only): Average annual turnover growth over past 3 years
-    --   a=in 12 months (past year), b=past 3 years avg
+    --   Removed in 2014H1 (replaced by Q6A).
+    --   Sub-items a–h map to answer codes 1–7,9:
+    --   a=Working capital, b=Land/buildings or equipment/vehicles,
+    --   c=R&D or intellectual property, d=Promotion, e=Staff training,
+    --   f=Buying another business, g=Other, h=DK/NA
+    -- Q16 (annex Q16, EC-only): Average annual growth over past 3 years
+    --   1=Over 20% p.a., 2=Less than 20% p.a., 3=No growth, 4=Got smaller,
+    --   7=Not applicable (too recent), 9=DK
+    --   a=in terms of employment (number of full-time equivalent employees)
+    --   b=in terms of turnover
     -- Q17 (annex Q17, EC-only): Expected turnover growth over next 2–3 years
-    --   (single response)
+    --   1=Grow >20% p.a., 2=Grow <20% p.a., 3=Stay same size, 4=Become smaller,
+    --   9=DK (single response, no sub-items)
     --------------------------------------------------------------------------
     union all
     select permid, wave_number, 'q12', '', q12, null, null, null
@@ -474,26 +487,55 @@ unpivoted as (
     from stg where q17 is not null
 
     --------------------------------------------------------------------------
-    -- Q19: Government support usage (a=applied, b=received)
-    -- Q20: Enterprise size (number of employees bracket)
-    -- Q21: Enterprise age bracket
-    -- Q22: Turnover bracket (q22=main, q22_a/b=sub-items)
+    -- Q19 (annex Q19, EC-only): Confidence talking about financing and
+    --   obtaining desired results. 1=Yes, 2=No, 7=Not applicable, 9=DK
+    --   a=...with banks
+    --   b=...with equity investors/venture capital enterprises
+    -- Q20 (annex Q20, EC-only): Preferred type of external financing if needed.
+    --   1=Bank loan, 2=Loan from other sources (trade credit, related enterprise, etc.)
+    --   3=Equity capital (incl. VC/business angels), 4=Subordinated/mezzanine,
+    --   5=Other, 9=DK (single response, no sub-items)
+    -- Q21 (annex Q21, EC-only): Desired financing amount over next 2–3 years.
+    --   1=up to €25k, 2=€25k–€100k, 3=€100k–€1M (old), 4=>€1M,
+    --   5=€100k–€250k (new split), 6=€250k–€1M (new split), 9=DK
+    --   (single response, no sub-items)
+    -- Q22 (annex Q22, EC-only): Most important limiting factor for preferred financing.
+    --   Asked only if Q20 = bank loan, other loan, or equity (codes 1, 2, 3).
+    --   1=Insufficient collateral/guarantee, 2=Interest/price too high,
+    --   3=Reduced control over enterprise, 4=Financing not available at all,
+    --   5=Other, 6=Too much paperwork, 8=No obstacles, 9=DK
+    --   (single response; q22_a/b are sub-variants asked per instrument type)
     -- Q23 (annex Q23): Expected availability of financing over next 6 months
-    --   (improve/unchanged/deteriorate per instrument)
+    --   1=Will improve, 2=Will remain unchanged, 3=Will deteriorate,
+    --   7=Not applicable, 9=DK
     --   a=Retained earnings or sale of assets
     --   b=Bank loans (excl. overdraft and credit lines)
     --   c=Equity capital
     --   d=Trade credit
     --   e=Debt securities issued
-    --   f=(legacy, empty in current questionnaire)
+    --   f=Other (removed in later rounds — same note as Q5_e/Q9_e)
     --   g=Credit line, bank overdraft or credit cards overdraft
     --   i=Leasing or hire-purchase
     --   j=Other loan (family, friends, related enterprise, shareholders)
-    -- Q24 (annex Q24, EC-only): Importance of financing factors for future
-    --   (scale 1–10, sub-items a–f)
-    -- Q25 (annex Q25, EC-only): Main obstacle to stock market listing
+    -- Q24 (annex Q24, EC-only): Importance of public support measures for future
+    --   financing. Scale 1–10 (1=not important at all, 10=extremely important).
+    --   Sub-items (verified from annex.xlsx Q24):
+    --   a=Guarantees for loans
+    --   b=Measures to facilitate equity investments
+    --   c=Export credits or guarantees
+    --   d=Tax incentives
+    --   e=Business support services (advisory, training, networks, etc.)
+    --   f=Making existing public measures easier to obtain
+    --   Note: q24 (no sub-item) = earlier single-response stock-market listing
+    --   question (1=yes main list, 2=yes alternative list, 3=no, 9=DK)
+    -- Q25 (annex Q25, EC-only): Main obstacle to stock market listing.
+    --   1=Too small, 2=Too expensive, 3=Reporting too heavy,
+    --   4=Partial loss of control, 5=Unfavourable market conditions, 9=DK
     -- Q26 (annex Q26): Expected change over next 6 months (increase/unchanged/decrease)
-    --   a=Company's turnover, b=Investments in property, plant or equipment
+    --   1=will increase, 2=will remain unchanged, 3=will decrease, 9=DK
+    --   a=Company's turnover
+    --   b=Investments in property, plant or equipment
+    --   Note: q26 (no sub-item) is a legacy base column present in early waves
     --------------------------------------------------------------------------
     union all
     select permid, wave_number, 'q19', 'a', q19_a, null, null, null
@@ -578,16 +620,22 @@ unpivoted as (
     from stg where (q26_b is not null or q26_b_3m is not null)
 
     --------------------------------------------------------------------------
-    -- Q31 (annex Q31): Expected turnover growth in future periods
+    -- Q31 (annex Q31, ECB-only): Expected euro area inflation rate (annual %).
+    --   Numeric open-ended response (stored as float, not coded).
     --   a=in 12 months, b=in three years, c=in five years
-    -- Q32 (annex Q32): Most important reason bank loans are not relevant
-    --   (single response)
-    -- Q33 (annex Q33): Supplementary question (varies by round/country)
-    -- Q34 (annex Q34): Price and wage expectations (increase/unchanged/decrease)
-    --   a=Average selling price, a_1=selling price (numeric variant)
-    --   b=Average prices of production inputs, b_1=production inputs (numeric)
-    --   c=Average wage of current employees, c_1=wage (numeric)
-    --   d=Number of employees, d_1=employees (numeric)
+    -- Q32 (annex Q32): Main reason bank loans are not relevant for this firm.
+    --   1=Insufficient collateral/guarantee, 2=Interest/price too high,
+    --   3=Reduced control, 4=No bank loans available, 5=Other,
+    --   6=Too much paperwork, 8=Do not need this type, 9=DK (single response)
+    -- Q33 (annex Q33, ECB-only): Main risk to 5-year inflation outlook.
+    --   1=Risk to the downside, 2=Risks broadly balanced, 3=Risk to the upside,
+    --   9=DK (single response)
+    -- Q34 (annex Q34): Expected % change over next 12 months (numeric open-ended).
+    --   _1 suffix = numeric variant (float); base = categorical recode
+    --   a=Average selling price of products/services in main markets
+    --   b=Average prices of production inputs (non-labour: materials, energy)
+    --   c=Average wage of current employees (before tax, excl. bonuses)
+    --   d=Number of employees
     --------------------------------------------------------------------------
     union all
     select permid, wave_number, 'q31', 'a', q31_a, null, null, null

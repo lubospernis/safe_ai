@@ -55,26 +55,6 @@ firm as (
 
 unpivoted as (
 
-
-    --------------------------------------------------------------------------
-    -- Q1 (annex Q2): Business situation — short sub-item block (common waves only)
-    --   Asked instead of Q2 in the common/short questionnaire rounds.
-    --   Same response scale as Q2: 1=Increased, 2=Unchanged, 3=Decreased
-    --   a=Turnover, b=Labour costs (incl. social contributions),
-    --   c=Interest expenses (net), d=Profit
-    --------------------------------------------------------------------------
-    select permid, wave_number, 'q1' as question_id, 'a' as sub_item, q1_a as response_raw, null as response_rec, null as response_3m, null as response_3m_rec
-    from stg where q1_a is not null
-    union all
-    select permid, wave_number, 'q1', 'b', q1_b, null, null, null
-    from stg where q1_b is not null
-    union all
-    select permid, wave_number, 'q1', 'c', q1_c, null, null, null
-    from stg where q1_c is not null
-    union all
-    select permid, wave_number, 'q1', 'd', q1_d, null, null, null
-    from stg where q1_d is not null
-
     --------------------------------------------------------------------------
     -- Q2 (annex Q2): Business situation — extended sub-item block
     --   (decreased / remained unchanged / increased)
@@ -85,7 +65,6 @@ unpivoted as (
     --   h=Inventories and other working capital, i=Number of employees,
     --   j=Debt compared to assets
     --------------------------------------------------------------------------
-    union all
     select permid, wave_number, 'q2' as question_id, 'a' as sub_item, q2_a as response_raw, null as response_rec, q2_a_3m as response_3m, null as response_3m_rec
     from stg where (q2_a is not null or q2_a_3m is not null)
     union all

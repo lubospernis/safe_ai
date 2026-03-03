@@ -5,12 +5,7 @@
 }}
 
 /*
-  Aggregated net balances for the business situation question (annex Q2).
-
-  In the data this question appears as two question_ids:
-    - 'q1': short block (sub-items a–d only), asked in common/short questionnaire rounds
-    - 'q2': extended block (sub-items a–j), asked in the full questionnaire rounds
-  Both use the same response scale and the sub-items a–d are identical in meaning.
+  Aggregated net balances for the business situation question (annex Q2 / question_id = 'q2').
 
   Question: "Have the following company indicators decreased, remained unchanged or increased
   during the past six months (or quarter)?"
@@ -22,21 +17,21 @@
     7 = Not applicable (routing / non-response)
     9 = DK/NA (non-response)
 
-  Sub-items:
+  Sub-items (verified from annex.xlsx Q2):
     a = Turnover
     b = Labour costs (including social contributions)
-    c = Other costs (q2 only) / Interest expenses net (q1)
-    d = Interest expenses (q2 only) / Profit (q1)
-    e = Profit (q2 only)
-    f = Profit margin — removed from questionnaire, older rounds only (q2 only)
-    g = Investments in property, plant or equipment (q2 only)
-    h = Inventories and other working capital (q2 only)
-    i = Number of employees (q2 only)
-    j = Debt compared to assets (q2 only)
+    c = Other costs (materials, energy, other)
+    d = Interest expenses (net)
+    e = Profit
+    f = Profit margin — removed from questionnaire, older rounds only
+    g = Investments in property, plant or equipment
+    h = Inventories and other working capital
+    i = Number of employees
+    j = Debt compared to assets
 
   Net balance = % increased − % decreased (standard ECB definition).
 
-  Aggregation: wave × country × question_id × sub_item (all firm sizes combined).
+  Aggregation: wave × country × sub_item (all firm sizes combined).
   Non-responses (response_raw in -1, -2, -99, 7, 99) excluded from aggregation metrics
   but counted in n_nonresponse.
 */
@@ -50,13 +45,12 @@ with source as (
         survey_period_label,
         country_code,
         country_name_en,
-        question_id,
         sub_item,
         coalesce(response_raw, response_3m)                         as response_raw,
         weight_common,
         is_nonresponse
     from {{ ref('int_safe__core_questions_long') }}
-    where question_id in ('q1', 'q2')
+    where question_id = 'q2'
 
 ),
 
@@ -64,23 +58,17 @@ labels as (
 
     select
         *,
-        case
-            -- q1 sub-items (short questionnaire)
-            when question_id = 'q1' and sub_item = 'a' then 'Turnover'
-            when question_id = 'q1' and sub_item = 'b' then 'Labour costs (including social contributions)'
-            when question_id = 'q1' and sub_item = 'c' then 'Interest expenses (net)'
-            when question_id = 'q1' and sub_item = 'd' then 'Profit'
-            -- q2 sub-items (extended questionnaire)
-            when question_id = 'q2' and sub_item = 'a' then 'Turnover'
-            when question_id = 'q2' and sub_item = 'b' then 'Labour costs (including social contributions)'
-            when question_id = 'q2' and sub_item = 'c' then 'Other costs (materials, energy, other)'
-            when question_id = 'q2' and sub_item = 'd' then 'Interest expenses (net)'
-            when question_id = 'q2' and sub_item = 'e' then 'Profit'
-            when question_id = 'q2' and sub_item = 'f' then 'Profit margin (legacy, older rounds only)'
-            when question_id = 'q2' and sub_item = 'g' then 'Investments in property, plant or equipment'
-            when question_id = 'q2' and sub_item = 'h' then 'Inventories and other working capital'
-            when question_id = 'q2' and sub_item = 'i' then 'Number of employees'
-            when question_id = 'q2' and sub_item = 'j' then 'Debt compared to assets'
+        case sub_item
+            when 'a' then 'Turnover'
+            when 'b' then 'Labour costs (including social contributions)'
+            when 'c' then 'Other costs (materials, energy, other)'
+            when 'd' then 'Interest expenses (net)'
+            when 'e' then 'Profit'
+            when 'f' then 'Profit margin (legacy, older rounds only)'
+            when 'g' then 'Investments in property, plant or equipment'
+            when 'h' then 'Inventories and other working capital'
+            when 'i' then 'Number of employees'
+            when 'j' then 'Debt compared to assets'
         end                                                         as sub_item_label
 
     from source
@@ -96,7 +84,6 @@ aggregated as (
         survey_year,
         survey_period,
         survey_period_label,
-        question_id,
         sub_item,
         sub_item_label,
 
@@ -148,4 +135,4 @@ aggregated as (
 )
 
 select * from aggregated
-order by wave_number, country_code, question_id, sub_item
+order by wave_number, country_code, sub_item

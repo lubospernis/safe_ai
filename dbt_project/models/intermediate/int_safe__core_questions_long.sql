@@ -5,7 +5,12 @@
 }}
 
 /*
-  Unpivots all recurring core survey questions (q1–q34) into long format.
+  Unpivots core survey questions into long format.
+  Sections and question IDs included:
+    Section 2 (General/situation): q0, q0b, q0c, q2, q3
+    Section 3 (Financing):         q4rec, q5, q6, q6a, q7a, q7b, q8a, q32
+    Section 4 (Availability):      q9, q10, q11, q23
+    Section 5 (Future/growth):     q16, q17, q19, q20, q21, q22, q24, q25
 
   Target schema:
     permid | wave_number | question_id | sub_item | response_raw
@@ -424,19 +429,6 @@ unpivoted as (
     from stg where (q11_i is not null or q11_i_3m is not null)
 
     --------------------------------------------------------------------------
-    -- Q12 (annex Q12, EC-only): Size of last loan obtained in past 2 years
-    --   (single response). Replaced by Q8A from 2014H1 onwards.
-    --   1=did not take a loan, 2=<€25k, 3=€25k–€99k, 4=€100k–€1M (old),
-    --   5=>€1M, 6=€100k–€249k (new split), 7=€250k–€1M (new split), 9=DK
-    -- Q13 (annex Q13, EC-only): Provider of last loan.
-    --   1=Bank, 2=Private individual (family/friend), 3=Other, 9=DK
-    --   Removed from later rounds.
-    -- Q14 (annex Q14, EC-only): Purpose of last loan (single response).
-    --   Removed in 2014H1 (replaced by Q6A).
-    --   Sub-items a–h map to answer codes 1–7,9:
-    --   a=Working capital, b=Land/buildings or equipment/vehicles,
-    --   c=R&D or intellectual property, d=Promotion, e=Staff training,
-    --   f=Buying another business, g=Other, h=DK/NA
     -- Q16 (annex Q16, EC-only): Average annual growth over past 3 years
     --   1=Over 20% p.a., 2=Less than 20% p.a., 3=No growth, 4=Got smaller,
     --   7=Not applicable (too recent), 9=DK
@@ -446,36 +438,6 @@ unpivoted as (
     --   1=Grow >20% p.a., 2=Grow <20% p.a., 3=Stay same size, 4=Become smaller,
     --   9=DK (single response, no sub-items)
     --------------------------------------------------------------------------
-    union all
-    select permid, wave_number, 'q12', '', q12, null, null, null
-    from stg where q12 is not null
-    union all
-    select permid, wave_number, 'q13', '', q13, null, null, null
-    from stg where q13 is not null
-    union all
-    select permid, wave_number, 'q14', 'a', q14_a, null, null, null
-    from stg where q14_a is not null
-    union all
-    select permid, wave_number, 'q14', 'b', q14_b, null, null, null
-    from stg where q14_b is not null
-    union all
-    select permid, wave_number, 'q14', 'c', q14_c, null, null, null
-    from stg where q14_c is not null
-    union all
-    select permid, wave_number, 'q14', 'd', q14_d, null, null, null
-    from stg where q14_d is not null
-    union all
-    select permid, wave_number, 'q14', 'e', q14_e, null, null, null
-    from stg where q14_e is not null
-    union all
-    select permid, wave_number, 'q14', 'f', q14_f, null, null, null
-    from stg where q14_f is not null
-    union all
-    select permid, wave_number, 'q14', 'g', q14_g, null, null, null
-    from stg where q14_g is not null
-    union all
-    select permid, wave_number, 'q14', 'h', q14_h, null, null, null
-    from stg where q14_h is not null
     union all
     select permid, wave_number, 'q16', 'a', q16_a, null, null, null
     from stg where q16_a is not null
@@ -531,11 +493,6 @@ unpivoted as (
     -- Q25 (annex Q25, EC-only): Main obstacle to stock market listing.
     --   1=Too small, 2=Too expensive, 3=Reporting too heavy,
     --   4=Partial loss of control, 5=Unfavourable market conditions, 9=DK
-    -- Q26 (annex Q26): Expected change over next 6 months (increase/unchanged/decrease)
-    --   1=will increase, 2=will remain unchanged, 3=will decrease, 9=DK
-    --   a=Company's turnover
-    --   b=Investments in property, plant or equipment
-    --   Note: q26 (no sub-item) is a legacy base column present in early waves
     --------------------------------------------------------------------------
     union all
     select permid, wave_number, 'q19', 'a', q19_a, null, null, null
@@ -609,73 +566,16 @@ unpivoted as (
     union all
     select permid, wave_number, 'q25', '', q25, null, null, null
     from stg where q25 is not null
-    union all
-    select permid, wave_number, 'q26', '', q26, null, null, null
-    from stg where q26 is not null
-    union all
-    select permid, wave_number, 'q26', 'a', q26_a, null, q26_a_3m, null
-    from stg where (q26_a is not null or q26_a_3m is not null)
-    union all
-    select permid, wave_number, 'q26', 'b', q26_b, null, q26_b_3m, null
-    from stg where (q26_b is not null or q26_b_3m is not null)
 
     --------------------------------------------------------------------------
-    -- Q31 (annex Q31, ECB-only): Expected euro area inflation rate (annual %).
-    --   Numeric open-ended response (stored as float, not coded).
-    --   a=in 12 months, b=in three years, c=in five years
-    -- Q32 (annex Q32): Main reason bank loans are not relevant for this firm.
+    -- Q32 (annex Q32, Section 3): Main reason bank loans are not relevant.
     --   1=Insufficient collateral/guarantee, 2=Interest/price too high,
     --   3=Reduced control, 4=No bank loans available, 5=Other,
     --   6=Too much paperwork, 8=Do not need this type, 9=DK (single response)
-    -- Q33 (annex Q33, ECB-only): Main risk to 5-year inflation outlook.
-    --   1=Risk to the downside, 2=Risks broadly balanced, 3=Risk to the upside,
-    --   9=DK (single response)
-    -- Q34 (annex Q34): Expected % change over next 12 months (numeric open-ended).
-    --   _1 suffix = numeric variant (float); base = categorical recode
-    --   a=Average selling price of products/services in main markets
-    --   b=Average prices of production inputs (non-labour: materials, energy)
-    --   c=Average wage of current employees (before tax, excl. bonuses)
-    --   d=Number of employees
     --------------------------------------------------------------------------
-    union all
-    select permid, wave_number, 'q31', 'a', q31_a, null, null, null
-    from stg where q31_a is not null
-    union all
-    select permid, wave_number, 'q31', 'b', q31_b, null, null, null
-    from stg where q31_b is not null
-    union all
-    select permid, wave_number, 'q31', 'c', q31_c, null, null, null
-    from stg where q31_c is not null
     union all
     select permid, wave_number, 'q32', '', q32, null, null, null
     from stg where q32 is not null
-    union all
-    select permid, wave_number, 'q33', '', q33, null, null, null
-    from stg where q33 is not null
-    union all
-    select permid, wave_number, 'q34', 'a',   q34_a,   q34_a_rec,   null, null
-    from stg where q34_a is not null
-    union all
-    select permid, wave_number, 'q34', 'a_1', q34_a_1, null,        null, null
-    from stg where q34_a_1 is not null
-    union all
-    select permid, wave_number, 'q34', 'b',   q34_b,   q34_b_rec,   null, null
-    from stg where q34_b is not null
-    union all
-    select permid, wave_number, 'q34', 'b_1', q34_b_1, null,        null, null
-    from stg where q34_b_1 is not null
-    union all
-    select permid, wave_number, 'q34', 'c',   q34_c,   q34_c_rec,   null, null
-    from stg where q34_c is not null
-    union all
-    select permid, wave_number, 'q34', 'c_1', q34_c_1, null,        null, null
-    from stg where q34_c_1 is not null
-    union all
-    select permid, wave_number, 'q34', 'd',   q34_d,   q34_d_rec,   null, null
-    from stg where q34_d is not null
-    union all
-    select permid, wave_number, 'q34', 'd_1', q34_d_1, null,        null, null
-    from stg where q34_d_1 is not null
 
     --------------------------------------------------------------------------
     -- Q0: Screener — whether enterprise obtains external financing (yes/no)

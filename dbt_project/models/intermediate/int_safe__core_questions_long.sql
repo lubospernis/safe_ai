@@ -57,6 +57,25 @@ unpivoted as (
 
 
     --------------------------------------------------------------------------
+    -- Q1 (annex Q2): Business situation — short sub-item block (common waves only)
+    --   Asked instead of Q2 in the common/short questionnaire rounds.
+    --   Same response scale as Q2: 1=Increased, 2=Unchanged, 3=Decreased
+    --   a=Turnover, b=Labour costs (incl. social contributions),
+    --   c=Interest expenses (net), d=Profit
+    --------------------------------------------------------------------------
+    select permid, wave_number, 'q1' as question_id, 'a' as sub_item, q1_a as response_raw, null as response_rec, null as response_3m, null as response_3m_rec
+    from stg where q1_a is not null
+    union all
+    select permid, wave_number, 'q1', 'b', q1_b, null, null, null
+    from stg where q1_b is not null
+    union all
+    select permid, wave_number, 'q1', 'c', q1_c, null, null, null
+    from stg where q1_c is not null
+    union all
+    select permid, wave_number, 'q1', 'd', q1_d, null, null, null
+    from stg where q1_d is not null
+
+    --------------------------------------------------------------------------
     -- Q2 (annex Q2): Business situation — extended sub-item block
     --   (decreased / remained unchanged / increased)
     --   a=Turnover, b=Labour costs (incl. social contributions),
@@ -65,38 +84,37 @@ unpivoted as (
     --   g=Investments in property, plant or equipment,
     --   h=Inventories and other working capital, i=Number of employees,
     --   j=Debt compared to assets
-    -- This is the full Q2 column set; data q1 holds only sub-items a–d.
     --------------------------------------------------------------------------
-    
+    union all
     select permid, wave_number, 'q2' as question_id, 'a' as sub_item, q2_a as response_raw, null as response_rec, q2_a_3m as response_3m, null as response_3m_rec
-    from stg where q2_a is not null
+    from stg where (q2_a is not null or q2_a_3m is not null)
     union all
     select permid, wave_number, 'q2', 'b', q2_b, null, q2_b_3m, null
-    from stg where q2_b is not null
+    from stg where (q2_b is not null or q2_b_3m is not null)
     union all
     select permid, wave_number, 'q2', 'c', q2_c, null, q2_c_3m, null
-    from stg where q2_c is not null
+    from stg where (q2_c is not null or q2_c_3m is not null)
     union all
     select permid, wave_number, 'q2', 'd', q2_d, null, q2_d_3m, null
-    from stg where q2_d is not null
+    from stg where (q2_d is not null or q2_d_3m is not null)
     union all
     select permid, wave_number, 'q2', 'e', q2_e, null, q2_e_3m, null
-    from stg where q2_e is not null
+    from stg where (q2_e is not null or q2_e_3m is not null)
     union all
     select permid, wave_number, 'q2', 'f', q2_f, null, null, null
     from stg where q2_f is not null
     union all
     select permid, wave_number, 'q2', 'g', q2_g, null, q2_g_3m, null
-    from stg where q2_g is not null
+    from stg where (q2_g is not null or q2_g_3m is not null)
     union all
     select permid, wave_number, 'q2', 'h', q2_h, null, q2_h_3m, null
-    from stg where q2_h is not null
+    from stg where (q2_h is not null or q2_h_3m is not null)
     union all
     select permid, wave_number, 'q2', 'i', q2_i, null, q2_i_3m, null
-    from stg where q2_i is not null
+    from stg where (q2_i is not null or q2_i_3m is not null)
     union all
     select permid, wave_number, 'q2', 'j', q2_j, q2_j_rec, q2_j_3m, q2_j_3m_rec
-    from stg where q2_j is not null
+    from stg where (q2_j is not null or q2_j_3m is not null)
 
     --------------------------------------------------------------------------
     -- Q3 (annex Q3): Debt compared to assets — decreased/unchanged/increased
@@ -180,37 +198,37 @@ unpivoted as (
     --------------------------------------------------------------------------
     union all
     select permid, wave_number, 'q4a', 'a', q4a_a, null, q4a_a_3m, null
-    from stg where q4a_a is not null
+    from stg where (q4a_a is not null or q4a_a_3m is not null)
     union all
     select permid, wave_number, 'q4a', 'b', q4a_b, null, q4a_b_3m, null
-    from stg where q4a_b is not null
+    from stg where (q4a_b is not null or q4a_b_3m is not null)
     union all
     select permid, wave_number, 'q4a', 'c', q4a_c, null, q4a_c_3m, null
-    from stg where q4a_c is not null
+    from stg where (q4a_c is not null or q4a_c_3m is not null)
     union all
     select permid, wave_number, 'q4a', 'd', q4a_d, null, q4a_d_3m, null
-    from stg where q4a_d is not null
+    from stg where (q4a_d is not null or q4a_d_3m is not null)
     union all
     select permid, wave_number, 'q4a', 'e', q4a_e, null, q4a_e_3m, null
-    from stg where q4a_e is not null
+    from stg where (q4a_e is not null or q4a_e_3m is not null)
     union all
     select permid, wave_number, 'q4a', 'f', q4a_f, null, q4a_f_3m, null
-    from stg where q4a_f is not null
+    from stg where (q4a_f is not null or q4a_f_3m is not null)
     union all
     select permid, wave_number, 'q4a', 'h', q4a_h, null, q4a_h_3m, null
-    from stg where q4a_h is not null
+    from stg where (q4a_h is not null or q4a_h_3m is not null)
     union all
     select permid, wave_number, 'q4a', 'j', q4a_j, null, q4a_j_3m, null
-    from stg where q4a_j is not null
+    from stg where (q4a_j is not null or q4a_j_3m is not null)
     union all
     select permid, wave_number, 'q4a', 'm', q4a_m, null, q4a_m_3m, null
-    from stg where q4a_m is not null
+    from stg where (q4a_m is not null or q4a_m_3m is not null)
     union all
     select permid, wave_number, 'q4a', 'p', q4a_p, null, q4a_p_3m, null
-    from stg where q4a_p is not null
+    from stg where (q4a_p is not null or q4a_p_3m is not null)
     union all
     select permid, wave_number, 'q4a', 'r', q4a_r, null, q4a_r_3m, null
-    from stg where q4a_r is not null
+    from stg where (q4a_r is not null or q4a_r_3m is not null)
 
     --------------------------------------------------------------------------
     -- Q5 (annex Q5): Change in need for external financing over past 6 months
@@ -226,28 +244,28 @@ unpivoted as (
     --------------------------------------------------------------------------
     union all
     select permid, wave_number, 'q5', 'a', q5_a, q5_a_rec, q5_a_3m, q5_a_3m_rec
-    from stg where q5_a is not null
+    from stg where (q5_a is not null or q5_a_3m is not null)
     union all
     select permid, wave_number, 'q5', 'b', q5_b, q5_b_rec, q5_b_3m, q5_b_3m_rec
-    from stg where q5_b is not null
+    from stg where (q5_b is not null or q5_b_3m is not null)
     union all
     select permid, wave_number, 'q5', 'c', q5_c, q5_c_rec, q5_c_3m, q5_c_3m_rec
-    from stg where q5_c is not null
+    from stg where (q5_c is not null or q5_c_3m is not null)
     union all
     select permid, wave_number, 'q5', 'd', q5_d, q5_d_rec, q5_d_3m, q5_d_3m_rec
-    from stg where q5_d is not null
+    from stg where (q5_d is not null or q5_d_3m is not null)
     union all
     select permid, wave_number, 'q5', 'e', q5_e, q5_e_rec, null, null
     from stg where q5_e is not null
     union all
     select permid, wave_number, 'q5', 'f', q5_f, q5_f_rec, q5_f_3m, q5_f_3m_rec
-    from stg where q5_f is not null
+    from stg where (q5_f is not null or q5_f_3m is not null)
     union all
     select permid, wave_number, 'q5', 'g', q5_g, q5_g_rec, q5_g_3m, q5_g_3m_rec
-    from stg where q5_g is not null
+    from stg where (q5_g is not null or q5_g_3m is not null)
     union all
     select permid, wave_number, 'q5', 'h', q5_h, q5_h_rec, q5_h_3m, q5_h_3m_rec
-    from stg where q5_h is not null
+    from stg where (q5_h is not null or q5_h_3m is not null)
 
     --------------------------------------------------------------------------
     -- Q6 (annex Q6, ECB-only): Factors affecting firm's need for external
@@ -281,22 +299,22 @@ unpivoted as (
     --------------------------------------------------------------------------
     union all
     select permid, wave_number, 'q6a', '1', q6a_1, null, q6a_1_3m, null
-    from stg where q6a_1 is not null
+    from stg where (q6a_1 is not null or q6a_1_3m is not null)
     union all
     select permid, wave_number, 'q6a', '2', q6a_2, null, q6a_2_3m, null
-    from stg where q6a_2 is not null
+    from stg where (q6a_2 is not null or q6a_2_3m is not null)
     union all
     select permid, wave_number, 'q6a', '3', q6a_3, null, q6a_3_3m, null
-    from stg where q6a_3 is not null
+    from stg where (q6a_3 is not null or q6a_3_3m is not null)
     union all
     select permid, wave_number, 'q6a', '4', q6a_4, null, q6a_4_3m, null
-    from stg where q6a_4 is not null
+    from stg where (q6a_4 is not null or q6a_4_3m is not null)
     union all
     select permid, wave_number, 'q6a', '5', q6a_5, null, q6a_5_3m, null
-    from stg where q6a_5 is not null
+    from stg where (q6a_5 is not null or q6a_5_3m is not null)
     union all
     select permid, wave_number, 'q6a', '6', q6a_6, null, q6a_6_3m, null
-    from stg where q6a_6 is not null
+    from stg where (q6a_6 is not null or q6a_6_3m is not null)
 
     --------------------------------------------------------------------------
     -- Q7A (annex Q7A): Application status for each financing instrument
@@ -315,28 +333,28 @@ unpivoted as (
     --------------------------------------------------------------------------
     union all
     select permid, wave_number, 'q7a', 'a', q7a_a, q7a_a_rec, q7a_a_3m, q7a_a_3m_rec
-    from stg where q7a_a is not null
+    from stg where (q7a_a is not null or q7a_a_3m is not null)
     union all
     select permid, wave_number, 'q7a', 'b', q7a_b, q7a_b_rec, q7a_b_3m, q7a_b_3m_rec
-    from stg where q7a_b is not null
+    from stg where (q7a_b is not null or q7a_b_3m is not null)
     union all
     select permid, wave_number, 'q7a', 'c', q7a_c, q7a_c_rec, q7a_c_3m, q7a_c_3m_rec
-    from stg where q7a_c is not null
+    from stg where (q7a_c is not null or q7a_c_3m is not null)
     union all
     select permid, wave_number, 'q7a', 'd', q7a_d, q7a_d_rec, q7a_d_3m, q7a_d_3m_rec
-    from stg where q7a_d is not null
+    from stg where (q7a_d is not null or q7a_d_3m is not null)
     union all
     select permid, wave_number, 'q7b', 'a', q7b_a, q7b_a_rec, q7b_a_3m, q7b_a_3m_rec
-    from stg where q7b_a is not null
+    from stg where (q7b_a is not null or q7b_a_3m is not null)
     union all
     select permid, wave_number, 'q7b', 'b', q7b_b, q7b_b_rec, q7b_b_3m, q7b_b_3m_rec
-    from stg where q7b_b is not null
+    from stg where (q7b_b is not null or q7b_b_3m is not null)
     union all
     select permid, wave_number, 'q7b', 'c', q7b_c, q7b_c_rec, q7b_c_3m, q7b_c_3m_rec
-    from stg where q7b_c is not null
+    from stg where (q7b_c is not null or q7b_c_3m is not null)
     union all
     select permid, wave_number, 'q7b', 'd', q7b_d, q7b_d_rec, q7b_d_3m, q7b_d_3m_rec
-    from stg where q7b_d is not null
+    from stg where (q7b_d is not null or q7b_d_3m is not null)
 
     --------------------------------------------------------------------------
     -- Q8A (annex Q8A): Size bracket of the last bank loan obtained.
@@ -363,28 +381,28 @@ unpivoted as (
     --------------------------------------------------------------------------
     union all
     select permid, wave_number, 'q9', 'a', q9_a, q9_a_rec, q9_a_3m, q9_a_3m_rec
-    from stg where q9_a is not null
+    from stg where (q9_a is not null or q9_a_3m is not null)
     union all
     select permid, wave_number, 'q9', 'b', q9_b, q9_b_rec, q9_b_3m, q9_b_3m_rec
-    from stg where q9_b is not null
+    from stg where (q9_b is not null or q9_b_3m is not null)
     union all
     select permid, wave_number, 'q9', 'c', q9_c, q9_c_rec, q9_c_3m, q9_c_3m_rec
-    from stg where q9_c is not null
+    from stg where (q9_c is not null or q9_c_3m is not null)
     union all
     select permid, wave_number, 'q9', 'd', q9_d, q9_d_rec, q9_d_3m, q9_d_3m_rec
-    from stg where q9_d is not null
+    from stg where (q9_d is not null or q9_d_3m is not null)
     union all
     select permid, wave_number, 'q9', 'e', q9_e, q9_e_rec, null, null
     from stg where q9_e is not null
     union all
     select permid, wave_number, 'q9', 'f', q9_f, q9_f_rec, q9_f_3m, q9_f_3m_rec
-    from stg where q9_f is not null
+    from stg where (q9_f is not null or q9_f_3m is not null)
     union all
     select permid, wave_number, 'q9', 'g', q9_g, q9_g_rec, q9_g_3m, q9_g_3m_rec
-    from stg where q9_g is not null
+    from stg where (q9_g is not null or q9_g_3m is not null)
     union all
     select permid, wave_number, 'q9', 'h', q9_h, q9_h_rec, q9_h_3m, q9_h_3m_rec
-    from stg where q9_h is not null
+    from stg where (q9_h is not null or q9_h_3m is not null)
 
     --------------------------------------------------------------------------
     -- Q10 (annex Q10): Terms and conditions of bank financing — increased,
@@ -399,22 +417,22 @@ unpivoted as (
     --------------------------------------------------------------------------
     union all
     select permid, wave_number, 'q10', 'a', q10_a, q10_a_rec, q10_a_3m, q10_a_3m_rec
-    from stg where q10_a is not null
+    from stg where (q10_a is not null or q10_a_3m is not null)
     union all
     select permid, wave_number, 'q10', 'b', q10_b, q10_b_rec, q10_b_3m, q10_b_3m_rec
-    from stg where q10_b is not null
+    from stg where (q10_b is not null or q10_b_3m is not null)
     union all
     select permid, wave_number, 'q10', 'c', q10_c, q10_c_rec, q10_c_3m, q10_c_3m_rec
-    from stg where q10_c is not null
+    from stg where (q10_c is not null or q10_c_3m is not null)
     union all
     select permid, wave_number, 'q10', 'd', q10_d, q10_d_rec, q10_d_3m, q10_d_3m_rec
-    from stg where q10_d is not null
+    from stg where (q10_d is not null or q10_d_3m is not null)
     union all
     select permid, wave_number, 'q10', 'e', q10_e, q10_e_rec, q10_e_3m, q10_e_3m_rec
-    from stg where q10_e is not null
+    from stg where (q10_e is not null or q10_e_3m is not null)
     union all
     select permid, wave_number, 'q10', 'f', q10_f, q10_f_rec, q10_f_3m, q10_f_3m_rec
-    from stg where q10_f is not null
+    from stg where (q10_f is not null or q10_f_3m is not null)
 
     --------------------------------------------------------------------------
     -- Q11 (annex Q11): Factors affecting availability of external financing —
@@ -433,31 +451,31 @@ unpivoted as (
     --------------------------------------------------------------------------
     union all
     select permid, wave_number, 'q11', 'a', q11_a, null, q11_a_3m, null
-    from stg where q11_a is not null
+    from stg where (q11_a is not null or q11_a_3m is not null)
     union all
     select permid, wave_number, 'q11', 'b', q11_b, null, q11_b_3m, null
-    from stg where q11_b is not null
+    from stg where (q11_b is not null or q11_b_3m is not null)
     union all
     select permid, wave_number, 'q11', 'c', q11_c, null, q11_c_3m, null
-    from stg where q11_c is not null
+    from stg where (q11_c is not null or q11_c_3m is not null)
     union all
     select permid, wave_number, 'q11', 'd', q11_d, null, q11_d_3m, null
-    from stg where q11_d is not null
+    from stg where (q11_d is not null or q11_d_3m is not null)
     union all
     select permid, wave_number, 'q11', 'e', q11_e, null, q11_e_3m, null
-    from stg where q11_e is not null
+    from stg where (q11_e is not null or q11_e_3m is not null)
     union all
     select permid, wave_number, 'q11', 'f', q11_f, q11_f_rec, q11_f_3m, q11_f_3m_rec
-    from stg where q11_f is not null
+    from stg where (q11_f is not null or q11_f_3m is not null)
     union all
     select permid, wave_number, 'q11', 'g', q11_g, q11_g_rec, q11_g_3m, q11_g_3m_rec
-    from stg where q11_g is not null
+    from stg where (q11_g is not null or q11_g_3m is not null)
     union all
     select permid, wave_number, 'q11', 'h', q11_h, q11_h_rec, q11_h_3m, q11_h_3m_rec
-    from stg where q11_h is not null
+    from stg where (q11_h is not null or q11_h_3m is not null)
     union all
     select permid, wave_number, 'q11', 'i', q11_i, null, q11_i_3m, null
-    from stg where q11_i is not null
+    from stg where (q11_i is not null or q11_i_3m is not null)
 
     --------------------------------------------------------------------------
     -- Q12 (annex Q12, EC-only): Size of last loan of any kind obtained in
@@ -556,31 +574,31 @@ unpivoted as (
     from stg where q22_b is not null
     union all
     select permid, wave_number, 'q23', 'a', q23_a, q23_a_rec, q23_a_3m, q23_a_3m_rec
-    from stg where q23_a is not null
+    from stg where (q23_a is not null or q23_a_3m is not null)
     union all
     select permid, wave_number, 'q23', 'b', q23_b, q23_b_rec, q23_b_3m, q23_b_3m_rec
-    from stg where q23_b is not null
+    from stg where (q23_b is not null or q23_b_3m is not null)
     union all
     select permid, wave_number, 'q23', 'c', q23_c, q23_c_rec, q23_c_3m, q23_c_3m_rec
-    from stg where q23_c is not null
+    from stg where (q23_c is not null or q23_c_3m is not null)
     union all
     select permid, wave_number, 'q23', 'd', q23_d, q23_d_rec, q23_d_3m, q23_d_3m_rec
-    from stg where q23_d is not null
+    from stg where (q23_d is not null or q23_d_3m is not null)
     union all
     select permid, wave_number, 'q23', 'e', q23_e, q23_e_rec, q23_e_3m, q23_e_3m_rec
-    from stg where q23_e is not null
+    from stg where (q23_e is not null or q23_e_3m is not null)
     union all
     select permid, wave_number, 'q23', 'f', q23_f, q23_f_rec, null, null
     from stg where q23_f is not null
     union all
     select permid, wave_number, 'q23', 'g', q23_g, q23_g_rec, q23_g_3m, q23_g_3m_rec
-    from stg where q23_g is not null
+    from stg where (q23_g is not null or q23_g_3m is not null)
     union all
     select permid, wave_number, 'q23', 'i', q23_i, q23_i_rec, q23_i_3m, q23_i_3m_rec
-    from stg where q23_i is not null
+    from stg where (q23_i is not null or q23_i_3m is not null)
     union all
     select permid, wave_number, 'q23', 'j', q23_j, q23_j_rec, q23_j_3m, q23_j_3m_rec
-    from stg where q23_j is not null
+    from stg where (q23_j is not null or q23_j_3m is not null)
     union all
     select permid, wave_number, 'q24', '', q24, null, null, null
     from stg where q24 is not null
@@ -610,10 +628,10 @@ unpivoted as (
     from stg where q26 is not null
     union all
     select permid, wave_number, 'q26', 'a', q26_a, null, q26_a_3m, null
-    from stg where q26_a is not null
+    from stg where (q26_a is not null or q26_a_3m is not null)
     union all
     select permid, wave_number, 'q26', 'b', q26_b, null, q26_b_3m, null
-    from stg where q26_b is not null
+    from stg where (q26_b is not null or q26_b_3m is not null)
 
     --------------------------------------------------------------------------
     -- Q31 (annex Q31): Expected turnover growth in future periods
@@ -683,25 +701,25 @@ unpivoted as (
     from stg where q0 is not null
     union all
     select permid, wave_number, 'q0b', '1', q0b_1, null, q0b_1_3m, null
-    from stg where q0b_1 is not null
+    from stg where (q0b_1 is not null or q0b_1_3m is not null)
     union all
     select permid, wave_number, 'q0b', '2', q0b_2, null, q0b_2_3m, null
-    from stg where q0b_2 is not null
+    from stg where (q0b_2 is not null or q0b_2_3m is not null)
     union all
     select permid, wave_number, 'q0b', '3', q0b_3, null, q0b_3_3m, null
-    from stg where q0b_3 is not null
+    from stg where (q0b_3 is not null or q0b_3_3m is not null)
     union all
     select permid, wave_number, 'q0b', '4', q0b_4, null, q0b_4_3m, null
-    from stg where q0b_4 is not null
+    from stg where (q0b_4 is not null or q0b_4_3m is not null)
     union all
     select permid, wave_number, 'q0b', '5', q0b_5, null, q0b_5_3m, null
-    from stg where q0b_5 is not null
+    from stg where (q0b_5 is not null or q0b_5_3m is not null)
     union all
     select permid, wave_number, 'q0b', '6', q0b_6, null, q0b_6_3m, null
-    from stg where q0b_6 is not null
+    from stg where (q0b_6 is not null or q0b_6_3m is not null)
     union all
     select permid, wave_number, 'q0b', '7', q0b_7, null, q0b_7_3m, null
-    from stg where q0b_7 is not null
+    from stg where (q0b_7 is not null or q0b_7_3m is not null)
     union all
     select permid, wave_number, 'q0c', '', q0c, null, null, null
     from stg where q0c is not null
@@ -731,10 +749,10 @@ final as (
         u.response_3m,
         u.response_3m_rec,
 
-        -- Non-response flag
+        -- Non-response flag based on whichever response column is populated.
         -- Covers: -1 (N/A), -2 (don't know), -99 (refused),
         --         7 (not asked - routing), 99 (not asked - routing)
-        u.response_raw in (-1, -2, -99, 7, 99)                     as is_nonresponse
+        coalesce(u.response_raw, u.response_3m) in (-1, -2, -99, 7, 99) as is_nonresponse
 
     from unpivoted u
     left join firm f using (permid, wave_number)

@@ -62,7 +62,7 @@ with source as (
         country_name_en,
         question_id,
         sub_item,
-        response_raw,
+        coalesce(response_raw, response_3m)         as response_raw,
         weight_common,
         is_nonresponse
     from {{ ref('int_safe__core_questions_long') }}

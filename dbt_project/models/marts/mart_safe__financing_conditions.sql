@@ -48,7 +48,12 @@
     f = Other (required guarantees, information requirements, loan covenants, procedures)
 
   Net balance = % improved − % deteriorated (Q9) or % increased − % decreased (Q10).
-  Aggregation: wave × country × question_id × sub_item (all firm sizes combined).
+
+  Scope: SMEs only (employee_band_code 1–3: micro, small, medium).
+  Large firms (band 4, 250+ employees) are excluded for comparability with
+  the ECB's published SAFE data warehouse, which reports SME aggregates.
+
+  Aggregation: wave × country × question_id × sub_item.
 */
 
 with source as (
@@ -67,6 +72,7 @@ with source as (
         is_nonresponse
     from {{ ref('int_safe__core_questions_long') }}
     where question_id in ('q9', 'q10')
+      and employee_band_code between 1 and 3
 
 ),
 

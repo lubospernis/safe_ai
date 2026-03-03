@@ -19,6 +19,10 @@
     - pct_high_pressing      : % of valid responses with score >= 7 (highly pressing)
     - pct_low_pressing       : % of valid responses with score <= 3 (not very pressing)
 
+  Scope: SMEs only (employee_band_code 1–3: micro, small, medium).
+  Large firms (band 4, 250+ employees) are excluded for comparability with
+  the ECB's published SAFE data warehouse, which reports SME aggregates.
+
   Source: int_safe__q0b_pressingness (valid responses only, is_nonresponse = false)
 */
 
@@ -31,8 +35,9 @@ with int_q0b as (
 valid as (
 
     select * from int_q0b
-    where  weight_common is not null and is_nonresponse = false
-    -- and employee_band_code BETWEEN 1 AND 3
+    where weight_common is not null
+      and is_nonresponse = false
+      and employee_band_code between 1 and 3
 
 ),
 

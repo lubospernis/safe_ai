@@ -46,7 +46,11 @@
     - financing_gap: discouragement_rate + rejection_rate (ECB headline indicator)
       expressed as % of all valid respondents
 
-  Aggregation: wave × country × instrument (all firm sizes combined).
+  Scope: SMEs only (employee_band_code 1–3: micro, small, medium).
+  Large firms (band 4, 250+ employees) are excluded for comparability with
+  the ECB's published SAFE data warehouse, which reports SME aggregates.
+
+  Aggregation: wave × country × instrument.
 */
 
 with q7a as (

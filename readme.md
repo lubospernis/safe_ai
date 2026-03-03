@@ -81,6 +81,7 @@ All tables are in the `main_safe` schema of the `my_db` MotherDuck database. Mar
 - "Which countries have the highest financing gap? How has it evolved?"
 - "What fraction of firms that applied for a bank loan were rejected in Spain?"
 - "How does discouragement differ by firm size or sector?"
+- "Are firms credit constrained? The analysis should check whether the availability of credit is lower than the need for credit."
 
 ### Business situation and cost pressures
 - "Have European SMEs' profit margins been declining? Show the net balance for profit over recent waves."

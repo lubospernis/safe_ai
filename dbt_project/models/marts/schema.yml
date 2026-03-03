@@ -239,3 +239,123 @@ models:
           ECB financing gap indicator = discouragement_rate + rejection share of all respondents
           (% discouraged + % applied and rejected, both as share of all valid respondents).
           Range: 0–100. Higher = worse access to financing.
+
+  - name: mart_safe__outlook
+    description: >
+      Weighted net balances for expected changes in turnover and fixed investment (Q26).
+      Question: "Looking ahead, please indicate whether you think the following will increase,
+      decrease or remain unchanged over the next two quarters."
+      Response: 1=will increase, 2=will remain unchanged, 3=will decrease, 9=DK.
+      Net balance = % will increase − % will decrease.
+      Scope: SMEs only (employee_band_code 1–3: micro, small, medium — excludes large firms).
+      Aggregation: wave × country × sub-item (a=turnover, b=fixed investment).
+      Sub-item labels verified from annex.xlsx Q26.
+
+    config:
+      tags: ["safe", "ecb", "survey", "mart", "outlook"]
+
+    columns:
+      - name: country_code
+        description: ISO 3166-1 alpha-2 country code.
+      - name: country_name_en
+        description: Full English country name.
+      - name: wave_number
+        description: Survey wave (1–37).
+      - name: survey_year
+        description: Calendar year of the survey wave.
+      - name: survey_period
+        description: "Survey half-year or quarter (H1, H2, Q1–Q4)."
+      - name: survey_period_label
+        description: "Human-readable period label (e.g. '2024Q3')."
+      - name: sub_item
+        description: "Sub-item code: a=Company's turnover, b=Investments in property, plant or equipment."
+      - name: sub_item_label
+        description: Human-readable label for the sub-item.
+      - name: n_total
+        description: Total rows in this group.
+      - name: n_respondents
+        description: Count of valid responses.
+      - name: n_nonresponse
+        description: Count of non-responses (code 9 = DK).
+      - name: total_weight
+        description: Sum of weight_common for valid respondents.
+      - name: pct_increase_wtd
+        description: Weighted % of firms expecting an increase. Range 0–100.
+      - name: pct_unchanged_wtd
+        description: Weighted % expecting no change. Range 0–100.
+      - name: pct_decrease_wtd
+        description: Weighted % expecting a decrease. Range 0–100.
+      - name: net_balance_wtd
+        description: >
+          Weighted net balance = pct_increase − pct_decrease. Range −100 to +100.
+          Positive = net expectation of growth.
+      - name: net_balance_unwtd
+        description: Unweighted net balance for reference.
+
+  - name: mart_safe__expectations
+    description: >
+      Aggregated expectation statistics for Q31 (inflation rate expectations), Q33 (inflation
+      risk direction), and Q34 (expected % changes in prices, wages, and employment).
+      Q31 and Q34 are continuous numeric variables; statistics include weighted mean and
+      unweighted percentiles (p25, median, p75).
+      Q33 is an ordinal question; statistics include weighted % downside/balanced/upside
+      and a net balance (upside − downside).
+      Scope: SMEs only (employee_band_code 1–3: micro, small, medium — excludes large firms).
+      Aggregation: wave × country × question_id × sub_item.
+
+    config:
+      tags: ["safe", "ecb", "survey", "mart", "expectations"]
+
+    columns:
+      - name: country_code
+        description: ISO 3166-1 alpha-2 country code.
+      - name: country_name_en
+        description: Full English country name.
+      - name: wave_number
+        description: Survey wave (1–37).
+      - name: survey_year
+        description: Calendar year of the survey wave.
+      - name: survey_period
+        description: "Survey half-year or quarter (H1, H2, Q1–Q4)."
+      - name: survey_period_label
+        description: "Human-readable period label (e.g. '2024Q3')."
+      - name: question_id
+        description: "'q31' = inflation rate expectations; 'q33' = inflation risk direction; 'q34' = expected % changes."
+      - name: question_label
+        description: Human-readable question label.
+      - name: sub_item
+        description: >
+          Sub-item code. Q31: a=in 12 months, b=in 3 years, c=in 5 years.
+          Q33: '' (single response). Q34: a=selling price, b=input prices, c=wages, d=employment.
+      - name: sub_item_label
+        description: Human-readable label for the sub-item.
+      - name: n_respondents
+        description: Count of valid responses (non-response sentinel -9999 or code 9 excluded).
+      - name: n_nonresponse
+        description: Count of non-responses.
+      - name: total_weight
+        description: Sum of weight_common for valid respondents.
+      - name: mean_wtd
+        description: "Weighted mean response value (Q31, Q34 only). Null for Q33."
+      - name: mean_unwtd
+        description: "Unweighted mean for reference (Q31, Q34 only). Null for Q33."
+      - name: p25_unwtd
+        description: "Unweighted 25th percentile (Q31, Q34 only). Null for Q33."
+      - name: median_unwtd
+        description: "Unweighted median (Q31, Q34 only). Null for Q33."
+      - name: p75_unwtd
+        description: "Unweighted 75th percentile (Q31, Q34 only). Null for Q33."
+      - name: pct_positive
+        description: "% of valid responses with value > 0 (Q31, Q34 only). Null for Q33."
+      - name: pct_zero
+        description: "% of valid responses with value = 0 (Q31, Q34 only). Null for Q33."
+      - name: pct_negative
+        description: "% of valid responses with value < 0 (Q31, Q34 only). Null for Q33."
+      - name: pct_downside_wtd
+        description: "Weighted % reporting risk to the downside — code 1 (Q33 only). Null for Q31/Q34."
+      - name: pct_balanced_wtd
+        description: "Weighted % reporting broadly balanced risks — code 2 (Q33 only). Null for Q31/Q34."
+      - name: pct_upside_wtd
+        description: "Weighted % reporting risk to the upside — code 3 (Q33 only). Null for Q31/Q34."
+      - name: net_balance_wtd
+        description: "Weighted net balance = pct_upside − pct_downside (Q33 only). Null for Q31/Q34."

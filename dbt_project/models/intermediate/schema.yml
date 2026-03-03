@@ -72,10 +72,15 @@ models:
 
   - name: int_safe__core_questions_long
     description: >
-      All Q-series survey responses unpivoted into long format (one row per firm × wave ×
+      Selected core survey questions unpivoted into long format (one row per firm × wave ×
       question sub-item). Enriched with firm context from int_safe__firm_survey_responses.
-      Covers questions Q0–Q34 across all 37 waves (~26M rows).
-      Non-responses are retained and flagged via is_nonresponse.
+      Covers questions: q2 (business situation), q4rec (financing sources), q5 (change in
+      financing need), q6a (purpose of financing), q7a/q7b (loan applications/outcomes),
+      q9 (availability), q10 (bank loan terms), q11 (availability factors), q23 (expected
+      availability), q26 (expected turnover/investment), q31 (inflation expectations),
+      q32 (bank loan irrelevance reason), q33 (inflation risk direction), q34 (expected
+      price/wage changes). Non-responses are retained and flagged via is_nonresponse.
+      Includes all firm sizes — apply employee_band_code filter in downstream models.
 
     config:
       tags: ["safe", "ecb", "survey", "intermediate", "long"]
@@ -108,7 +113,9 @@ models:
       - name: weight_common
         description: Main ECB calibration weight for weighted analysis.
       - name: question_id
-        description: "Question identifier (e.g. 'q1', 'q4', 'q7a', 'q7b', 'q9', 'q10', 'q0b')."
+        description: >
+          Question identifier. Values: q2, q4rec, q5, q6a, q7a, q7b, q9, q10, q11, q23,
+          q26, q31, q32, q33, q34.
       - name: sub_item
         description: Sub-item code within the question (e.g. 'a', 'b', '1', '2').
       - name: response_raw
@@ -127,5 +134,7 @@ models:
           Populated only where a recoded 3-month variant exists in the source data.
       - name: is_nonresponse
         description: >
-          True when response_raw is a non-response code:
-          -1 (not applicable), -2 (don't know), -99 (refused), 7 (not asked/routing), 99 (not asked).
+          True when the response is a non-response code. Standard codes: -1 (not applicable),
+          -2 (don't know), -99 (refused), 7 (not asked/routing), 99 (not asked).
+          Exceptions: q4rec uses codes 9 and 99 only (code 7 = "not relevant" is substantive).
+          q31 and q34 (continuous numeric) use -9999 as the DK/refused sentinel.

@@ -55,8 +55,12 @@ firm as (
 unpivoted as (
 
     --------------------------------------------------------------------------
-    -- Q1: Business situation change over past 6 months
-    --   a=turnover, b=labour costs, c=interest expenses, d=profits
+    -- Q1 (annex Q2): Business situation change over past 6 months/quarter
+    --   (decreased / remained unchanged / increased; 1=increased, 2=unchanged, 3=decreased)
+    --   Core 4-item block asked in all common rounds:
+    --   a=Turnover, b=Labour costs (incl. social contributions),
+    --   c=Interest expenses, d=Profit
+    -- The extended Q2 block (data q2, same annex Q2) adds items e–j.
     --------------------------------------------------------------------------
     select permid, wave_number, 'q1' as question_id, 'a' as sub_item,
         q1_a as response_raw, null::integer as response_rec,
@@ -73,11 +77,15 @@ unpivoted as (
     from stg where q1_d is not null
 
     --------------------------------------------------------------------------
-    -- Q2: Sources of financing used in past 6 months
-    --   a=retained earnings, b=bank overdraft/credit line, c=bank loan,
-    --   d=trade credit, e=other loans, f=subsidised bank loan,
-    --   g=subordinated debt/hybrid, h=equity issuance, i=other,
-    --   j=not needed external financing
+    -- Q2 (annex Q2): Business situation — extended sub-item block
+    --   (decreased / remained unchanged / increased)
+    --   a=Turnover, b=Labour costs (incl. social contributions),
+    --   c=Other costs (materials, energy, other), d=Interest expenses,
+    --   e=Profit, f=Profit margin (removed from questionnaire, older rounds only),
+    --   g=Investments in property, plant or equipment,
+    --   h=Inventories and other working capital, i=Number of employees,
+    --   j=Debt compared to assets
+    -- This is the full Q2 column set; data q1 holds only sub-items a–d.
     --------------------------------------------------------------------------
     union all
     select permid, wave_number, 'q2', 'a', q2_a, null, q2_a_grouped, null
@@ -111,19 +119,33 @@ unpivoted as (
     from stg where q2_j is not null
 
     --------------------------------------------------------------------------
-    -- Q3: Most pressing problem facing firm (single-choice)
+    -- Q3 (annex Q3): Debt compared to assets — decreased/unchanged/increased
+    --   over past 6 months (single response, no sub-items).
+    --   Note: from later waves this item was folded into Q2 (as Q2_j).
     --------------------------------------------------------------------------
     union all
     select permid, wave_number, 'q3', '', q3, null, null, null
     from stg where q3 is not null
 
     --------------------------------------------------------------------------
-    -- Q4: Change in availability of financing instruments over past 6 months
-    --   a=bank loans, b=bank overdraft/credit line, c=trade credit,
-    --   d=other loans, e=equity, f=leasing/hire purchase,
-    --   g=factoring, h=public financial support, i=debt securities,
-    --   j=subordinated debt, k=internal funds, l=grants,
-    --   m=other, p=private equity/venture capital, r=crowdfunding
+    -- Q4 (annex Q4): Financing sources relevant/used — whether each source was
+    --   used or considered (1=relevant/used, 2=not used, 3=not relevant).
+    --   Sub-items (verified from annex.xlsx Q4):
+    --   a=Retained earnings or sale of assets
+    --   b=Grants or subsidised bank loans
+    --   c=Credit line, bank overdraft or credit cards overdraft
+    --   d=Bank loan (excl. subsidised loans, overdrafts and credit lines)
+    --   e=Trade credit
+    --   f=Other loan (family, friends, related enterprise, shareholders)
+    --   g=(legacy, empty in current questionnaire)
+    --   h=Debt securities issued
+    --   i=(legacy, empty in current questionnaire)
+    --   j=Equity capital
+    --   k=(legacy, empty in current questionnaire)
+    --   l=(legacy, empty in current questionnaire)
+    --   m=Leasing or hire-purchase
+    --   p=Other sources of financing (subordinated debt, peer-to-peer, crowdfunding, etc.)
+    --   r=Factoring
     --------------------------------------------------------------------------
     union all
     select permid, wave_number, 'q4', 'a', q4_a, q4_a_rec, null, q4_a_grouped_rec
@@ -172,7 +194,9 @@ unpivoted as (
     from stg where q4_r is not null
 
     --------------------------------------------------------------------------
-    -- Q4A: Reasons for change in availability (mirrors q4 sub-items)
+    -- Q4A (annex Q4A): Change in availability of each financing source over
+    --   past 6 months (improved/unchanged/deteriorated).
+    --   Sub-items mirror the Q4 instrument list (same letter codes).
     --------------------------------------------------------------------------
     union all
     select permid, wave_number, 'q4a', 'a', q4a_a, null, q4a_a_grouped, null
@@ -209,8 +233,16 @@ unpivoted as (
     from stg where q4a_r is not null
 
     --------------------------------------------------------------------------
-    -- Q5: Change in need for financing over past 6 months
-    --   Same instrument sub-items as q4 (a–h)
+    -- Q5 (annex Q5): Change in need for external financing over past 6 months
+    --   (increased/unchanged/decreased per instrument type)
+    --   a=Bank loans (excl. overdraft and credit lines)
+    --   b=Trade credit
+    --   c=Equity capital
+    --   d=Debt securities issued
+    --   e=(removed in later rounds)
+    --   f=Credit line, bank overdraft or credit cards overdraft
+    --   g=Leasing or hire-purchase
+    --   h=Other loan (family, friends, related enterprise, shareholders)
     --------------------------------------------------------------------------
     union all
     select permid, wave_number, 'q5', 'a', q5_a, q5_a_rec, q5_a_grouped, q5_a_grouped_rec
@@ -238,8 +270,12 @@ unpivoted as (
     from stg where q5_h is not null
 
     --------------------------------------------------------------------------
-    -- Q6: Bank relationship
-    --   a=main bank, b=number of banks, c=bank switched, d=duration
+    -- Q6 (annex Q6, ECB-only): Factors affecting firm's need for external
+    --   financing — increased/decreased/no impact over past 6 months
+    --   a=Fixed Investment
+    --   b=Inventories and working capital
+    --   c=Availability of internal funds (Internal funds)
+    --   d=Mergers & Acquisitions and corporate restructuring
     --------------------------------------------------------------------------
     union all
     select permid, wave_number, 'q6', 'a', q6_a, null, null, null
@@ -255,7 +291,13 @@ unpivoted as (
     from stg where q6_d is not null
 
     --------------------------------------------------------------------------
-    -- Q6A: Bank relationship sub-items (1–6)
+    -- Q6A (annex Q6A): Purpose of external financing used in past 6 months
+    --   1=Investments in property, plant or equipment
+    --   2=Inventory and other working capital
+    --   3=Hiring and training of employees
+    --   4=Developing and launching new products or services
+    --   5=Refinancing or paying off obligations
+    --   6=Other
     --------------------------------------------------------------------------
     union all
     select permid, wave_number, 'q6a', '1', q6a_1, null, q6a_1_grouped, null
@@ -277,9 +319,19 @@ unpivoted as (
     from stg where q6a_6 is not null
 
     --------------------------------------------------------------------------
-    -- Q7A/Q7B: Obstacles to obtaining financing
-    --   a=sufficient collateral, b=credit history, c=too small/young,
-    --   d=business prospects
+    -- Q7A (annex Q7A): Application status for each financing instrument
+    --   1=Applied, 2=Did not apply — fear of rejection (discouraged),
+    --   3=Did not apply — sufficient internal funds,
+    --   4=Did not apply — other reasons, 9=DK/NA
+    -- Q7B (annex Q7B): Outcome of application (for applicants only)
+    --   1=Received all applied for, 2=Got part (old), 3=Refused — too costly,
+    --   4=Rejected by lender, 5=Received most (new), 6=Received limited part (new),
+    --   8=Still pending, 9=DK
+    --   Sub-items for both Q7A and Q7B:
+    --   a=Bank loan (excl. overdraft and credit lines)
+    --   b=Trade credit
+    --   c=Other external financing
+    --   d=Credit line, bank overdraft or credit cards overdraft
     --------------------------------------------------------------------------
     union all
     select permid, wave_number, 'q7a', 'a', q7a_a, q7a_a_rec, q7a_a_grouped, q7a_a_grouped_rec
@@ -307,19 +359,27 @@ unpivoted as (
     from stg where q7b_d is not null
 
     --------------------------------------------------------------------------
-    -- Q8A: Bank loan amount bracket
-    -- Q8A only — q8b and rate sub-fields are kept in staging as floats
-    -- and handled separately in mart_safe__loan_applications
+    -- Q8A (annex Q8A): Size bracket of the last bank loan obtained.
+    --   Single response (no sub-items). Replaces old Q12 from 2014H1 onwards.
+    -- Q8B (interest rate on credit line/overdraft) is a numeric field kept in
+    --   staging as a float; not included in this long-format model.
     --------------------------------------------------------------------------
     union all
     select permid, wave_number, 'q8a', '', q8a, q8a_rec, null, null
     from stg where q8a is not null
 
     --------------------------------------------------------------------------
-    -- Q9: Applied for / outcome of applications (by instrument)
-    --   a=bank loan, b=bank overdraft/credit line, c=trade credit,
-    --   d=other loans, e=subordinated debt, f=equity, g=grants,
-    --   h=other
+    -- Q9 (annex Q9): Availability of each financing type — has it improved,
+    --   remained unchanged or deteriorated over past 6 months?
+    --   1=Improved, 2=Unchanged, 3=Deteriorated, 7=Not applicable, 9=DK
+    --   a=Bank loans (excl. overdraft and credit lines)
+    --   b=Trade credit
+    --   c=Equity capital
+    --   d=Debt securities issued
+    --   e=(legacy, empty in current questionnaire)
+    --   f=Credit line, bank overdraft or credit cards overdraft
+    --   g=Leasing or hire-purchase
+    --   h=Other loan (family, friends, related enterprise, shareholders)
     --------------------------------------------------------------------------
     union all
     select permid, wave_number, 'q9', 'a', q9_a, q9_a_rec, q9_a_grouped, q9_a_grouped_rec
@@ -347,9 +407,15 @@ unpivoted as (
     from stg where q9_h is not null
 
     --------------------------------------------------------------------------
-    -- Q10: Change in terms and conditions of financing
-    --   a=interest rates, b=other financing costs, c=available size/amount,
-    --   d=collateral requirements, e=maturity, f=covenants
+    -- Q10 (annex Q10): Terms and conditions of bank financing — increased,
+    --   unchanged or decreased by the bank over past 6 months?
+    --   1=Increased, 2=Unchanged, 3=Decreased, 9=DK/NA
+    --   a=Level of interest rates
+    --   b=Level of cost of financing other than interest rates (charges, fees, commissions)
+    --   c=Available size of loan or credit line
+    --   d=Available maturity of the loan
+    --   e=Collateral requirements
+    --   f=Other terms (guarantees, information requirements, procedures, covenants)
     --------------------------------------------------------------------------
     union all
     select permid, wave_number, 'q10', 'a', q10_a, q10_a_rec, q10_a_grouped, q10_a_grouped_rec
@@ -371,10 +437,19 @@ unpivoted as (
     from stg where q10_f is not null
 
     --------------------------------------------------------------------------
-    -- Q11: Most important obstacle to business activity
-    --   a=finding customers, b=access to finance, c=costs of production,
-    --   d=availability of skilled staff, e=competition,
-    --   f=regulation, g=economic outlook, h=other, i=none
+    -- Q11 (annex Q11): Factors affecting availability of external financing —
+    --   improved, unchanged or deteriorated over past 6 months?
+    --   1=Improved, 2=Unchanged, 3=Deteriorated, 9=DK
+    --   a=General economic outlook
+    --   b=Access to public financial support, including guarantees
+    --   c=Enterprise-specific outlook (sales, profitability, business plan)
+    --   d=Enterprise's own capital
+    --   e=Enterprise's credit history
+    --   f=Willingness of banks to provide credit
+    --   g=Willingness of business partners to provide trade credit
+    --   h=Willingness of investors to invest in the enterprise
+    --   i=(used for sub-item with grouped coding)
+    --   j=Willingness to extend credit to customers (accounts receivable)
     --------------------------------------------------------------------------
     union all
     select permid, wave_number, 'q11', 'a', q11_a, null, q11_a_grouped, null
@@ -405,7 +480,16 @@ unpivoted as (
     from stg where q11_i is not null
 
     --------------------------------------------------------------------------
-    -- Q12–Q17: Future needs, innovation financing, trade credit
+    -- Q12 (annex Q12, EC-only): Size of last loan of any kind obtained in
+    --   past 2 years (single response). Replaced by Q8A from 2014H1 onwards.
+    -- Q13 (annex Q13, EC-only): Provider of last loan (single response).
+    --   Removed from later rounds.
+    -- Q14 (annex Q14, EC-only): Purpose of last loan (single response).
+    --   Replaced by Q6A from 2014H1 onwards.
+    -- Q16 (annex Q16, EC-only): Average annual turnover growth over past 3 years
+    --   a=in 12 months (past year), b=past 3 years avg
+    -- Q17 (annex Q17, EC-only): Expected turnover growth over next 2–3 years
+    --   (single response)
     --------------------------------------------------------------------------
     union all
     select permid, wave_number, 'q12', '', q12, null, null, null
@@ -448,7 +532,26 @@ unpivoted as (
     from stg where q17 is not null
 
     --------------------------------------------------------------------------
-    -- Q19–Q26: Government support, expectations, other
+    -- Q19: Government support usage (a=applied, b=received)
+    -- Q20: Enterprise size (number of employees bracket)
+    -- Q21: Enterprise age bracket
+    -- Q22: Turnover bracket (q22=main, q22_a/b=sub-items)
+    -- Q23 (annex Q23): Expected availability of financing over next 6 months
+    --   (improve/unchanged/deteriorate per instrument)
+    --   a=Retained earnings or sale of assets
+    --   b=Bank loans (excl. overdraft and credit lines)
+    --   c=Equity capital
+    --   d=Trade credit
+    --   e=Debt securities issued
+    --   f=(legacy, empty in current questionnaire)
+    --   g=Credit line, bank overdraft or credit cards overdraft
+    --   i=Leasing or hire-purchase
+    --   j=Other loan (family, friends, related enterprise, shareholders)
+    -- Q24 (annex Q24, EC-only): Importance of financing factors for future
+    --   (scale 1–10, sub-items a–f)
+    -- Q25 (annex Q25, EC-only): Main obstacle to stock market listing
+    -- Q26 (annex Q26): Expected change over next 6 months (increase/unchanged/decrease)
+    --   a=Company's turnover, b=Investments in property, plant or equipment
     --------------------------------------------------------------------------
     union all
     select permid, wave_number, 'q19', 'a', q19_a, null, null, null
@@ -533,7 +636,16 @@ unpivoted as (
     from stg where q26_b is not null
 
     --------------------------------------------------------------------------
-    -- Q31–Q34: Supplementary / country-specific questions
+    -- Q31 (annex Q31): Expected turnover growth in future periods
+    --   a=in 12 months, b=in three years, c=in five years
+    -- Q32 (annex Q32): Most important reason bank loans are not relevant
+    --   (single response)
+    -- Q33 (annex Q33): Supplementary question (varies by round/country)
+    -- Q34 (annex Q34): Price and wage expectations (increase/unchanged/decrease)
+    --   a=Average selling price, a_1=selling price (numeric variant)
+    --   b=Average prices of production inputs, b_1=production inputs (numeric)
+    --   c=Average wage of current employees, c_1=wage (numeric)
+    --   d=Number of employees, d_1=employees (numeric)
     --------------------------------------------------------------------------
     union all
     select permid, wave_number, 'q31', 'a', q31_a, null, null, null
@@ -576,7 +688,15 @@ unpivoted as (
     from stg where q34_d_1 is not null
 
     --------------------------------------------------------------------------
-    -- Q0 / Q0B / Q0C: Screener and routing questions
+    -- Q0: Screener — whether enterprise obtains external financing (yes/no)
+    -- Q0B: Pressingness of business problems (scale 1–10, 7 problem categories)
+    --   1=Finding customers, 2=Competition, 3=Access to finance,
+    --   4=Costs of production or labour,
+    --   5=Availability of skilled staff or experienced managers,
+    --   6=Regulation, 7=Other
+    --   The _3m variant (response_grouped) = 3-month reference period version
+    --   (present in wave 30/2024H1 and wave 37/2025Q4 only)
+    -- Q0C: Routing / classification question
     --------------------------------------------------------------------------
     union all
     select permid, wave_number, 'q0', '',  q0,  null, null, null

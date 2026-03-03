@@ -64,7 +64,7 @@ with q7a as (
         weight_common,
         is_nonresponse                                              as q7a_nonresponse
     from {{ ref('int_safe__core_questions_long') }}
-    where question_id = 'q7a'
+    where question_id = 'q7a' and employee_band_code BETWEEN 1 and 3
 
 ),
 
@@ -77,8 +77,7 @@ q7b as (
         response_raw                                                as q7b_response,
         response_raw in (-1, -2, -99, 7, 9, 99)                    as q7b_nonresponse
     from {{ ref('int_safe__core_questions_long') }}
-    where question_id = 'q7b'
-
+    where question_id = 'q7b' and employee_band_code BETWEEN 1 and 3
 ),
 
 combined as (

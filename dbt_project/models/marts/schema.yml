@@ -128,14 +128,15 @@ models:
       Weighted net balances for financing needs (Q5), financing availability (Q9), and bank loan
       terms & conditions (Q10). Net balance direction is consistent: positive = improving,
       negative = deteriorating — regardless of which question.
+      Net balance = % code-1 − % code-3 on raw response codes (same formula for all questions).
       Q5: "Has your need for [instrument] increased, remained unchanged or decreased?"
-        Net balance negative = net increase in financing need (pressure rising).
+        Net balance positive = net increase in financing need (pressure rising).
       Q9: "Has the availability of [instrument] improved, remained unchanged or deteriorated?"
-        Net balance negative = net deterioration in availability.
+        Net balance positive = net improvement in availability.
       Q10: "Were the [terms] of bank financing increased, unchanged or decreased by the bank?"
-        Net balance negative = net tightening (e.g. interest rates rising, collateral rising).
-      financing_gap_wtd (Q9 rows only) = net_availability − net_need for the same instrument.
-        Negative gap = availability falling relative to need; a credit crunch signal.
+        Net balance positive = net tightening (e.g. interest rates rising, collateral rising).
+      financing_gap_wtd (Q9 rows only) = needs_nb − avail_nb = Q5.net_balance − Q9.net_balance.
+        Positive gap = needs rising faster than availability; a credit crunch signal.
       Scope: SMEs only (employee_band_code 1–3: micro, small, medium — excludes large firms).
       Aggregation: wave × country × question × sub-item.
       Sub-item labels verified from annex.xlsx.
@@ -176,26 +177,27 @@ models:
         description: Sum of weight_common for valid respondents.
       - name: pct_improved_wtd
         description: >
-          Weighted % on the "good" side (code 1 after normalisation). Q5: need decreased.
-          Q9: availability improved. Q10: bank decreased/loosened the term.
+          Weighted % of code-1 responses (raw). Q5: need increased. Q9: availability improved.
+          Q10: term increased by bank (e.g. interest rate rose).
       - name: pct_unchanged_wtd
         description: Weighted % reporting unchanged (code 2).
       - name: pct_deteriorated_wtd
         description: >
-          Weighted % on the "bad" side (code 3 after normalisation). Q5: need increased.
-          Q9: availability deteriorated. Q10: bank increased/tightened the term.
+          Weighted % of code-3 responses (raw). Q5: need decreased. Q9: availability deteriorated.
+          Q10: term decreased by bank.
       - name: net_balance_wtd
         description: >
-          Weighted net balance = pct_improved − pct_deteriorated. Range: −100 to +100.
-          Negative = net deterioration. Consistent sign across Q5, Q9, Q10.
+          Weighted net balance = % code-1 − % code-3. Range: −100 to +100.
+          Q5: positive = net increase in need. Q9: positive = net improvement in availability.
+          Q10: positive = net tightening by bank.
       - name: net_balance_unwtd
         description: Unweighted net balance for reference.
       - name: financing_gap_wtd
         description: >
-          Financing gap = net_availability_wtd (Q9) − net_need_wtd (Q5) for the same instrument
-          and wave. Populated only for question_id = 'q9' rows; NULL for Q5 and Q10.
-          Negative = availability deteriorating relative to need (gap opened, credit crunch signal).
-          Positive = availability improving relative to need (conditions easing).
+          Financing gap = Q5.net_balance_wtd − Q9.net_balance_wtd for the same instrument and wave.
+          Populated only for question_id = 'q9' rows; NULL for Q5 and Q10.
+          Positive = needs rising faster than availability (gap opened, credit crunch signal).
+          Negative = availability improving relative to needs (conditions easing).
 
   - name: mart_safe__loan_applications
     description: >

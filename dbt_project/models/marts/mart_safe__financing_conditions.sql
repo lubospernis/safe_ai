@@ -8,22 +8,21 @@
   Aggregated net balances for financing needs (Q5), financing availability (Q9), and
   bank loan terms and conditions (Q10).
 
-  Net balance direction is consistent across all three questions:
-    Positive net balance = improvement / conditions getting better
-    Negative net balance = deterioration / conditions getting worse
+  Each question uses raw response codes for net balance: % code-1 − % code-3.
+  Signs differ by question — read net_balance_wtd in context:
 
   --- Q5: Change in need for external financing ---
   Question: "Over the past six months, has your need for the following types of
   external financing increased, remained unchanged or decreased?"
 
   Response scale (verified from annex.xlsx Q5):
-    1 = Increased need      → mapped to pct_deteriorated_wtd (more need = worse)
+    1 = Increased need   → pct_improved_wtd (code 1, "first response")
     2 = Remained unchanged
-    3 = Decreased need      → mapped to pct_improved_wtd (less need = better)
+    3 = Decreased need   → pct_deteriorated_wtd (code 3, "third response")
     7 = Not applicable, 9 = DK (non-response)
 
-  Net balance for Q5 = % decreased need − % increased need.
-  Negative = net increase in financing need (pressure building).
+  Net balance for Q5 = % increased need − % decreased need.
+  Positive = net increase in financing need (pressure building).
 
   Sub-items (verified from annex.xlsx Q5):
     a = Bank loans (excl. overdraft and credit lines)
@@ -59,9 +58,10 @@
     h = Other loan (from family, friends, related enterprise)
 
   --- Financing gap (Q5 vs Q9, same instrument) ---
-  financing_gap_wtd = net_balance_wtd(Q9) − net_balance_wtd(Q5)
-    Negative gap = availability deteriorating relative to needs (credit crunch signal).
-    Positive gap = availability improving relative to needs (easing conditions).
+  financing_gap_wtd = net_balance_wtd(Q5) − net_balance_wtd(Q9)
+    = (% need increased − % need decreased) − (% availability improved − % availability deteriorated)
+    Positive gap = needs rising faster than availability (credit crunch signal).
+    Negative gap = availability improving relative to needs (easing conditions).
   Only populated for rows where question_id = 'q9' (the availability side).
   NULL for Q5 and Q10 rows.
 
@@ -151,22 +151,7 @@ labels as (
             when question_id = 'q10' and sub_item = 'd' then 'Available maturity of the loan'
             when question_id = 'q10' and sub_item = 'e' then 'Collateral requirements'
             when question_id = 'q10' and sub_item = 'f' then 'Other terms (guarantees, covenants, procedures)'
-        end                                                         as sub_item_label,
-
-        -- For Q5 the response codes are inverted relative to Q9/Q10:
-        --   code 1 = increased need (bad) → treat as "deteriorated"
-        --   code 3 = decreased need (good) → treat as "improved"
-        -- This makes net_balance_wtd negative when financing need is rising,
-        -- consistent with Q9 (negative = availability deteriorating).
-        case
-            when question_id = 'q5' then
-                case response_raw
-                    when 1 then 3   -- increased need → deteriorated
-                    when 3 then 1   -- decreased need → improved
-                    else response_raw
-                end
-            else response_raw
-        end                                                         as response_normalised
+        end                                                         as sub_item_label
 
     from source
 
@@ -191,49 +176,44 @@ aggregated as (
         count(*) filter (where is_nonresponse)                      as n_nonresponse,
         sum(weight_common) filter (where not is_nonresponse)        as total_weight,
 
-        -- pct_improved_wtd:
-        --   Q5:  % of firms where financing need decreased (pressure easing)
-        --   Q9:  % of firms where availability improved
-        --   Q10: % of firms where bank decreased/loosened the term
+        -- pct_improved_wtd = % code 1:
+        --   Q5:  need increased   Q9: availability improved   Q10: term increased by bank
         round(
-            100.0 * sum(weight_common) filter (where response_normalised = 1 and not is_nonresponse)
+            100.0 * sum(weight_common) filter (where response_raw = 1 and not is_nonresponse)
             / nullif(sum(weight_common) filter (where not is_nonresponse), 0),
             2
         )                                                           as pct_improved_wtd,
 
         round(
-            100.0 * sum(weight_common) filter (where response_normalised = 2 and not is_nonresponse)
+            100.0 * sum(weight_common) filter (where response_raw = 2 and not is_nonresponse)
             / nullif(sum(weight_common) filter (where not is_nonresponse), 0),
             2
         )                                                           as pct_unchanged_wtd,
 
-        -- pct_deteriorated_wtd:
-        --   Q5:  % of firms where financing need increased (pressure rising)
-        --   Q9:  % of firms where availability deteriorated
-        --   Q10: % of firms where bank increased/tightened the term
+        -- pct_deteriorated_wtd = % code 3:
+        --   Q5:  need decreased   Q9: availability deteriorated   Q10: term decreased by bank
         round(
-            100.0 * sum(weight_common) filter (where response_normalised = 3 and not is_nonresponse)
+            100.0 * sum(weight_common) filter (where response_raw = 3 and not is_nonresponse)
             / nullif(sum(weight_common) filter (where not is_nonresponse), 0),
             2
         )                                                           as pct_deteriorated_wtd,
 
-        -- Net balance: positive = improving, negative = deteriorating.
-        -- For Q5: negative means net increase in financing need.
-        -- For Q9: negative means net deterioration in availability.
-        -- A gap has opened when Q9 net balance < Q5 net balance
-        -- (availability falling relative to rising need).
+        -- Net balance = % code1 − % code3.
+        -- Q5:  positive = net increase in need (pressure rising)
+        -- Q9:  positive = net improvement in availability
+        -- Q10: positive = net tightening by bank (e.g. rates rising, collateral rising)
         round(
             100.0 * (
-                sum(weight_common) filter (where response_normalised = 1 and not is_nonresponse)
-                - sum(weight_common) filter (where response_normalised = 3 and not is_nonresponse)
+                sum(weight_common) filter (where response_raw = 1 and not is_nonresponse)
+                - sum(weight_common) filter (where response_raw = 3 and not is_nonresponse)
             ) / nullif(sum(weight_common) filter (where not is_nonresponse), 0),
             2
         )                                                           as net_balance_wtd,
 
         round(
             100.0 * (
-                count(*) filter (where response_normalised = 1 and not is_nonresponse)
-                - count(*) filter (where response_normalised = 3 and not is_nonresponse)
+                count(*) filter (where response_raw = 1 and not is_nonresponse)
+                - count(*) filter (where response_raw = 3 and not is_nonresponse)
             ) / nullif(count(*) filter (where not is_nonresponse), 0),
             2
         )                                                           as net_balance_unwtd
@@ -243,17 +223,17 @@ aggregated as (
 
 ),
 
--- Financing gap: joined back so Q9 rows carry the gap vs same-instrument Q5.
--- financing_gap_wtd = net_availability (Q9) − net_need (Q5).
--- Negative = availability deteriorating relative to need (gap opened).
--- NULL for Q5 and Q10 rows (gap is only meaningful on the availability side).
+-- Financing gap on Q9 rows: needs_nb − avail_nb.
+-- Positive = needs rising faster than availability (gap opened, credit crunch signal).
+-- Negative = availability improving relative to needs (conditions easing).
+-- NULL for Q5 and Q10 rows.
 with_gap as (
 
     select
         a.*,
         case
             when a.question_id = 'q9' then
-                round(a.net_balance_wtd - q5.net_balance_wtd, 2)
+                round(q5.net_balance_wtd - a.net_balance_wtd, 2)
             else null
         end                                                         as financing_gap_wtd
     from aggregated a

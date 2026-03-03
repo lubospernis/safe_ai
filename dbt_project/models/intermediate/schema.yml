@@ -115,10 +115,16 @@ models:
         description: Raw response code as in the source data.
       - name: response_rec
         description: Recoded response (where a _rec variant exists in staging).
-      - name: response_grouped
-        description: Grouped response variant (where available in staging).
-      - name: response_grouped_rec
-        description: Grouped and recoded response variant (where available).
+      - name: response_3m
+        description: >
+          3-month reference period response (from the _g1 questionnaire variant).
+          Populated only in quarterly waves (wave 30 / 2024H1 onwards) where the
+          3-month questionnaire was administered alongside the 6-month one.
+          NULL for all other waves and for questions without a _g1 variant.
+      - name: response_3m_rec
+        description: >
+          Recoded version of response_3m (from the _g1_rec raw column).
+          Populated only where a recoded 3-month variant exists in the source data.
       - name: is_nonresponse
         description: >
           True when response_raw is a non-response code:

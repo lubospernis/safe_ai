@@ -6,3 +6,7 @@ safe_ai:
       path: "md:my_db"
       extensions:
         - motherduck
+    dev:
+      type: duckdb
+      path: "/Users/lubospernis/Documents/safe_ai/dev.duckdb"
+      schema: main_safe

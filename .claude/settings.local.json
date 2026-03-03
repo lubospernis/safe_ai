@@ -9,7 +9,10 @@
       "mcp__claude_ai_MotherDuck__list_tables",
       "mcp__claude_ai_MotherDuck__list_columns",
       "mcp__claude_ai_MotherDuck__query",
-      "Bash(python3 -c \":*)"
+      "Bash(python3 -c \":*)",
+      "Bash(env/bin/python -c \":*)",
+      "Bash(../env/bin/dbt run --target dev --select int_safe__core_questions_long mart_safe__loan_applications)",
+      "Bash(../env/bin/dbt run --target dev --select mart_safe__financing_conditions mart_safe__q0b_pressingness)"
     ]
   }
 }

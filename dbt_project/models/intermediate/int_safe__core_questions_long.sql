@@ -96,6 +96,7 @@ unpivoted as (
     from stg where (q2_j is not null or q2_j_3m is not null)
 
 
+
     --------------------------------------------------------------------------
     -- Q4rec (annex Q4): Financing sources — combined relevance/usage recode.
     --

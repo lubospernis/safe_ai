@@ -32,6 +32,26 @@ with stg as (
 
 ),
 
+firm as (
+
+    select
+        permid,
+        wave_number,
+        country_code,
+        country_name_en,
+        employee_band_code,
+        firm_size_en,
+        is_sme,
+        sector_code,
+        sector_en,
+        survey_year,
+        survey_period,
+        survey_period_label,
+        weight_common
+    from {{ ref('int_safe__firm_survey_responses') }}
+
+),
+
 unpivoted as (
 
     --------------------------------------------------------------------------
@@ -591,21 +611,33 @@ unpivoted as (
 final as (
 
     select
-        permid,
-        wave_number,
-        question_id,
-        sub_item,
-        response_raw,
-        response_rec,
-        response_grouped,
-        response_grouped_rec,
+        u.permid,
+        u.wave_number,
+        f.country_code,
+        f.country_name_en,
+        f.employee_band_code,
+        f.firm_size_en,
+        f.is_sme,
+        f.sector_code,
+        f.sector_en,
+        f.survey_year,
+        f.survey_period,
+        f.survey_period_label,
+        f.weight_common,
+        u.question_id,
+        u.sub_item,
+        u.response_raw,
+        u.response_rec,
+        u.response_grouped,
+        u.response_grouped_rec,
 
         -- Non-response flag
         -- Covers: -1 (N/A), -2 (don't know), -99 (refused),
         --         7 (not asked - routing), 99 (not asked - routing)
-        response_raw in (-1, -2, -99, 7, 99)                       as is_nonresponse
+        u.response_raw in (-1, -2, -99, 7, 99)                     as is_nonresponse
 
-    from unpivoted
+    from unpivoted u
+    left join firm f using (permid, wave_number)
 
 )
 

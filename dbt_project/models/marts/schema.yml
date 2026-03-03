@@ -69,3 +69,169 @@ models:
         description: >
           Percentage (0–100) of valid weighted responses with pressingness score <= 3.
           Represents firms rating the problem as not very pressing.
+
+  - name: mart_safe__business_situation
+    description: >
+      Weighted net balances for the business situation question (question_id = 'q1' in the data;
+      corresponds to Q2 in the annex questionnaire).
+      Question: "Have the following company indicators decreased, remained unchanged or increased
+      during the past period?" Response: 1=Increased, 2=Unchanged, 3=Decreased.
+      Net balance = % increased − % decreased (standard ECB published metric).
+      Aggregation: wave × country × sub-item (all firm sizes combined).
+      Non-responses (-1, -2, -99, 7, 99) excluded from metrics but counted in n_nonresponse.
+
+    config:
+      tags: ["safe", "ecb", "survey", "mart", "business_situation"]
+
+    columns:
+      - name: country_code
+        description: ISO 3166-1 alpha-2 country code.
+      - name: country_name_en
+        description: Full English country name.
+      - name: wave_number
+        description: Survey wave (1–37).
+      - name: survey_year
+        description: Calendar year of the survey wave.
+      - name: survey_period
+        description: "Survey half-year or quarter (H1, H2, Q1–Q4)."
+      - name: survey_period_label
+        description: "Human-readable period label (e.g. '2024Q3')."
+      - name: sub_item
+        description: "Sub-item code: a=Turnover, b=Labour costs, c=Interest expenses (net), d=Profit."
+      - name: sub_item_label
+        description: Human-readable label for the sub-item.
+      - name: n_total
+        description: Total rows (valid + non-response) in this group.
+      - name: n_respondents
+        description: Count of valid responses (non-response codes excluded).
+      - name: n_nonresponse
+        description: Count of non-responses (-1, -2, -99, 7, 99).
+      - name: total_weight
+        description: Sum of weight_common for valid respondents.
+      - name: pct_increased_wtd
+        description: Weighted % of firms reporting the indicator increased (0–100).
+      - name: pct_unchanged_wtd
+        description: Weighted % of firms reporting the indicator remained unchanged (0–100).
+      - name: pct_decreased_wtd
+        description: Weighted % of firms reporting the indicator decreased (0–100).
+      - name: net_balance_wtd
+        description: >
+          Weighted net balance = pct_increased − pct_decreased. Range: −100 to +100.
+          Positive = indicator rising on balance. For costs (labour, interest), positive means costs rising.
+      - name: net_balance_unwtd
+        description: Unweighted net balance for reference.
+
+  - name: mart_safe__financing_conditions
+    description: >
+      Weighted net balances for financing availability (Q9) and bank loan terms & conditions (Q10).
+      Q9: "Has the availability of [instrument] improved, remained unchanged or deteriorated?"
+      Q10: "Were the [terms] of bank financing increased, unchanged or decreased by the bank?"
+      Net balance = % improved/increased − % deteriorated/decreased.
+      Aggregation: wave × country × question × sub-item (all firm sizes combined).
+      Sub-item labels verified from annex.xlsx.
+
+    config:
+      tags: ["safe", "ecb", "survey", "mart", "financing_conditions"]
+
+    columns:
+      - name: country_code
+        description: ISO 3166-1 alpha-2 country code.
+      - name: country_name_en
+        description: Full English country name.
+      - name: wave_number
+        description: Survey wave (1–37).
+      - name: survey_year
+        description: Calendar year of the survey wave.
+      - name: survey_period
+        description: "Survey half-year or quarter (H1, H2, Q1–Q4)."
+      - name: survey_period_label
+        description: "Human-readable period label (e.g. '2024Q3')."
+      - name: question_id
+        description: "'q9' = availability of external financing; 'q10' = terms and conditions of bank financing."
+      - name: question_label
+        description: Human-readable label for the question.
+      - name: sub_item
+        description: >
+          Sub-item code. Q9: a=bank loans, b=trade credit, c=equity, d=debt securities,
+          e=other, f=credit line/overdraft, g=leasing, h=other loan.
+          Q10: a=interest rates, b=non-interest costs, c=loan size, d=maturity,
+          e=collateral, f=other terms.
+      - name: sub_item_label
+        description: Human-readable label for the sub-item (verified from annex.xlsx).
+      - name: n_respondents
+        description: Count of valid responses.
+      - name: n_nonresponse
+        description: Count of non-responses excluded.
+      - name: total_weight
+        description: Sum of weight_common for valid respondents.
+      - name: pct_improved_wtd
+        description: Weighted % reporting improved / increased by bank (code 1).
+      - name: pct_unchanged_wtd
+        description: Weighted % reporting unchanged (code 2).
+      - name: pct_deteriorated_wtd
+        description: Weighted % reporting deteriorated / decreased by bank (code 3).
+      - name: net_balance_wtd
+        description: >
+          Weighted net balance = pct_improved − pct_deteriorated. Range: −100 to +100.
+          Positive = conditions improving on balance.
+          For Q10 interest rates: positive means rates rising (worse for borrowers).
+      - name: net_balance_unwtd
+        description: Unweighted net balance for reference.
+
+  - name: mart_safe__loan_applications
+    description: >
+      Loan application rates, discouragement, rejection, and financing gap by instrument.
+      Source: Q7A (application status) and Q7B (outcome for applicants).
+      Q7A: "Have you applied for the following types of financing?" (1=applied, 2=discouraged,
+      3=sufficient funds, 4=other reason not to apply).
+      Q7B: "If you applied, what was the outcome?" (1=received all, 3=too costly, 4=rejected,
+      5=received most, 6=received limited part, 8=pending).
+      Instruments: bank loans, trade credit, other external financing, credit lines.
+      Financing gap = discouragement_rate + (rejection_rate × application_rate / 100).
+      Aggregation: wave × country × instrument (all firm sizes combined).
+
+    config:
+      tags: ["safe", "ecb", "survey", "mart", "loan_applications"]
+
+    columns:
+      - name: country_code
+        description: ISO 3166-1 alpha-2 country code.
+      - name: country_name_en
+        description: Full English country name.
+      - name: wave_number
+        description: Survey wave (1–37).
+      - name: survey_year
+        description: Calendar year of the survey wave.
+      - name: survey_period
+        description: "Survey half-year or quarter (H1, H2, Q1–Q4)."
+      - name: survey_period_label
+        description: "Human-readable period label (e.g. '2024Q3')."
+      - name: sub_item
+        description: "Instrument code: a=bank loan, b=trade credit, c=other external, d=credit line/overdraft."
+      - name: instrument_label
+        description: Human-readable label for the financing instrument.
+      - name: n_valid_q7a
+        description: Count of firms with a valid Q7A response (denominator for rates).
+      - name: n_applied
+        description: Count of firms that applied (Q7A = 1).
+      - name: n_discouraged
+        description: Count of firms that did not apply due to fear of rejection (Q7A = 2).
+      - name: n_rejected
+        description: Count of applicants that were rejected (Q7B = 4).
+      - name: total_weight
+        description: Sum of weight_common for valid Q7A respondents.
+      - name: application_rate_wtd
+        description: "Weighted % of firms that applied. Range: 0–100."
+      - name: discouragement_rate_wtd
+        description: "Weighted % of firms discouraged from applying (Q7A = 2). Range: 0–100."
+      - name: success_full_rate_wtd
+        description: "Weighted % of applicants that received all or most of what they applied for. Range: 0–100."
+      - name: success_partial_rate_wtd
+        description: "Weighted % of applicants that received only a limited part. Range: 0–100."
+      - name: rejection_rate_wtd
+        description: "Weighted % of applicants that were rejected. Range: 0–100."
+      - name: financing_gap_wtd
+        description: >
+          ECB financing gap indicator = discouragement_rate + rejection share of all respondents
+          (% discouraged + % applied and rejected, both as share of all valid respondents).
+          Range: 0–100. Higher = worse access to financing.

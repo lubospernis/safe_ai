@@ -1,4 +1,4 @@
-"""Download and extract text from the latest ECB SAFE report PDF."""
+"""Download and extract text from the latest ECB SAFE report HTML page."""
 
 from __future__ import annotations
 
@@ -9,93 +9,73 @@ import tempfile
 from pathlib import Path
 
 import requests
-
-# ECB publishes the main SAFE results report at a stable URL pattern.
-# The URL uses the current year+half e.g. ecb.safesme202501 for 2025H1.
-_ECB_REPORT_BASE = (
-    "https://www.ecb.europa.eu/stats/accesstofinancesofenterprises/pdf/"
-)
-# Fallback: the survey results overview (always updated to latest wave)
-_ECB_FALLBACK_URL = (
-    "https://www.ecb.europa.eu/stats/accesstofinancesofenterprises/pdf/"
-    "ecb.safesme.en.pdf"
-)
+from bs4 import BeautifulSoup
 
 _CACHE_DIR = Path(tempfile.gettempdir()) / "safe_agent_ecb_cache"
 _CACHE_DIR.mkdir(exist_ok=True)
 
+_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; safe-agent/1.0)"}
+
 
 def _cache_path(url: str) -> Path:
     key = hashlib.md5(url.encode()).hexdigest()
-    return _CACHE_DIR / f"{key}.pdf"
+    return _CACHE_DIR / f"{key}.html"
 
 
-def _download_pdf(url: str) -> bytes:
+def _download_page(url: str) -> str:
     cached = _cache_path(url)
     if cached.exists():
-        return cached.read_bytes()
-    resp = requests.get(url, timeout=60, headers={"User-Agent": "safe-agent/1.0"})
+        print(f"[fetch_ecb] using cached page: {cached}")
+        return cached.read_text(encoding="utf-8")
+    print(f"[fetch_ecb] downloading {url}")
+    resp = requests.get(url, timeout=60, headers=_HEADERS)
     resp.raise_for_status()
-    cached.write_bytes(resp.content)
-    return resp.content
+    cached.write_text(resp.text, encoding="utf-8")
+    return resp.text
 
 
-def _extract_text(pdf_bytes: bytes) -> str:
-    try:
-        import fitz  # PyMuPDF
+def _extract_text_from_html(html: str) -> str:
+    """Extract readable text from ECB SAFE HTML report."""
+    soup = BeautifulSoup(html, "lxml")
 
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-        pages = [page.get_text() for page in doc]
-        doc.close()
-        return "\n".join(pages)
-    except ImportError:
-        # Fallback to pdfminer if PyMuPDF not installed
-        from io import BytesIO
+    # Remove navigation, scripts, styles
+    for tag in soup(["script", "style", "nav", "header", "footer"]):
+        tag.decompose()
 
-        from pdfminer.high_level import extract_text as pm_extract
+    # ECB report content is typically in <main> or <article> or <div class="content">
+    main = soup.find("main") or soup.find("article") or soup.find("div", class_=re.compile("content|report|publication", re.I))
+    target = main if main else soup.body
 
-        return pm_extract(BytesIO(pdf_bytes))
+    return target.get_text(separator="\n", strip=True) if target else soup.get_text(separator="\n", strip=True)
 
 
-def _filter_relevant_pages(text: str, country_keyword: str = "Slovakia") -> tuple[str, str]:
-    """Return (country_section, euroarea_section) extracted from full PDF text."""
+def _filter_relevant_sections(text: str, country_keyword: str = "Slovakia") -> tuple[str, str]:
+    """Return (country_section, euroarea_section) from full report text."""
     lines = text.split("\n")
 
+    # Grab lines around every occurrence of the keyword (±50 lines)
     sk_lines: list[str] = []
+    sk_indices = [i for i, l in enumerate(lines) if country_keyword.lower() in l.lower()]
+    for idx in sk_indices:
+        sk_lines.extend(lines[max(0, idx - 3): idx + 50])
+
+    # Euro area: first few occurrences
     ea_lines: list[str] = []
-    in_sk = False
-    in_ea = False
+    ea_indices = [i for i, l in enumerate(lines) if "euro area" in l.lower()]
+    for idx in ea_indices[:4]:
+        ea_lines.extend(lines[max(0, idx - 3): idx + 50])
 
-    for line in lines:
-        low = line.lower()
-        if country_keyword.lower() in low:
-            in_sk = True
-            in_ea = False
-        elif "euro area" in low and not in_sk:
-            in_ea = True
-            in_sk = False
-        elif re.match(r"^[A-Z][a-z]+$", line.strip()) and len(line.strip()) > 4:
-            # New country heading — reset
-            if in_sk or in_ea:
-                in_sk = False
-                in_ea = False
-
-        if in_sk:
-            sk_lines.append(line)
-        if in_ea:
-            ea_lines.append(line)
-
-    # If no Slovakia section found, return chunks around the keyword
-    if not sk_lines:
-        idx = [i for i, l in enumerate(lines) if country_keyword.lower() in l.lower()]
-        for i in idx:
-            sk_lines.extend(lines[max(0, i - 2) : i + 60])
-
-    return "\n".join(sk_lines[:500]), "\n".join(ea_lines[:500])
+    return "\n".join(sk_lines[:600]), "\n".join(ea_lines[:400])
 
 
-def fetch_ecb_report(wave_year: int | None = None, wave_half: str | None = None) -> dict:
+def fetch_ecb_report() -> dict:
     """
+    Fetch the ECB SAFE report from ECB_REPORT_URL env var.
+
+    Set ECB_REPORT_URL to the latest ECB SAFE HTML report, e.g.:
+      https://www.ecb.europa.eu/stats/ecb_surveys/safe/html/ecb.safe202604.en.html
+
+    The URL changes each wave — check https://www.ecb.europa.eu/stats/ecb_surveys/safe/
     Returns:
         {
             "full_text": str,
@@ -104,26 +84,20 @@ def fetch_ecb_report(wave_year: int | None = None, wave_half: str | None = None)
             "source_url": str,
         }
     """
-    url = _ECB_FALLBACK_URL
-    if wave_year and wave_half:
-        half_num = "1" if wave_half.upper() in ("H1", "Q1", "Q2") else "2"
-        candidate = (
-            f"{_ECB_REPORT_BASE}"
-            f"ecb.safesme{wave_year}{half_num:0>2}.en.pdf"
+    url = os.environ.get("ECB_REPORT_URL", "").strip()
+    if not url:
+        raise RuntimeError(
+            "ECB_REPORT_URL is not set. "
+            "Find the latest report at https://www.ecb.europa.eu/stats/ecb_surveys/safe/ "
+            "and set: export ECB_REPORT_URL=https://www.ecb.europa.eu/stats/ecb_surveys/safe/html/ecb.safe202604.en.html"
         )
-        try:
-            pdf_bytes = _download_pdf(candidate)
-            url = candidate
-        except requests.HTTPError:
-            pdf_bytes = _download_pdf(_ECB_FALLBACK_URL)
-    else:
-        pdf_bytes = _download_pdf(url)
 
-    full_text = _extract_text(pdf_bytes)
-    slovakia_text, euroarea_text = _filter_relevant_pages(full_text)
+    html = _download_page(url)
+    full_text = _extract_text_from_html(html)
+    slovakia_text, euroarea_text = _filter_relevant_sections(full_text)
 
     return {
-        "full_text": full_text[:20000],  # cap to avoid context overflow
+        "full_text": full_text[:15000],
         "slovakia_text": slovakia_text,
         "euroarea_text": euroarea_text,
         "source_url": url,

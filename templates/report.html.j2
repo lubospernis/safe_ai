@@ -9,156 +9,84 @@
     :root {
       --ecb-blue: #003087;
       --ecb-gold: #f0a500;
-      --sk-red: #d01010;
-      --ea-grey: #6c757d;
-      --bg: #f8f9fa;
+      --positive: #1a7c3e;
+      --positive-bg: #e8f5ec;
+      --negative: #b91c1c;
+      --negative-bg: #fef2f2;
+      --neutral-bg: #f1f5f9;
+      --bg: #f0f2f5;
       --card-bg: #ffffff;
       --text: #1a1a2e;
-      --muted: #6c757d;
-      --border: #dee2e6;
+      --muted: #64748b;
+      --border: #e2e8f0;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.6;
-    }
-    header {
-      background: var(--ecb-blue);
-      color: white;
-      padding: 2rem 3rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 1rem;
-    }
-    header h1 { font-size: 1.6rem; font-weight: 700; }
-    header .meta { font-size: 0.85rem; opacity: 0.8; text-align: right; }
-    header .wave-badge {
-      background: var(--ecb-gold);
-      color: var(--ecb-blue);
-      font-weight: 700;
-      padding: 0.3rem 0.8rem;
-      border-radius: 4px;
-      font-size: 0.9rem;
-    }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.55; font-size: 0.94rem; }
 
-    nav {
-      background: white;
-      border-bottom: 2px solid var(--ecb-blue);
-      padding: 0 3rem;
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.08);
-    }
-    nav ul {
-      list-style: none;
-      display: flex;
-      gap: 0;
-      overflow-x: auto;
-    }
-    nav a {
-      display: block;
-      padding: 0.75rem 1.1rem;
-      color: var(--ecb-blue);
-      text-decoration: none;
-      font-size: 0.85rem;
-      font-weight: 500;
-      white-space: nowrap;
-      border-bottom: 3px solid transparent;
-      transition: border-color 0.15s;
-    }
+    /* ── Header ── */
+    header { background: var(--ecb-blue); color: white; padding: 1.75rem 3rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+    header h1 { font-size: 1.5rem; font-weight: 700; }
+    header .sub { font-size: 0.85rem; opacity: 0.8; margin-top: 0.2rem; }
+    .wave-badge { background: var(--ecb-gold); color: var(--ecb-blue); font-weight: 700; padding: 0.3rem 0.9rem; border-radius: 4px; font-size: 0.9rem; }
+    .meta { font-size: 0.8rem; opacity: 0.75; text-align: right; margin-top: 0.4rem; }
+
+    /* ── Nav ── */
+    nav { background: white; border-bottom: 2px solid var(--ecb-blue); padding: 0 2rem; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 6px rgba(0,0,0,0.07); }
+    nav ul { list-style: none; display: flex; overflow-x: auto; }
+    nav a { display: block; padding: 0.7rem 1rem; color: var(--ecb-blue); text-decoration: none; font-size: 0.8rem; font-weight: 600; white-space: nowrap; border-bottom: 3px solid transparent; transition: border-color 0.15s; }
     nav a:hover { border-bottom-color: var(--ecb-gold); }
 
-    main {
-      max-width: 1100px;
-      margin: 0 auto;
-      padding: 2rem 1.5rem;
-    }
+    /* ── Layout ── */
+    main { max-width: 1080px; margin: 0 auto; padding: 1.75rem 1.25rem; }
+    section { background: var(--card-bg); border-radius: 10px; padding: 1.75rem 2rem; margin-bottom: 1.5rem; border: 1px solid var(--border); box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+    section h2 { font-size: 1.1rem; color: var(--ecb-blue); margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--ecb-gold); text-transform: uppercase; letter-spacing: 0.04em; }
+    section h3 { font-size: 0.9rem; font-weight: 700; margin: 1.1rem 0 0.5rem; color: var(--text); text-transform: uppercase; letter-spacing: 0.03em; opacity: 0.75; }
+    p { margin-bottom: 0.7rem; }
+    ul, ol { padding-left: 1.25rem; margin-bottom: 0.7rem; }
+    li { margin-bottom: 0.35rem; }
+    strong { color: var(--text); }
 
-    section {
-      background: var(--card-bg);
-      border-radius: 8px;
-      padding: 2rem 2.5rem;
-      margin-bottom: 2rem;
-      border: 1px solid var(--border);
-      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-    }
-    section h2 {
-      font-size: 1.25rem;
-      color: var(--ecb-blue);
-      margin-bottom: 1.25rem;
-      padding-bottom: 0.5rem;
-      border-bottom: 2px solid var(--ecb-gold);
-    }
-    section h3 {
-      font-size: 1rem;
-      font-weight: 600;
-      margin: 1.2rem 0 0.6rem;
-      color: var(--text);
-    }
-    p { margin-bottom: 0.9rem; }
-    ul, ol { padding-left: 1.5rem; margin-bottom: 0.9rem; }
-    li { margin-bottom: 0.3rem; }
+    /* ── Glossary callout ── */
+    .glossary { background: #eff6ff; border-left: 4px solid #3b82f6; border-radius: 0 6px 6px 0; padding: 0.75rem 1rem; margin-bottom: 1.5rem; font-size: 0.83rem; color: #1e3a5f; }
+    .glossary strong { color: #1d4ed8; }
 
-    .chart-container {
-      position: relative;
-      height: 340px;
-      margin: 1.5rem 0;
-    }
-    .chart-placeholder { display: none; } /* hidden — JS replaces these */
+    /* ── Stat cards ── */
+    .stat-row { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1.25rem; }
+    .stat-card { flex: 1 1 140px; border-radius: 8px; padding: 0.9rem 1rem; min-width: 120px; }
+    .stat-card.positive { background: var(--positive-bg); border-left: 3px solid var(--positive); }
+    .stat-card.negative { background: var(--negative-bg); border-left: 3px solid var(--negative); }
+    .stat-card.neutral  { background: var(--neutral-bg);  border-left: 3px solid var(--muted); }
+    .stat-value { font-size: 1.55rem; font-weight: 800; line-height: 1.1; }
+    .stat-card.positive .stat-value { color: var(--positive); }
+    .stat-card.negative .stat-value { color: var(--negative); }
+    .stat-card.neutral  .stat-value { color: var(--muted); }
+    .stat-label { font-size: 0.75rem; font-weight: 600; margin-top: 0.25rem; opacity: 0.8; }
+    .stat-delta { font-size: 0.72rem; margin-top: 0.2rem; opacity: 0.65; }
 
-    /* Inline chart canvases injected by JS */
+    /* ── Charts ── */
+    .chart-container { position: relative; height: 320px; margin: 1.25rem 0; }
+    .chart-placeholder { display: none; }
     canvas.safe-chart { width: 100% !important; }
 
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.88rem;
-      margin: 1rem 0;
-    }
-    th {
-      background: var(--ecb-blue);
-      color: white;
-      text-align: left;
-      padding: 0.5rem 0.75rem;
-      font-weight: 600;
-    }
-    td {
-      padding: 0.45rem 0.75rem;
-      border-bottom: 1px solid var(--border);
-    }
-    tr:nth-child(even) td { background: #f4f6fb; }
+    /* ── Tables ── */
+    table { width: 100%; border-collapse: collapse; font-size: 0.84rem; margin: 0.9rem 0; }
+    th { background: var(--ecb-blue); color: white; text-align: left; padding: 0.45rem 0.7rem; font-weight: 600; font-size: 0.8rem; }
+    td { padding: 0.4rem 0.7rem; border-bottom: 1px solid var(--border); }
+    tr:nth-child(even) td { background: #f8fafc; }
 
-    .badge-score {
-      display: inline-block;
-      padding: 0.2rem 0.6rem;
-      border-radius: 4px;
-      font-size: 0.8rem;
-      font-weight: 700;
-      background: #d4edda;
-      color: #155724;
-    }
-    .badge-score.warn { background: #fff3cd; color: #856404; }
-    .badge-score.fail { background: #f8d7da; color: #721c24; }
+    /* ── Badge ── */
+    .badge-score { display: inline-block; padding: 0.2rem 0.55rem; border-radius: 4px; font-size: 0.78rem; font-weight: 700; background: var(--positive-bg); color: var(--positive); }
+    .badge-score.warn { background: #fffbeb; color: #92400e; }
+    .badge-score.fail { background: var(--negative-bg); color: var(--negative); }
 
-    footer {
-      text-align: center;
-      padding: 2rem;
-      font-size: 0.8rem;
-      color: var(--muted);
-      border-top: 1px solid var(--border);
-      margin-top: 2rem;
-    }
+    footer { text-align: center; padding: 1.75rem; font-size: 0.78rem; color: var(--muted); border-top: 1px solid var(--border); margin-top: 1rem; }
     footer a { color: var(--ecb-blue); }
 
-    @media (max-width: 640px) {
-      header { padding: 1.5rem; }
-      section { padding: 1.25rem; }
-      main { padding: 1rem; }
+    @media (max-width: 600px) {
+      header { padding: 1.25rem; }
+      section { padding: 1.1rem; }
+      main { padding: 0.75rem; }
+      .stat-value { font-size: 1.2rem; }
     }
   </style>
 </head>
@@ -166,16 +94,14 @@
 
 <header>
   <div>
-    <h1>ECB SAFE — Slovakia Analysis</h1>
-    <div style="margin-top:0.4rem;font-size:0.9rem;opacity:0.9;">
-      Survey on the Access to Finance of Enterprises
-    </div>
+    <h1>ECB SAFE — Slovakia</h1>
+    <div class="sub">Survey on the Access to Finance of Enterprises</div>
   </div>
   <div style="text-align:right">
     <span class="wave-badge">{{ wave_label }}</span>
-    <div class="meta" style="margin-top:0.5rem;">
+    <div class="meta">
       Generated {{ generated_at }}<br>
-      LLM iterations: {{ iterations }} &nbsp;|&nbsp;
+      {{ iterations }} iteration{{ 's' if iterations != 1 else '' }} &nbsp;|&nbsp;
       Judge score:
       <span class="badge-score{% if final_score < 0.7 %} fail{% elif final_score < 0.85 %} warn{% endif %}">
         {{ "%.0f"|format(final_score * 100) }}%
@@ -188,122 +114,189 @@
   <ul>
     <li><a href="#executive-summary">Summary</a></li>
     <li><a href="#financing-conditions">Financing</a></li>
+    <li><a href="#loan-applications">Applications</a></li>
     <li><a href="#business-situation">Business</a></li>
     <li><a href="#pressing-problems">Problems</a></li>
     <li><a href="#outlook">Outlook</a></li>
+    <li><a href="#expectations">Expectations</a></li>
     <li><a href="#slovakia-vs-ea">SK vs EA</a></li>
-    <li><a href="#data-gaps">Data Gaps</a></li>
+    <li><a href="#data-gaps">Gaps</a></li>
   </ul>
 </nav>
 
 <main>
 
-  <!-- LLM-generated report body injected here -->
+  <div class="glossary">
+    <strong>How to read this report:</strong>
+    Figures are <strong>net balances</strong> — the share of firms reporting an improvement minus those reporting a deterioration, in percentage points (pp).
+    A value of <strong>+20 pp</strong> means 20% more firms saw improvement than deterioration. <strong>−30 pp</strong> means the opposite.
+    Zero means equal numbers improved and deteriorated. All figures are weighted to represent Slovakia's SME population.
+  </div>
+
   {{ report_body }}
 
-  <!-- Data gaps section from gap-finder LLM -->
   {{ gap_section }}
 
-  <section id="charts-raw" style="display:none">
-    <!-- Chart data passed to JS -->
+  <div id="charts-raw" style="display:none">
     <script id="charts-data" type="application/json">{{ charts_json }}</script>
-  </section>
+  </div>
 
 </main>
 
 <footer>
   <p>
-    Data source: <a href="{{ ecb_source_url }}" target="_blank">ECB SAFE microdata</a> via MotherDuck &nbsp;|&nbsp;
-    <a href="https://www.ecb.europa.eu/stats/accesstofinancesofenterprises/" target="_blank">ECB SAFE homepage</a>
+    Data: <a href="{{ ecb_source_url }}" target="_blank">ECB SAFE {{ wave_label }}</a> via MotherDuck &nbsp;|&nbsp;
+    <a href="https://www.ecb.europa.eu/stats/ecb_surveys/safe/" target="_blank">ECB SAFE homepage</a>
   </p>
-  <p style="margin-top:0.4rem;">
-    Generated by SAFE Agent using Claude (Anthropic) &nbsp;|&nbsp; {{ generated_at }}
-  </p>
+  <p style="margin-top:0.3rem;">Generated by SAFE Agent · Claude (Anthropic) · {{ generated_at }}</p>
 </footer>
 
 <script>
 (function () {
-  const COLORS = {
-    SK: '#003087',
-    EA: '#d01010',
-    palette: [
-      '#003087','#d01010','#f0a500','#28a745','#6610f2','#fd7e14','#20c997','#6c757d'
-    ]
+  const C = {
+    blue:   '#003087',
+    red:    '#b91c1c',
+    gold:   '#f0a500',
+    green:  '#1a7c3e',
+    purple: '#6d28d9',
+    teal:   '#0f766e',
+    orange: '#c2410c',
+    slate:  '#475569',
+    palette: ['#003087','#b91c1c','#f0a500','#1a7c3e','#6d28d9','#0f766e','#c2410c','#475569']
   };
 
-  function makeDataset(ds, idx) {
-    const isSK = ds.country === 'SK' || (ds.label && ds.label.startsWith('SK'));
-    const isEA = ds.country === 'EA' || (ds.label && ds.label.startsWith('EA'));
-    const color = isSK ? COLORS.SK : isEA ? COLORS.EA : COLORS.palette[idx % COLORS.palette.length];
+  function lineDataset(ds, idx) {
+    const color = C.palette[idx % C.palette.length];
     return {
       label: ds.label,
       data: ds.data,
       borderColor: color,
-      backgroundColor: color + '22',
+      backgroundColor: color + '18',
       borderWidth: 2,
-      borderDash: ds.borderDash || [],
       tension: 0.3,
       spanGaps: true,
       pointRadius: 3,
+      pointHoverRadius: 5,
+      borderDash: ds.borderDash || [],
     };
+  }
+
+  function barDataset(ds, idx) {
+    const color = C.palette[idx % C.palette.length];
+    return { label: ds.label, data: ds.data, backgroundColor: color + 'cc', borderColor: color, borderWidth: 1 };
   }
 
   const chartsData = JSON.parse(document.getElementById('charts-data').textContent);
 
-  // Replace .chart-placeholder divs with actual Chart.js canvases
+  const LINE_OPTS = {
+    responsive: true, maintainAspectRatio: false,
+    scales: { y: { title: { display: true, text: 'Net balance (pp)' } } },
+    plugins: {
+      legend: { position: 'top', labels: { boxWidth: 11, font: { size: 10 } } },
+      tooltip: { mode: 'index', intersect: false }
+    }
+  };
+
   document.querySelectorAll('.chart-placeholder').forEach(function (el) {
-    const chartKey = el.getAttribute('data-chart');
-    const def = chartsData[chartKey];
+    const key = el.getAttribute('data-chart');
+    const def = chartsData[key];
     if (!def) return;
 
     el.style.display = 'block';
-    const wrapper = document.createElement('div');
-    wrapper.className = 'chart-container';
+    const wrap = document.createElement('div');
+    wrap.className = 'chart-container';
     const canvas = document.createElement('canvas');
     canvas.className = 'safe-chart';
-    wrapper.appendChild(canvas);
-    el.parentNode.insertBefore(wrapper, el.nextSibling);
+    wrap.appendChild(canvas);
+    el.parentNode.insertBefore(wrap, el.nextSibling);
 
-    if (chartKey === 'pressingness') {
-      // Horizontal bar chart
+    if (key === 'pressingness') {
       new Chart(canvas, {
         type: 'bar',
         data: {
           labels: def.labels,
-          datasets: [
-            { label: 'Slovakia', data: def.sk, backgroundColor: COLORS.SK + 'cc' },
-            { label: 'Euro Area', data: def.ea, backgroundColor: COLORS.EA + 'cc' }
-          ]
+          datasets: [{ label: 'Slovakia avg. pressingness', data: def.sk, backgroundColor: C.blue + 'cc', borderColor: C.blue, borderWidth: 1 }]
         },
         options: {
-          indexAxis: 'y',
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            x: { min: 1, max: 10, title: { display: true, text: 'Avg. pressingness (1–10)' } }
-          },
-          plugins: { legend: { position: 'top' } }
+          indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+          scales: { x: { min: 0, max: 10, title: { display: true, text: 'Avg. pressingness (0–10)' } } },
+          plugins: { legend: { display: false } }
         }
       });
-    } else {
-      // Line chart
-      new Chart(canvas, {
-        type: 'line',
+
+    } else if (key === 'loan_applications') {
+      // Two tabs: bar (latest wave by instrument) + trend line (bank loans over time)
+      // We render both stacked vertically in one container (double height)
+      wrap.style.height = '520px';
+
+      // Top: grouped bar by instrument
+      const topCanvas = canvas;
+      const barDef = def.bar || {};
+      new Chart(topCanvas, {
+        type: 'bar',
         data: {
-          labels: def.labels,
-          datasets: (def.datasets || []).map(makeDataset)
+          labels: barDef.labels || [],
+          datasets: (barDef.datasets || []).map(barDataset)
         },
         options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            y: { title: { display: true, text: 'Net balance (pp)' } }
-          },
+          responsive: true, maintainAspectRatio: false,
+          scales: { y: { title: { display: true, text: '% of firms' }, max: 50 } },
           plugins: {
-            legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
-            tooltip: { mode: 'index', intersect: false }
+            legend: { position: 'top', labels: { boxWidth: 11, font: { size: 10 } } },
+            title: { display: true, text: 'Latest wave — by instrument', font: { size: 11 } }
           }
         }
+      });
+
+      // Bottom: trend line for bank loans
+      if (def.trend && def.trend.datasets && def.trend.datasets.length) {
+        const trendWrap = document.createElement('div');
+        trendWrap.className = 'chart-container';
+        trendWrap.style.height = '220px';
+        trendWrap.style.marginTop = '0.5rem';
+        const trendCanvas = document.createElement('canvas');
+        trendCanvas.className = 'safe-chart';
+        trendWrap.appendChild(trendCanvas);
+        wrap.parentNode.insertBefore(trendWrap, wrap.nextSibling);
+        new Chart(trendCanvas, {
+          type: 'line',
+          data: { labels: def.trend.labels, datasets: def.trend.datasets.map(lineDataset) },
+          options: {
+            ...LINE_OPTS,
+            scales: { y: { title: { display: true, text: '% of firms (bank loans)' } } },
+            plugins: {
+              ...LINE_OPTS.plugins,
+              title: { display: true, text: 'Bank loan — trend over time', font: { size: 11 } }
+            }
+          }
+        });
+      }
+
+    } else if (key === 'expectations') {
+      // Horizontal bar
+      new Chart(canvas, {
+        type: 'bar',
+        data: {
+          labels: def.labels,
+          datasets: (def.datasets || []).map(function(ds, i) {
+            const vals = ds.data || [];
+            const colors = vals.map(function(v) { return v == null ? C.slate + '88' : v >= 0 ? C.blue + 'cc' : C.red + 'cc'; });
+            return { label: ds.label, data: vals, backgroundColor: colors, borderWidth: 0 };
+          })
+        },
+        options: {
+          indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+          scales: { x: { title: { display: true, text: 'Expected % change' } } },
+          plugins: { legend: { display: false } }
+        }
+      });
+
+    } else {
+      // Default: line chart
+      new Chart(canvas, {
+        type: 'line',
+        data: { labels: def.labels, datasets: (def.datasets || []).map(lineDataset) },
+        options: LINE_OPTS
       });
     }
   });

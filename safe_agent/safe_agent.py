@@ -20,23 +20,35 @@ _PAGES_URL = os.environ.get(
 _RECIPIENTS_ENV = os.environ.get("REPORT_RECIPIENTS", "lubos.pernis@gmail.com")
 
 
-def _all_mart_columns() -> list[str]:
-    """Return a flat list of all column names across all mart tables for gap analysis."""
+def _mart_schema_summary() -> str:
+    """Return a structured text summary of mart tables and their columns for gap analysis."""
     from query_marts import _connect
     con = _connect()
     tables = [
         "main_safe.mart_safe__financing_conditions",
         "main_safe.mart_safe__business_situation",
         "main_safe.mart_safe__q0b_pressingness",
+        "main_safe.mart_safe__loan_applications",
         "main_safe.mart_safe__outlook",
         "main_safe.mart_safe__expectations",
     ]
-    cols = []
+    lines = []
     for t in tables:
-        rows = con.execute(f"DESCRIBE {t}").fetchall()
-        cols.extend(f"{t}.{r[0]}" for r in rows)
+        short = t.split(".")[-1]
+        cols = [r[0] for r in con.execute(f"DESCRIBE {t}").fetchall()]
+        # Also pull distinct sub_item_label / instrument_label / problem_label values
+        for label_col in ("sub_item_label", "instrument_label", "problem_label", "question_label"):
+            if label_col in cols:
+                try:
+                    vals = [r[0] for r in con.execute(
+                        f"SELECT DISTINCT {label_col} FROM {t} WHERE {label_col} IS NOT NULL ORDER BY 1"
+                    ).fetchall()]
+                    lines.append(f"\n{short} — {label_col} values: {', '.join(vals)}")
+                except Exception:
+                    pass
+        lines.append(f"{short} columns: {', '.join(cols)}")
     con.close()
-    return cols
+    return "\n".join(lines)
 
 
 def main() -> None:
@@ -58,8 +70,8 @@ def main() -> None:
 
     # 3. LLM loop
     print("[safe_agent] running LLM draft/judge/rewrite loop...")
-    mart_columns = _all_mart_columns()
-    result = run_llm_loop(data_json, ecb_report, mart_columns)
+    mart_schema = _mart_schema_summary()
+    result = run_llm_loop(data_json, ecb_report, mart_schema)
     print(
         f"[safe_agent] LLM loop complete: {result['iterations']} iteration(s), "
         f"final score {result['final_score']:.2f}"

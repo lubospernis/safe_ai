@@ -205,7 +205,12 @@ def render(
     gap_section = _strip_fences(result["gap_section"])
 
     # Serialise — replace NaN/Inf with null so JSON is valid
-    charts_json = json.dumps(charts, allow_nan=False, default=lambda x: None)
+    import math
+    def _clean(obj):
+        if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+            return None
+        raise TypeError
+    charts_json = json.dumps(charts, default=_clean)
 
     html = template.render(
         report_body=report_body,

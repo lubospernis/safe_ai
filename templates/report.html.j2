@@ -3,303 +3,438 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SAFE Slovakia Report — {{ wave_label }}</title>
+  <title>Slovakia SME Monitor — {{ wave_label }}</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     :root {
-      --ecb-blue: #003087;
-      --ecb-gold: #f0a500;
-      --positive: #1a7c3e;
-      --positive-bg: #e8f5ec;
-      --negative: #b91c1c;
-      --negative-bg: #fef2f2;
-      --neutral-bg: #f1f5f9;
-      --bg: #f0f2f5;
-      --card-bg: #ffffff;
-      --text: #1a1a2e;
-      --muted: #64748b;
-      --border: #e2e8f0;
+      --blue:   #1d3461;
+      --blue2:  #376fd0;
+      --gold:   #e8a020;
+      --red:    #c0392b;
+      --green:  #1a7c3e;
+      --slate:  #475569;
+      --bg:     #f4f6f9;
+      --card:   #ffffff;
+      --border: #dde3ec;
+      --text:   #1a2035;
+      --muted:  #64748b;
+      --pos-bg: #edf7f1;
+      --neg-bg: #fdf2f2;
+      --neu-bg: #f1f5f9;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.55; font-size: 0.94rem; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg); color: var(--text);
+      font-size: 15px; line-height: 1.6;
+    }
 
-    /* ── Header ── */
-    header { background: var(--ecb-blue); color: white; padding: 1.75rem 3rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
-    header h1 { font-size: 1.5rem; font-weight: 700; }
-    header .sub { font-size: 0.85rem; opacity: 0.8; margin-top: 0.2rem; }
-    .wave-badge { background: var(--ecb-gold); color: var(--ecb-blue); font-weight: 700; padding: 0.3rem 0.9rem; border-radius: 4px; font-size: 0.9rem; }
-    .meta { font-size: 0.8rem; opacity: 0.75; text-align: right; margin-top: 0.4rem; }
+    /* ── Top bar ── */
+    .topbar {
+      background: var(--blue);
+      color: #fff;
+      padding: 0 2.5rem;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 52px;
+      font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase;
+    }
+    .topbar-left { opacity: 0.6; }
+    .topbar-right { display: flex; gap: 1.5rem; align-items: center; }
+    .topbar-right a { color: rgba(255,255,255,0.55); text-decoration: none; }
+    .topbar-right a:hover { color: #fff; }
 
-    /* ── Nav ── */
-    nav { background: white; border-bottom: 2px solid var(--ecb-blue); padding: 0 2rem; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 6px rgba(0,0,0,0.07); }
-    nav ul { list-style: none; display: flex; overflow-x: auto; }
-    nav a { display: block; padding: 0.7rem 1rem; color: var(--ecb-blue); text-decoration: none; font-size: 0.8rem; font-weight: 600; white-space: nowrap; border-bottom: 3px solid transparent; transition: border-color 0.15s; }
-    nav a:hover { border-bottom-color: var(--ecb-gold); }
+    /* ── Hero ── */
+    .hero {
+      background: linear-gradient(135deg, var(--blue) 0%, #2a4a8c 100%);
+      color: #fff;
+      padding: 3rem 2.5rem 2.5rem;
+    }
+    .hero-inner { max-width: 1100px; margin: 0 auto; display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 1.5rem; }
+    .hero h1 { font-size: 2rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; }
+    .hero h1 span { color: var(--gold); }
+    .hero-sub { margin-top: 0.4rem; opacity: 0.7; font-size: 0.88rem; }
+    .hero-meta { text-align: right; font-size: 0.8rem; opacity: 0.65; line-height: 1.8; }
+    .wave-pill {
+      display: inline-block; background: var(--gold); color: var(--blue);
+      font-weight: 800; padding: 0.35rem 1rem; border-radius: 20px;
+      font-size: 0.9rem; margin-bottom: 0.4rem;
+    }
+    .score-pill {
+      display: inline-block; padding: 0.2rem 0.6rem; border-radius: 12px;
+      font-size: 0.75rem; font-weight: 700;
+      background: rgba(255,255,255,0.15); color: #fff;
+    }
+    .score-pill.pass  { background: rgba(26,124,62,0.4); }
+    .score-pill.warn  { background: rgba(232,160,32,0.4); }
+    .score-pill.fail  { background: rgba(192,57,43,0.4); }
 
-    /* ── Layout ── */
-    main { max-width: 1080px; margin: 0 auto; padding: 1.75rem 1.25rem; }
-    section { background: var(--card-bg); border-radius: 10px; padding: 1.75rem 2rem; margin-bottom: 1.5rem; border: 1px solid var(--border); box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
-    section h2 { font-size: 1.1rem; color: var(--ecb-blue); margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--ecb-gold); text-transform: uppercase; letter-spacing: 0.04em; }
-    section h3 { font-size: 0.9rem; font-weight: 700; margin: 1.1rem 0 0.5rem; color: var(--text); text-transform: uppercase; letter-spacing: 0.03em; opacity: 0.75; }
-    p { margin-bottom: 0.7rem; }
-    ul, ol { padding-left: 1.25rem; margin-bottom: 0.7rem; }
-    li { margin-bottom: 0.35rem; }
-    strong { color: var(--text); }
+    /* ── Sticky nav ── */
+    nav {
+      background: var(--card); border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 200;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .nav-inner {
+      max-width: 1100px; margin: 0 auto; padding: 0 2rem;
+      display: flex; overflow-x: auto; gap: 0;
+      scrollbar-width: none;
+    }
+    .nav-inner::-webkit-scrollbar { display: none; }
+    nav a {
+      display: block; padding: 0.85rem 1.1rem;
+      color: var(--muted); text-decoration: none;
+      font-size: 0.78rem; font-weight: 600; letter-spacing: 0.03em;
+      white-space: nowrap; border-bottom: 3px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    nav a:hover, nav a.active { color: var(--blue); border-bottom-color: var(--gold); }
 
-    /* ── Glossary callout ── */
-    .glossary { background: #eff6ff; border-left: 4px solid #3b82f6; border-radius: 0 6px 6px 0; padding: 0.75rem 1rem; margin-bottom: 1.5rem; font-size: 0.83rem; color: #1e3a5f; }
-    .glossary strong { color: #1d4ed8; }
+    /* ── Main layout ── */
+    main { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem 3rem; }
 
-    /* ── Stat cards ── */
-    .stat-row { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1.25rem; }
-    .stat-card { flex: 1 1 140px; border-radius: 8px; padding: 0.9rem 1rem; min-width: 120px; }
-    .stat-card.positive { background: var(--positive-bg); border-left: 3px solid var(--positive); }
-    .stat-card.negative { background: var(--negative-bg); border-left: 3px solid var(--negative); }
-    .stat-card.neutral  { background: var(--neutral-bg);  border-left: 3px solid var(--muted); }
-    .stat-value { font-size: 1.55rem; font-weight: 800; line-height: 1.1; }
-    .stat-card.positive .stat-value { color: var(--positive); }
-    .stat-card.negative .stat-value { color: var(--negative); }
-    .stat-card.neutral  .stat-value { color: var(--muted); }
-    .stat-label { font-size: 0.75rem; font-weight: 600; margin-top: 0.25rem; opacity: 0.8; }
-    .stat-delta { font-size: 0.72rem; margin-top: 0.2rem; opacity: 0.65; }
+    /* ── Glossary ── */
+    .glossary {
+      background: #eff6ff; border-left: 4px solid var(--blue2);
+      border-radius: 0 8px 8px 0; padding: 0.8rem 1.2rem;
+      font-size: 0.82rem; color: #1e3a5f; margin-bottom: 2rem;
+    }
+    .glossary strong { color: var(--blue2); }
 
-    /* ── Charts ── */
-    .chart-container { position: relative; height: 320px; margin: 1.25rem 0; }
+    /* ── Section cards ── */
+    .section-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 2rem 2.25rem;
+      margin-bottom: 1.75rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .section-card h2 {
+      font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--muted);
+      margin-bottom: 1.25rem; display: flex; align-items: center; gap: 0.5rem;
+    }
+    .section-card h2::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+
+    /* ── KPI row ── */
+    .kpi-row { display: flex; flex-wrap: wrap; gap: 0.85rem; margin-bottom: 1.5rem; }
+    .kpi {
+      flex: 1 1 130px; min-width: 110px; max-width: 200px;
+      padding: 0.9rem 1rem 0.8rem;
+      border-radius: 10px; border: 1px solid transparent;
+    }
+    .kpi.pos { background: var(--pos-bg); border-color: #b2ddc4; }
+    .kpi.neg { background: var(--neg-bg); border-color: #f5c2bf; }
+    .kpi.neu { background: var(--neu-bg); border-color: var(--border); }
+    .kpi-val { font-size: 1.65rem; font-weight: 800; line-height: 1; }
+    .kpi.pos .kpi-val { color: var(--green); }
+    .kpi.neg .kpi-val { color: var(--red); }
+    .kpi.neu .kpi-val { color: var(--slate); }
+    .kpi-label { font-size: 0.72rem; font-weight: 600; margin-top: 0.3rem; color: var(--muted); line-height: 1.3; }
+    .kpi-delta { font-size: 0.68rem; margin-top: 0.2rem; color: var(--muted); opacity: 0.8; }
+
+    /* ── Bullets ── */
+    .findings { list-style: none; margin-bottom: 1rem; }
+    .findings li {
+      padding: 0.55rem 0 0.55rem 1rem;
+      border-left: 3px solid var(--border);
+      margin-bottom: 0.5rem;
+      font-size: 0.9rem; line-height: 1.5;
+    }
+    .findings li.sig { border-left-color: var(--gold); }
+    .findings li strong { color: var(--blue); }
+
+    /* ── Chart wrapper ── */
+    .chart-wrap { position: relative; height: 260px; margin: 1.25rem 0 0.5rem; }
+    .chart-wrap.tall { height: 340px; }
+    .chart-wrap.short { height: 180px; }
     .chart-placeholder { display: none; }
-    canvas.safe-chart { width: 100% !important; }
+    canvas { width: 100% !important; }
 
-    /* ── Tables ── */
-    table { width: 100%; border-collapse: collapse; font-size: 0.84rem; margin: 0.9rem 0; }
-    th { background: var(--ecb-blue); color: white; text-align: left; padding: 0.45rem 0.7rem; font-weight: 600; font-size: 0.8rem; }
-    td { padding: 0.4rem 0.7rem; border-bottom: 1px solid var(--border); }
-    tr:nth-child(even) td { background: #f8fafc; }
+    /* ── Chart title ── */
+    .chart-title { font-size: 0.75rem; font-weight: 600; color: var(--muted); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.05em; }
 
-    /* ── Badge ── */
-    .badge-score { display: inline-block; padding: 0.2rem 0.55rem; border-radius: 4px; font-size: 0.78rem; font-weight: 700; background: var(--positive-bg); color: var(--positive); }
-    .badge-score.warn { background: #fffbeb; color: #92400e; }
-    .badge-score.fail { background: var(--negative-bg); color: var(--negative); }
+    /* ── Gap table ── */
+    .gap-table { width: 100%; border-collapse: collapse; font-size: 0.84rem; margin-top: 1rem; }
+    .gap-table th { background: var(--blue); color: #fff; text-align: left; padding: 0.5rem 0.8rem; font-size: 0.75rem; font-weight: 600; }
+    .gap-table td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .gap-table tr:nth-child(even) td { background: #f8fafc; }
 
-    footer { text-align: center; padding: 1.75rem; font-size: 0.78rem; color: var(--muted); border-top: 1px solid var(--border); margin-top: 1rem; }
-    footer a { color: var(--ecb-blue); }
+    /* ── Footer ── */
+    footer {
+      text-align: center; padding: 2rem 1rem;
+      font-size: 0.78rem; color: var(--muted);
+      border-top: 1px solid var(--border); margin-top: 1rem;
+    }
+    footer a { color: var(--blue2); text-decoration: none; }
 
-    @media (max-width: 600px) {
-      header { padding: 1.25rem; }
-      section { padding: 1.1rem; }
-      main { padding: 0.75rem; }
-      .stat-value { font-size: 1.2rem; }
+    @media (max-width: 640px) {
+      .hero { padding: 2rem 1.25rem 1.75rem; }
+      .hero h1 { font-size: 1.5rem; }
+      .section-card { padding: 1.25rem; }
+      main { padding: 1rem 0.75rem 2rem; }
+      .kpi { flex: 1 1 100px; }
     }
   </style>
 </head>
 <body>
 
-<header>
-  <div>
-    <h1>ECB SAFE — Slovakia</h1>
-    <div class="sub">Survey on the Access to Finance of Enterprises</div>
+<div class="topbar">
+  <span class="topbar-left">ECB SAFE Survey · Slovakia SME Monitor</span>
+  <div class="topbar-right">
+    <a href="https://www.ecb.europa.eu/stats/ecb_surveys/safe/" target="_blank">ECB SAFE</a>
+    <a href="#data-gaps">Data gaps</a>
   </div>
-  <div style="text-align:right">
-    <span class="wave-badge">{{ wave_label }}</span>
-    <div class="meta">
+</div>
+
+<div class="hero">
+  <div class="hero-inner">
+    <div>
+      <div class="wave-pill">{{ wave_label }}</div>
+      <h1>Slovakia <span>SME</span> Monitor</h1>
+      <div class="hero-sub">Survey on the Access to Finance of Enterprises &nbsp;·&nbsp; SMEs only</div>
+    </div>
+    <div class="hero-meta">
       Generated {{ generated_at }}<br>
-      {{ iterations }} iteration{{ 's' if iterations != 1 else '' }} &nbsp;|&nbsp;
-      Judge score:
-      <span class="badge-score{% if final_score < 0.7 %} fail{% elif final_score < 0.85 %} warn{% endif %}">
-        {{ "%.0f"|format(final_score * 100) }}%
+      {{ iterations }} LLM iteration{{ 's' if iterations != 1 else '' }}
+      &nbsp;&nbsp;
+      <span class="score-pill{% if final_score >= 0.85 %} pass{% elif final_score >= 0.70 %} warn{% else %} fail{% endif %}">
+        Judge {{ "%.0f"|format(final_score * 100) }}%
       </span>
+      {% if ecb_source_url %}
+      <br><a href="{{ ecb_source_url }}" target="_blank" style="color:rgba(255,255,255,0.5);font-size:0.75rem;">ECB reference ↗</a>
+      {% endif %}
     </div>
   </div>
-</header>
+</div>
 
 <nav>
-  <ul>
-    <li><a href="#executive-summary">Summary</a></li>
-    <li><a href="#financing-conditions">Financing</a></li>
-    <li><a href="#loan-applications">Applications</a></li>
-    <li><a href="#business-situation">Business</a></li>
-    <li><a href="#pressing-problems">Problems</a></li>
-    <li><a href="#outlook">Outlook</a></li>
-    <li><a href="#expectations">Expectations</a></li>
-    <li><a href="#slovakia-vs-ea">SK vs EA</a></li>
-    <li><a href="#data-gaps">Gaps</a></li>
-  </ul>
+  <div class="nav-inner">
+    <a href="#executive-summary">Summary</a>
+    <a href="#financing-conditions">Financing</a>
+    <a href="#loan-applications">Loans</a>
+    <a href="#business-situation">Business</a>
+    <a href="#pressing-problems">Problems</a>
+    <a href="#outlook">Outlook</a>
+    <a href="#expectations">Expectations</a>
+    <a href="#slovakia-vs-ea">vs EA</a>
+    <a href="#data-gaps">Gaps</a>
+  </div>
 </nav>
 
 <main>
 
   <div class="glossary">
-    <strong>How to read this report:</strong>
-    Figures are <strong>net balances</strong> — the share of firms reporting an improvement minus those reporting a deterioration, in percentage points (pp).
-    A value of <strong>+20 pp</strong> means 20% more firms saw improvement than deterioration. <strong>−30 pp</strong> means the opposite.
-    Zero means equal numbers improved and deteriorated. All figures are weighted to represent Slovakia's SME population.
+    <strong>How to read:</strong>
+    <strong>Net balance</strong> = % of firms reporting improvement − % reporting deterioration (pp).
+    <strong>+20 pp</strong> = 20% more firms improved than deteriorated.
+    <strong>Pressingness scores</strong> are on a 1–10 scale (1 = not pressing, 10 = extremely pressing) — not pp.
+    All figures are weighted to represent Slovakia's SME population.
   </div>
 
   {{ report_body }}
 
   {{ gap_section }}
 
-  <div id="charts-raw" style="display:none">
-    <script id="charts-data" type="application/json">{{ charts_json }}</script>
-  </div>
-
 </main>
 
 <footer>
   <p>
-    Data: <a href="{{ ecb_source_url }}" target="_blank">ECB SAFE {{ wave_label }}</a> via MotherDuck &nbsp;|&nbsp;
+    Data: <a href="{{ ecb_source_url or 'https://www.ecb.europa.eu/stats/ecb_surveys/safe/' }}" target="_blank">ECB SAFE {{ wave_label }}</a>
+    via MotherDuck &nbsp;·&nbsp;
     <a href="https://www.ecb.europa.eu/stats/ecb_surveys/safe/" target="_blank">ECB SAFE homepage</a>
   </p>
-  <p style="margin-top:0.3rem;">Generated by SAFE Agent · Claude (Anthropic) · {{ generated_at }}</p>
+  <p style="margin-top:0.3rem">Generated by SAFE Agent · Powered by Claude (Anthropic) · {{ generated_at }}</p>
 </footer>
+
+<!-- Chart data injected here -->
+<script id="charts-data" type="application/json">{{ charts_json }}</script>
 
 <script>
 (function () {
-  const C = {
-    blue:   '#003087',
-    red:    '#b91c1c',
-    gold:   '#f0a500',
-    green:  '#1a7c3e',
-    purple: '#6d28d9',
-    teal:   '#0f766e',
-    orange: '#c2410c',
-    slate:  '#475569',
-    palette: ['#003087','#b91c1c','#f0a500','#1a7c3e','#6d28d9','#0f766e','#c2410c','#475569']
-  };
+  'use strict';
 
-  function lineDataset(ds, idx) {
-    const color = C.palette[idx % C.palette.length];
+  const PALETTE = ['#1d3461','#e8a020','#c0392b','#1a7c3e','#6d28d9','#0891b2','#9a3412','#475569'];
+
+  function hex(color, alpha) {
+    const a = Math.round(alpha * 255).toString(16).padStart(2,'0');
+    return color + a;
+  }
+
+  function lineDS(ds, i) {
+    const c = PALETTE[i % PALETTE.length];
     return {
-      label: ds.label,
-      data: ds.data,
-      borderColor: color,
-      backgroundColor: color + '18',
-      borderWidth: 2,
-      tension: 0.3,
-      spanGaps: true,
-      pointRadius: 3,
-      pointHoverRadius: 5,
-      borderDash: ds.borderDash || [],
+      label: ds.label, data: ds.data,
+      borderColor: c, backgroundColor: hex(c, 0.08),
+      borderWidth: 2.5, tension: 0.35,
+      spanGaps: true, pointRadius: 3.5, pointHoverRadius: 6,
+      pointBackgroundColor: c,
     };
   }
 
-  function barDataset(ds, idx) {
-    const color = C.palette[idx % C.palette.length];
-    return { label: ds.label, data: ds.data, backgroundColor: color + 'cc', borderColor: color, borderWidth: 1 };
+  function barDS(ds, i) {
+    const c = PALETTE[i % PALETTE.length];
+    return { label: ds.label, data: ds.data, backgroundColor: hex(c, 0.75), borderColor: c, borderWidth: 1, borderRadius: 3 };
   }
 
-  const chartsData = JSON.parse(document.getElementById('charts-data').textContent);
-
-  const LINE_OPTS = {
+  const LINE_BASE = {
     responsive: true, maintainAspectRatio: false,
-    scales: { y: { title: { display: true, text: 'Net balance (pp)' } } },
+    interaction: { mode: 'index', intersect: false },
     plugins: {
-      legend: { position: 'top', labels: { boxWidth: 11, font: { size: 10 } } },
-      tooltip: { mode: 'index', intersect: false }
+      legend: { position: 'top', labels: { boxWidth: 10, padding: 14, font: { size: 11 } } },
+      tooltip: { backgroundColor: 'rgba(15,23,42,0.92)', titleFont: { size: 11 }, bodyFont: { size: 11 }, padding: 10 }
+    },
+    scales: {
+      x: { ticks: { font: { size: 10 }, maxRotation: 45 }, grid: { display: false } },
+      y: { ticks: { font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.05)' } }
     }
   };
 
-  document.querySelectorAll('.chart-placeholder').forEach(function (el) {
+  const data = JSON.parse(document.getElementById('charts-data').textContent);
+
+  document.querySelectorAll('.chart-placeholder[data-chart]').forEach(function (el) {
     const key = el.getAttribute('data-chart');
-    const def = chartsData[key];
-    if (!def) return;
+    const def = data[key];
+    if (!def || !def.labels) return;
 
     el.style.display = 'block';
-    const wrap = document.createElement('div');
-    wrap.className = 'chart-container';
-    const canvas = document.createElement('canvas');
-    canvas.className = 'safe-chart';
-    wrap.appendChild(canvas);
-    el.parentNode.insertBefore(wrap, el.nextSibling);
 
     if (key === 'pressingness') {
+      // Horizontal bar — sorted by value
+      const wrap = document.createElement('div');
+      wrap.className = 'chart-wrap tall';
+      const canvas = document.createElement('canvas');
+      wrap.appendChild(canvas);
+      el.parentNode.insertBefore(wrap, el.nextSibling);
       new Chart(canvas, {
         type: 'bar',
         data: {
           labels: def.labels,
-          datasets: [{ label: 'Slovakia avg. pressingness', data: def.sk, backgroundColor: C.blue + 'cc', borderColor: C.blue, borderWidth: 1 }]
+          datasets: [{
+            label: 'Avg pressingness (1–10)',
+            data: def.sk,
+            backgroundColor: def.sk.map(v => v >= 6 ? hex('#c0392b', 0.75) : v >= 5 ? hex('#e8a020', 0.75) : hex('#1d3461', 0.55)),
+            borderWidth: 0, borderRadius: 4,
+          }]
         },
         options: {
-          indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-          scales: { x: { min: 0, max: 10, title: { display: true, text: 'Avg. pressingness (0–10)' } } },
-          plugins: { legend: { display: false } }
-        }
-      });
-
-    } else if (key === 'loan_applications') {
-      // Two tabs: bar (latest wave by instrument) + trend line (bank loans over time)
-      // We render both stacked vertically in one container (double height)
-      wrap.style.height = '520px';
-
-      // Top: grouped bar by instrument
-      const topCanvas = canvas;
-      const barDef = def.bar || {};
-      new Chart(topCanvas, {
-        type: 'bar',
-        data: {
-          labels: barDef.labels || [],
-          datasets: (barDef.datasets || []).map(barDataset)
-        },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          scales: { y: { title: { display: true, text: '% of firms' }, max: 50 } },
+          ...LINE_BASE,
+          indexAxis: 'y',
           plugins: {
-            legend: { position: 'top', labels: { boxWidth: 11, font: { size: 10 } } },
-            title: { display: true, text: 'Latest wave — by instrument', font: { size: 11 } }
+            ...LINE_BASE.plugins,
+            legend: { display: false },
+            tooltip: { ...LINE_BASE.plugins.tooltip, callbacks: { label: ctx => ' ' + ctx.raw.toFixed(2) + ' / 10' } }
+          },
+          scales: {
+            x: { min: 0, max: 10, ticks: { font: { size: 10 } }, title: { display: true, text: 'Score (1–10)', font: { size: 10 } } },
+            y: { ticks: { font: { size: 10 } } }
           }
         }
       });
 
-      // Bottom: trend line for bank loans
-      if (def.trend && def.trend.datasets && def.trend.datasets.length) {
-        const trendWrap = document.createElement('div');
-        trendWrap.className = 'chart-container';
-        trendWrap.style.height = '220px';
-        trendWrap.style.marginTop = '0.5rem';
-        const trendCanvas = document.createElement('canvas');
-        trendCanvas.className = 'safe-chart';
-        trendWrap.appendChild(trendCanvas);
-        wrap.parentNode.insertBefore(trendWrap, wrap.nextSibling);
-        new Chart(trendCanvas, {
+    } else if (key === 'loan_applications') {
+      // Two charts stacked
+      const barDef = def.bar || {};
+      const wrap1 = document.createElement('div');
+      wrap1.className = 'chart-wrap';
+      const c1 = document.createElement('canvas');
+      wrap1.appendChild(c1);
+      el.parentNode.insertBefore(wrap1, el.nextSibling);
+      new Chart(c1, {
+        type: 'bar',
+        data: { labels: barDef.labels || [], datasets: (barDef.datasets || []).map(barDS) },
+        options: {
+          ...LINE_BASE,
+          plugins: { ...LINE_BASE.plugins, title: { display: true, text: 'Latest wave — by instrument (%)', font: { size: 11 } } },
+          scales: { x: LINE_BASE.scales.x, y: { ...LINE_BASE.scales.y, title: { display: true, text: '% of firms', font: { size: 10 } } } }
+        }
+      });
+
+      if (def.trend && (def.trend.datasets || []).length) {
+        const wrap2 = document.createElement('div');
+        wrap2.className = 'chart-wrap short';
+        wrap2.style.marginTop = '1rem';
+        const c2 = document.createElement('canvas');
+        wrap2.appendChild(c2);
+        el.parentNode.insertBefore(wrap2, wrap1.nextSibling);
+        new Chart(c2, {
           type: 'line',
-          data: { labels: def.trend.labels, datasets: def.trend.datasets.map(lineDataset) },
+          data: { labels: def.trend.labels, datasets: def.trend.datasets.map(lineDS) },
           options: {
-            ...LINE_OPTS,
-            scales: { y: { title: { display: true, text: '% of firms (bank loans)' } } },
-            plugins: {
-              ...LINE_OPTS.plugins,
-              title: { display: true, text: 'Bank loan — trend over time', font: { size: 11 } }
-            }
+            ...LINE_BASE,
+            plugins: { ...LINE_BASE.plugins, title: { display: true, text: 'Bank loan — trend (%)', font: { size: 11 } } },
+            scales: { x: LINE_BASE.scales.x, y: { ...LINE_BASE.scales.y, title: { display: true, text: '% of firms', font: { size: 10 } } } }
           }
         });
       }
 
     } else if (key === 'expectations') {
-      // Horizontal bar
+      const wrap = document.createElement('div');
+      wrap.className = 'chart-wrap';
+      const canvas = document.createElement('canvas');
+      wrap.appendChild(canvas);
+      el.parentNode.insertBefore(wrap, el.nextSibling);
       new Chart(canvas, {
         type: 'bar',
         data: {
           labels: def.labels,
           datasets: (def.datasets || []).map(function(ds, i) {
-            const vals = ds.data || [];
-            const colors = vals.map(function(v) { return v == null ? C.slate + '88' : v >= 0 ? C.blue + 'cc' : C.red + 'cc'; });
-            return { label: ds.label, data: vals, backgroundColor: colors, borderWidth: 0 };
+            return {
+              label: ds.label, data: ds.data, borderWidth: 0, borderRadius: 3,
+              backgroundColor: ds.data.map(v => v == null ? '#cccccc' : v >= 0 ? hex('#1a7c3e', 0.7) : hex('#c0392b', 0.7))
+            };
           })
         },
         options: {
-          indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-          scales: { x: { title: { display: true, text: 'Expected % change' } } },
-          plugins: { legend: { display: false } }
+          ...LINE_BASE,
+          indexAxis: 'y',
+          plugins: { ...LINE_BASE.plugins, legend: { display: false } },
+          scales: {
+            x: { ticks: { font: { size: 10 } }, title: { display: true, text: 'Expected % change', font: { size: 10 } } },
+            y: { ticks: { font: { size: 10 } } }
+          }
         }
       });
 
     } else {
-      // Default: line chart
+      // Default line chart (financing, business, outlook, etc.)
+      const wrap = document.createElement('div');
+      wrap.className = 'chart-wrap' + (def.datasets && def.datasets.length > 3 ? ' tall' : '');
+      const canvas = document.createElement('canvas');
+      wrap.appendChild(canvas);
+      el.parentNode.insertBefore(wrap, el.nextSibling);
+
+      const yLabel = (key === 'pressingness') ? 'Score (1–10)' : 'Net balance (pp)';
       new Chart(canvas, {
         type: 'line',
-        data: { labels: def.labels, datasets: (def.datasets || []).map(lineDataset) },
-        options: LINE_OPTS
+        data: { labels: def.labels, datasets: (def.datasets || []).map(lineDS) },
+        options: {
+          ...LINE_BASE,
+          plugins: { ...LINE_BASE.plugins },
+          scales: {
+            x: LINE_BASE.scales.x,
+            y: { ...LINE_BASE.scales.y, title: { display: true, text: yLabel, font: { size: 10 } } }
+          }
+        }
       });
     }
   });
+
+  // Highlight active nav link on scroll
+  const sections = document.querySelectorAll('section[id], div[id]');
+  const navLinks = document.querySelectorAll('nav a');
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        navLinks.forEach(a => {
+          a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id);
+        });
+      }
+    });
+  }, { rootMargin: '-30% 0px -60% 0px' });
+  sections.forEach(s => obs.observe(s));
+
 })();
 </script>
 

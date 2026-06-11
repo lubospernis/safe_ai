@@ -12,13 +12,12 @@ Before listing any gap, check: does any mart table have a column or sub_item tha
 
 ## Output format
 
-Return an HTML fragment — no `<html>`/`<head>`/`<body>` tags. Use this structure:
+Return an HTML fragment — no `<html>`/`<head>`/`<body>` tags, no markdown fences. Use this structure exactly:
 
-```html
-<section id="data-gaps">
+<section id="data-gaps" class="section-card">
   <h2>What This Report Doesn't Cover Yet</h2>
-  <p>The ECB's official SAFE publication analyses some topics our current data pipeline doesn't yet capture for Slovakia. These are potential areas for future analysis.</p>
-  <table>
+  <p style="font-size:0.88rem;color:#475569;margin-bottom:1rem;">The ECB's official SAFE publication analyses some topics our current data pipeline doesn't yet capture for Slovakia.</p>
+  <table class="gap-table">
     <thead>
       <tr>
         <th>Missing Topic</th>
@@ -28,14 +27,10 @@ Return an HTML fragment — no `<html>`/`<head>`/`<body>` tags. Use this structu
       </tr>
     </thead>
     <tbody>
-      <!-- one row per genuine gap -->
+      <!-- one <tr> per genuine gap -->
     </tbody>
   </table>
-  <p style="font-size:0.85em;color:#64748b;margin-top:0.75rem;">
-    Based on comparison of ECB SAFE {{ wave_label }} publication against available mart columns.
-  </p>
 </section>
-```
 
 ## Column of "Why It Matters for Slovakia"
 

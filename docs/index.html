@@ -3,526 +3,691 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SAFE Slovakia Report — 2026Q1</title>
+  <title>Slovakia SME Monitor — 2026Q1</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     :root {
-      --ecb-blue: #003087;
-      --ecb-gold: #f0a500;
-      --sk-red: #d01010;
-      --ea-grey: #6c757d;
-      --bg: #f8f9fa;
-      --card-bg: #ffffff;
-      --text: #1a1a2e;
-      --muted: #6c757d;
-      --border: #dee2e6;
+      --blue:   #1d3461;
+      --blue2:  #376fd0;
+      --gold:   #e8a020;
+      --red:    #c0392b;
+      --green:  #1a7c3e;
+      --slate:  #475569;
+      --bg:     #f4f6f9;
+      --card:   #ffffff;
+      --border: #dde3ec;
+      --text:   #1a2035;
+      --muted:  #64748b;
+      --pos-bg: #edf7f1;
+      --neg-bg: #fdf2f2;
+      --neu-bg: #f1f5f9;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.6;
-    }
-    header {
-      background: var(--ecb-blue);
-      color: white;
-      padding: 2rem 3rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 1rem;
-    }
-    header h1 { font-size: 1.6rem; font-weight: 700; }
-    header .meta { font-size: 0.85rem; opacity: 0.8; text-align: right; }
-    header .wave-badge {
-      background: var(--ecb-gold);
-      color: var(--ecb-blue);
-      font-weight: 700;
-      padding: 0.3rem 0.8rem;
-      border-radius: 4px;
-      font-size: 0.9rem;
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg); color: var(--text);
+      font-size: 15px; line-height: 1.6;
     }
 
+    /* ── Top bar ── */
+    .topbar {
+      background: var(--blue);
+      color: #fff;
+      padding: 0 2.5rem;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 52px;
+      font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase;
+    }
+    .topbar-left { opacity: 0.6; }
+    .topbar-right { display: flex; gap: 1.5rem; align-items: center; }
+    .topbar-right a { color: rgba(255,255,255,0.55); text-decoration: none; }
+    .topbar-right a:hover { color: #fff; }
+
+    /* ── Hero ── */
+    .hero {
+      background: linear-gradient(135deg, var(--blue) 0%, #2a4a8c 100%);
+      color: #fff;
+      padding: 3rem 2.5rem 2.5rem;
+    }
+    .hero-inner { max-width: 1100px; margin: 0 auto; display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 1.5rem; }
+    .hero h1 { font-size: 2rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; }
+    .hero h1 span { color: var(--gold); }
+    .hero-sub { margin-top: 0.4rem; opacity: 0.7; font-size: 0.88rem; }
+    .hero-meta { text-align: right; font-size: 0.8rem; opacity: 0.65; line-height: 1.8; }
+    .wave-pill {
+      display: inline-block; background: var(--gold); color: var(--blue);
+      font-weight: 800; padding: 0.35rem 1rem; border-radius: 20px;
+      font-size: 0.9rem; margin-bottom: 0.4rem;
+    }
+    .score-pill {
+      display: inline-block; padding: 0.2rem 0.6rem; border-radius: 12px;
+      font-size: 0.75rem; font-weight: 700;
+      background: rgba(255,255,255,0.15); color: #fff;
+    }
+    .score-pill.pass  { background: rgba(26,124,62,0.4); }
+    .score-pill.warn  { background: rgba(232,160,32,0.4); }
+    .score-pill.fail  { background: rgba(192,57,43,0.4); }
+
+    /* ── Sticky nav ── */
     nav {
-      background: white;
-      border-bottom: 2px solid var(--ecb-blue);
-      padding: 0 3rem;
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+      background: var(--card); border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 200;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
     }
-    nav ul {
-      list-style: none;
-      display: flex;
-      gap: 0;
-      overflow-x: auto;
+    .nav-inner {
+      max-width: 1100px; margin: 0 auto; padding: 0 2rem;
+      display: flex; overflow-x: auto; gap: 0;
+      scrollbar-width: none;
     }
+    .nav-inner::-webkit-scrollbar { display: none; }
     nav a {
-      display: block;
-      padding: 0.75rem 1.1rem;
-      color: var(--ecb-blue);
-      text-decoration: none;
-      font-size: 0.85rem;
-      font-weight: 500;
-      white-space: nowrap;
-      border-bottom: 3px solid transparent;
-      transition: border-color 0.15s;
+      display: block; padding: 0.85rem 1.1rem;
+      color: var(--muted); text-decoration: none;
+      font-size: 0.78rem; font-weight: 600; letter-spacing: 0.03em;
+      white-space: nowrap; border-bottom: 3px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
     }
-    nav a:hover { border-bottom-color: var(--ecb-gold); }
+    nav a:hover, nav a.active { color: var(--blue); border-bottom-color: var(--gold); }
 
-    main {
-      max-width: 1100px;
-      margin: 0 auto;
-      padding: 2rem 1.5rem;
+    /* ── Main layout ── */
+    main { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem 3rem; }
+
+    /* ── Glossary ── */
+    .glossary {
+      background: #eff6ff; border-left: 4px solid var(--blue2);
+      border-radius: 0 8px 8px 0; padding: 0.8rem 1.2rem;
+      font-size: 0.82rem; color: #1e3a5f; margin-bottom: 2rem;
     }
+    .glossary strong { color: var(--blue2); }
 
-    section {
-      background: var(--card-bg);
-      border-radius: 8px;
-      padding: 2rem 2.5rem;
-      margin-bottom: 2rem;
-      border: 1px solid var(--border);
+    /* ── Section cards ── */
+    .section-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 2rem 2.25rem;
+      margin-bottom: 1.75rem;
       box-shadow: 0 1px 3px rgba(0,0,0,0.04);
     }
-    section h2 {
-      font-size: 1.25rem;
-      color: var(--ecb-blue);
-      margin-bottom: 1.25rem;
-      padding-bottom: 0.5rem;
-      border-bottom: 2px solid var(--ecb-gold);
+    .section-card h2 {
+      font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--muted);
+      margin-bottom: 1.25rem; display: flex; align-items: center; gap: 0.5rem;
     }
-    section h3 {
-      font-size: 1rem;
-      font-weight: 600;
-      margin: 1.2rem 0 0.6rem;
-      color: var(--text);
+    .section-card h2::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
     }
-    p { margin-bottom: 0.9rem; }
-    ul, ol { padding-left: 1.5rem; margin-bottom: 0.9rem; }
-    li { margin-bottom: 0.3rem; }
 
-    .chart-container {
-      position: relative;
-      height: 340px;
-      margin: 1.5rem 0;
+    /* ── KPI row ── */
+    .kpi-row { display: flex; flex-wrap: wrap; gap: 0.85rem; margin-bottom: 1.5rem; }
+    .kpi {
+      flex: 1 1 130px; min-width: 110px; max-width: 200px;
+      padding: 0.9rem 1rem 0.8rem;
+      border-radius: 10px; border: 1px solid transparent;
     }
-    .chart-placeholder { display: none; } /* hidden — JS replaces these */
+    .kpi.pos { background: var(--pos-bg); border-color: #b2ddc4; }
+    .kpi.neg { background: var(--neg-bg); border-color: #f5c2bf; }
+    .kpi.neu { background: var(--neu-bg); border-color: var(--border); }
+    .kpi-val { font-size: 1.65rem; font-weight: 800; line-height: 1; }
+    .kpi.pos .kpi-val { color: var(--green); }
+    .kpi.neg .kpi-val { color: var(--red); }
+    .kpi.neu .kpi-val { color: var(--slate); }
+    .kpi-label { font-size: 0.72rem; font-weight: 600; margin-top: 0.3rem; color: var(--muted); line-height: 1.3; }
+    .kpi-delta { font-size: 0.68rem; margin-top: 0.2rem; color: var(--muted); opacity: 0.8; }
 
-    /* Inline chart canvases injected by JS */
-    canvas.safe-chart { width: 100% !important; }
+    /* ── Bullets ── */
+    .findings { list-style: none; margin-bottom: 1rem; }
+    .findings li {
+      padding: 0.55rem 0 0.55rem 1rem;
+      border-left: 3px solid var(--border);
+      margin-bottom: 0.5rem;
+      font-size: 0.9rem; line-height: 1.5;
+    }
+    .findings li.sig { border-left-color: var(--gold); }
+    .findings li strong { color: var(--blue); }
 
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.88rem;
-      margin: 1rem 0;
-    }
-    th {
-      background: var(--ecb-blue);
-      color: white;
-      text-align: left;
-      padding: 0.5rem 0.75rem;
-      font-weight: 600;
-    }
-    td {
-      padding: 0.45rem 0.75rem;
-      border-bottom: 1px solid var(--border);
-    }
-    tr:nth-child(even) td { background: #f4f6fb; }
+    /* ── Chart wrapper ── */
+    .chart-wrap { position: relative; height: 260px; margin: 1.25rem 0 0.5rem; }
+    .chart-wrap.tall { height: 340px; }
+    .chart-wrap.short { height: 180px; }
+    .chart-placeholder { display: none; }
+    canvas { width: 100% !important; }
 
-    .badge-score {
-      display: inline-block;
-      padding: 0.2rem 0.6rem;
-      border-radius: 4px;
-      font-size: 0.8rem;
-      font-weight: 700;
-      background: #d4edda;
-      color: #155724;
-    }
-    .badge-score.warn { background: #fff3cd; color: #856404; }
-    .badge-score.fail { background: #f8d7da; color: #721c24; }
+    /* ── Chart title ── */
+    .chart-title { font-size: 0.75rem; font-weight: 600; color: var(--muted); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.05em; }
 
+    /* ── Gap table ── */
+    .gap-table { width: 100%; border-collapse: collapse; font-size: 0.84rem; margin-top: 1rem; }
+    .gap-table th { background: var(--blue); color: #fff; text-align: left; padding: 0.5rem 0.8rem; font-size: 0.75rem; font-weight: 600; }
+    .gap-table td { padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .gap-table tr:nth-child(even) td { background: #f8fafc; }
+
+    /* ── Footer ── */
     footer {
-      text-align: center;
-      padding: 2rem;
-      font-size: 0.8rem;
-      color: var(--muted);
-      border-top: 1px solid var(--border);
-      margin-top: 2rem;
+      text-align: center; padding: 2rem 1rem;
+      font-size: 0.78rem; color: var(--muted);
+      border-top: 1px solid var(--border); margin-top: 1rem;
     }
-    footer a { color: var(--ecb-blue); }
+    footer a { color: var(--blue2); text-decoration: none; }
 
     @media (max-width: 640px) {
-      header { padding: 1.5rem; }
-      section { padding: 1.25rem; }
-      main { padding: 1rem; }
+      .hero { padding: 2rem 1.25rem 1.75rem; }
+      .hero h1 { font-size: 1.5rem; }
+      .section-card { padding: 1.25rem; }
+      main { padding: 1rem 0.75rem 2rem; }
+      .kpi { flex: 1 1 100px; }
     }
   </style>
 </head>
 <body>
 
-<header>
-  <div>
-    <h1>ECB SAFE — Slovakia Analysis</h1>
-    <div style="margin-top:0.4rem;font-size:0.9rem;opacity:0.9;">
-      Survey on the Access to Finance of Enterprises
-    </div>
+<div class="topbar">
+  <span class="topbar-left">ECB SAFE Survey · Slovakia SME Monitor</span>
+  <div class="topbar-right">
+    <a href="https://www.ecb.europa.eu/stats/ecb_surveys/safe/" target="_blank">ECB SAFE</a>
+    <a href="#data-gaps">Data gaps</a>
   </div>
-  <div style="text-align:right">
-    <span class="wave-badge">2026Q1</span>
-    <div class="meta" style="margin-top:0.5rem;">
-      Generated 2026-06-10 14:00 UTC<br>
-      LLM iterations: 3 &nbsp;|&nbsp;
-      Judge score:
-      <span class="badge-score fail">
-        0%
+</div>
+
+<div class="hero">
+  <div class="hero-inner">
+    <div>
+      <div class="wave-pill">2026Q1</div>
+      <h1>Slovakia <span>SME</span> Monitor</h1>
+      <div class="hero-sub">Survey on the Access to Finance of Enterprises &nbsp;·&nbsp; SMEs only</div>
+    </div>
+    <div class="hero-meta">
+      Generated 2026-06-10 16:04 UTC<br>
+      2 LLM iterations
+      &nbsp;&nbsp;
+      <span class="score-pill fail">
+        Judge 62%
       </span>
+      
+      <br><a href="https://www.ecb.europa.eu/stats/ecb_surveys/safe/html/ecb.safe202604.en.html" target="_blank" style="color:rgba(255,255,255,0.5);font-size:0.75rem;">ECB reference ↗</a>
+      
     </div>
   </div>
-</header>
+</div>
 
 <nav>
-  <ul>
-    <li><a href="#executive-summary">Summary</a></li>
-    <li><a href="#financing-conditions">Financing</a></li>
-    <li><a href="#business-situation">Business</a></li>
-    <li><a href="#pressing-problems">Problems</a></li>
-    <li><a href="#outlook">Outlook</a></li>
-    <li><a href="#slovakia-vs-ea">SK vs EA</a></li>
-    <li><a href="#data-gaps">Data Gaps</a></li>
-  </ul>
+  <div class="nav-inner">
+    <a href="#executive-summary">Summary</a>
+    <a href="#financing-conditions">Financing</a>
+    <a href="#loan-applications">Loans</a>
+    <a href="#business-situation">Business</a>
+    <a href="#pressing-problems">Problems</a>
+    <a href="#outlook">Outlook</a>
+    <a href="#expectations">Expectations</a>
+    <a href="#slovakia-vs-ea">vs EA</a>
+    <a href="#data-gaps">Gaps</a>
+  </div>
 </nav>
 
 <main>
 
-  <!-- LLM-generated report body injected here -->
-  ```html
-<h1>Slovakia's SME Financing and Business Conditions: ECB SAFE Wave 38 (2026Q1)</h1>
+  <div class="glossary">
+    <strong>How to read:</strong>
+    <strong>Net balance</strong> = % of firms reporting improvement − % reporting deterioration (pp).
+    <strong>+20 pp</strong> = 20% more firms improved than deteriorated.
+    <strong>Pressingness scores</strong> are on a 1–10 scale (1 = not pressing, 10 = extremely pressing) — not pp.
+    All figures are weighted to represent Slovakia's SME population.
+  </div>
 
-<section id="executive-summary">
-<h2>Executive Summary</h2>
-
-<ul>
-<li><strong>Financing Terms Show Mixed Relief:</strong> Slovakia's SMEs report sharp improvement in non-interest bank financing costs (net balance +46.98 pp), reflecting competitive easing and regulatory pressure. Interest rates edged down to +9.42 pp (from +17.11 pp in Q4 2025), suggesting modest benefit from ECB easing. However, loan availability remains constrained (net −1.89 pp for loans excluding overdrafts), creating a financing gap of +4.71 pp—indicating that more firms face unmet needs than achieved improved access.</li>
-
-<li><strong>Business Conditions Deteriorate Sharply:</strong> Q1 2026 presents a severe operating environment. Turnover net balance plunged to −29.06 pp (from −22.45 pp in Q4 2025), while profit collapsed to −43.09 pp. Labour costs surged at +86.82 pp and other production costs at +76.43 pp, creating a classic stagflationary squeeze. Only 16.39% of firms report increased turnover, while 45.45% report declines.</li>
-
-<li><strong>Cost Pressures Dominate Business Concerns:</strong> Cost of production/labour (6.46/10) and skilled staff availability (6.30/10) emerge as the top pressing problems. Access to finance—previously elevated—has receded to 3.88/10, suggesting firms now prioritize operational survival over borrowing. 56.4% rate costs as highly pressing; only 21.2% rate finance constraints as urgent.</li>
-
-<li><strong>Inflation Expectations Climb Sharply:</strong> SMEs expect 12-month euro-area inflation of 4.83 pp and 5-year inflation of 9.56 pp—far exceeding ECB's 2% target. 66.88% perceive upside risks to inflation. Expected price increases (+4.90 pp) and wage growth (+4.30 pp) remain insufficient to offset cost pressures.</li>
-
-<li><strong>Investment Resilience Puzzles Against Profit Collapse:</strong> Despite margin destruction (profit −43.09 pp), SMEs report increased PP&E investment (net +13.80 pp). This may reflect government schemes, structural necessity, or delayed investment pullbacks. Employment contraction has begun (−3.78 pp), signalling firms are adjusting headcount as demand and margins erode.</li>
-</ul>
-
+  <section id="executive-summary" class="section-card">
+  <h2>Executive Summary</h2>
+  <div class="kpi-row">
+    <div class="kpi neg">
+      <div class="kpi-val">−43.1 pp</div>
+      <div class="kpi-label">Profit net balance</div>
+      <div class="kpi-delta">↓ from −31.7 pp</div>
+    </div>
+    <div class="kpi neg">
+      <div class="kpi-val">86.8 pp</div>
+      <div class="kpi-label">Labour cost net balance</div>
+      <div class="kpi-delta">↑ from 66.0 pp</div>
+    </div>
+    <div class="kpi neg">
+      <div class="kpi-val">−29.1 pp</div>
+      <div class="kpi-label">Turnover net balance</div>
+      <div class="kpi-delta">↓ from −22.5 pp</div>
+    </div>
+    <div class="kpi neg">
+      <div class="kpi-val">4.7 pp</div>
+      <div class="kpi-label">Bank loan gap</div>
+      <div class="kpi-delta">↑ from 0.9 pp</div>
+    </div>
+  </div>
+  <ul class="findings">
+    <li class="sig"><strong>−43.1 pp</strong> Profit fell to worst reading on record; firms squeezed simultaneously by weakening turnover and surging labour costs.</li>
+    <li><strong>86.8 pp</strong> Labour costs jumped 20.8 pp to record high; wage pressure persists despite severe demand contraction.</li>
+    <li><strong>−29.1 pp</strong> Turnover deterioration extended to fifth consecutive quarter; demand weakness now entrenched.</li>
+    <li><strong>4.7 pp</strong> Credit gap widened sharply; loan need edged up while bank availability tightened, signalling early credit squeeze.</li>
+    <li><strong>5.4/10</strong> Finding customers ranks most pressing problem; firms cannot offset cost inflation through volume or pricing.</li>
+  </ul>
 </section>
 
-<section id="financing-conditions">
-<h2>Financing Conditions</h2>
-
-<h3>Bank Lending Terms (Q10 — 2026Q1, Wave 38)</h3>
-
-<p>Slovakia's bank lending terms reflect a bifurcated trend: structural cost relief paired with persistent pricing tightness:</p>
-
-<ul>
-<li><strong>Interest Rates on Loans:</strong> Net balance +9.42 pp (wtd), with 19.1% improving and 9.69% deteriorating. This represents moderation from Q4 2025 (+17.11 pp), consistent with ECB rate cuts taking effect. However, positive net balance indicates continued pricing pressure despite easing policy, likely reflecting the stock of high-cost legacy debt.</li>
-
-<li><strong>Non-interest Costs (Charges, Fees, Commissions):</strong> Exceptional improvement of +46.98 pp (wtd)—the strongest reading in the dataset. 48.93% report cost improvements, only 1.96% deterioration. This sharp relief likely reflects banks' competitive response to SME margin pressures and regulatory scrutiny of fee structures.</li>
-
-<li><strong>Loan Size Availability:</strong> Net +9.51 pp (wtd), with 18.06% improving and 8.54% deteriorating. Loan quantum constraints have eased slightly from Q4 2025 (−3.56 pp), though availability remains tight relative to peak periods.</li>
-
-<li><strong>Loan Maturity:</strong> Unweighted net −7.84 pp; weighted figure unavailable. Tenor remains a minor constraint (91.23% unchanged, 6.61% deteriorated), suggesting banks are not yet extending maturities significantly despite SME stress.</li>
-
-<li><strong>Collateral Requirements:</strong> Unweighted net +19.61 pp. 18.91% report easing, with negligible deterioration. Banks are gradually relaxing security demands, a positive signal for smaller, asset-light firms.</li>
-
-<li><strong>Other Terms (Guarantees, Covenants, Procedures):</strong> Net +11.70 pp (wtd), indicating modest easing of documentation and administrative burdens.</li>
-</ul>
-
-<p><strong>Trend: Q2 2025 → Q1 2026.</strong> Interest rate net balances have oscillated (Q2: −0.26 pp → Q3: +8.83 pp → Q4: +17.11 pp → Q1: +9.42 pp), reflecting ECB policy transmission volatility. Non-interest costs show consistent improvement (Q2: +41.55 pp → Q4: +58.45 pp → Q1: +46.98 pp), indicating structural relief. Loan availability has hovered near zero or mildly negative across the year, a persistent concern.</p>
-
-<div class="chart-placeholder" data-chart="financing"></div>
-
-<h3>Financing Needs & Availability (Q5 & Q9 — 2026Q1)</h3>
-
-<p><strong>Change in Need for External Financing (Q5):</strong></p>
-<ul>
-<li><strong>Bank Loans (excl. overdraft):</strong> Net balance +2.82 pp (wtd). Only 12.77% report increased needs; 77.28% report unchanged; 9.95% decreased. This modest positive shift (from −0.08 pp in Q4) suggests tentative borrowing appetite, though most firms manage with existing facilities. The low incidence of increased needs reflects weakened growth outlook and constrained investment.</li>
-
-<li><strong>Trade Credit:</strong> Net +7.29 pp (wtd), declining from +12.21 pp in Q4. Firms rely on supplier finance to manage working capital amid cash-flow stress, though supplier availability is tightening (see Q9 below).</li>
-
-<li><strong>Credit Lines & Overdrafts:</strong> Net +11.81 pp (wtd), the strongest financing need signal, rising from +4.87 pp in Q4. This reflects firms drawing on short-term liquidity buffers as operating margins compress. Overdraft reliance is a red flag for financial stress.</li>
-
-<li><strong>Other Loans (Non-bank Finance):</strong> Net +22.69 pp (wtd)—the highest across categories. Growing appetite for government-backed schemes, leasing, or alternative credit suggests traditional bank channels are perceived as insufficient. This may reflect both supply constraints and SME preference for subsidised programmes.</li>
-
-<li><strong>Leasing:</strong> Net +3.15 pp (wtd), subdued but stable.</li>
-
-<li><strong>Equity Capital:</strong> Net −8.49 pp (wtd), minimal respondents (n=8), but trend shows declining appetite for dilutive funding.</li>
-</ul>
-
-<p><strong>Availability of External Financing (Q9):</strong></p>
-<ul>
-<li><strong>Bank Loans (excl. overdraft):</strong> Net balance −1.89 pp (wtd), with only 6.2% reporting improved availability and 8.09% deteriorated. <strong>Financing gap: +4.71 pp</strong>—the margin between increased needs (+2.82 pp) and improved availability (−1.89 pp). This gap is economically significant: approximately 4.7 percentage points more firms face unmet increased borrowing needs than achieved improved loan access. This is a key indicator of credit rationing.</li>
-
-<li><strong>Trade Credit:</strong> Net −3.32 pp (wtd), with <strong>financing gap of +10.61 pp</strong>—the highest among all instruments. Only 3.68% report improved availability; 7.0% report deterioration. Supplier constraints are acute, driven by upstream supply-chain tightness and working-capital pressure on vendors themselves.</li>
-
-<li><strong>Credit Lines & Overdrafts:</strong> Net +1.24 pp (wtd), marginally positive, but <strong>financing gap of +10.57 pp</strong> indicates many firms increased overdraft needs while access improvements lagged. Banks may be accommodating overdraft draws but with stricter terms or temporary relief.</li>
-
-<li><strong>Other Loans (Non-bank):</strong> Net −7.92 pp (wtd), with <strong>financing gap of +30.61 pp</strong>—the largest gap in the survey. Despite high demand (+22.69 pp), availability deteriorated sharply (−7.92 pp). This suggests government support schemes are either saturated, oversubscribed, or subject to stricter eligibility; alternatively, non-bank lenders are tightening credit as SME risk profiles worsen.</li>
-
-<li><strong>Leasing:</strong> Net +3.91 pp (wtd), with <strong>financing gap of −0.76 pp</strong> (balanced). Leasing supply appears to track demand reasonably well, possibly because lessors have better asset-recovery rights than unsecured lenders.</li>
-</ul>
-
-<p><strong>Financing Gap Summary:</strong> Average financing gap across bank loans, trade credit, and credit lines is approximately +5.3 pp. The gap for other loans is +30.61 pp—a stark signal that SMEs are seeking alternative finance but cannot access it. This mismatch portends constrained investment and working-capital stress.</p>
-
+<section id="financing-conditions" class="section-card">
+  <h2>Financing Conditions</h2>
+  <div class="kpi-row">
+    <div class="kpi neu">
+      <div class="kpi-val">2.8 pp</div>
+      <div class="kpi-label">Bank loan need net balance</div>
+      <div class="kpi-delta">↑ from −0.1 pp</div>
+    </div>
+    <div class="kpi neg">
+      <div class="kpi-val">−1.9 pp</div>
+      <div class="kpi-label">Bank loan availability net balance</div>
+      <div class="kpi-delta">↓ from −1.0 pp</div>
+    </div>
+    <div class="kpi neg">
+      <div class="kpi-val">4.7 pp</div>
+      <div class="kpi-label">Bank loan gap</div>
+      <div class="kpi-delta">↑ from 0.9 pp</div>
+    </div>
+    <div class="kpi neg">
+      <div class="kpi-val">9.4 pp</div>
+      <div class="kpi-label">Interest rates net balance</div>
+      <div class="kpi-delta">↓ from 17.1 pp</div>
+    </div>
+  </div>
+  <ul class="findings">
+    <li class="sig"><strong>4.7 pp</strong> Credit gap widened significantly; more firms report difficulty accessing loans than secure funding freely, indicating tightening supply-side constraints.</li>
+    <li><strong>9.4 pp</strong> Banks raised interest rates on balance, down from 17.1 pp but still firmly positive; pricing discipline persists despite weak demand.</li>
+    <li><strong>2.8 pp</strong> Loan need flipped modestly positive; weak turnover does not suppress all financing demand, likely reflecting working capital strain.</li>
+    <li><strong>−1.9 pp</strong> Availability deteriorated; bank supply-side caution deepens alongside weakening borrower conditions.</li>
+  </ul>
+  <div class="chart-placeholder" data-chart="financing"></div>
 </section>
 
-<section id="business-situation">
-<h2>Business Situation (Q2 Net Balances; 2026Q1, Wave 38)</h2>
-
-<p>Slovakia's real business conditions have deteriorated markedly in Q1 2026, revealing severe operational stress:</p>
-
-<h3>Operational Performance</h3>
-
-<ul>
-<li><strong>Turnover:</strong> Net balance −29.06 pp (wtd). Only 16.39% report increased turnover; 45.45% report decreased—a sharp deterioration from Q4 2025 (−22.45 pp) and Q3 2025 (−16.0 pp). This accelerating decline signals deepening demand weakness, possibly reflecting euro-area soft activity and Slovakia's export dependence.</li>
-
-<li><strong>Profit:</strong> Net −43.09 pp (wtd)—the worst reading in the dataset. Only 12.14% improved profit; 55.22% deteriorated. This catastrophic margin squeeze (from −31.66 pp in Q4) despite modest price increases reveals that pricing power is negligible relative to cost inflation.</li>
-
-<li><strong>Investments in PP&E:</strong> Net +13.80 pp (wtd), with 20.95% reporting increases and 7.15% decreases. This resilience is striking given profit collapse, suggesting either: (a) government investment incentives or EU funds deployment; (b) essential capacity maintenance; or (c) delayed pullback effects from Q4 2025 momentum. Firms may be front-loading capex before balance sheets deteriorate further.</li>
-
-<li><strong>Inventories & Working Capital:</strong> Net +1.04 pp (wtd), nearly flat. Firms are managing cash carefully but not yet destocking aggressively, likely because they lack pricing power to liquidate excess stock.</li>
-
-<li><strong>Number of Employees:</strong> Net −3.78 pp (wtd), with 13.74% reporting increases and 17.52% decreases. Employment contraction has begun, a lagging indicator of underlying demand weakness. Firms are adjusting headcount in response to margin destruction.</li>
-
-<li><strong>Debt/Assets Ratio:</strong> Net −2.99 pp (wtd), with 17.39% reporting increases and 20.38% decreases. Moderate deleveraging is underway. Many firms are shrinking balance sheets (likely via earnings retention, not active debt paydown) as profitability collapses.</li>
-</ul>
-
-<h3>Cost Pressures</h3>
-
-<ul>
-<li><strong>Labour Costs (incl. Social Contributions):</strong> Net +86.82 pp (wtd)—the most dramatic pressure. 88.25% report increases; only 1.43% report decreases. This near-universal cost surge reflects wage inflation (partly policy-driven via minimum wage hikes), social security contributions, and labour hoarding until firm circumstances force layoffs.</li>
-
-<li><strong>Other Costs (Materials, Energy, Other):</strong> Net +76.43 pp (wtd), with 76.66% reporting increases and 0.22% decreases. Persistent global supply-chain inflation and elevated energy costs (despite some moderation from 2022 peaks) remain substantial headwinds. This is the second-largest cost pressure.</li>
-
-<li><strong>Interest Expenses:</strong> Net +25.66 pp (wtd, among borrowers only; n=280). 28.28% report increased costs; 69.1% unchanged; 2.62% decreased. Despite ECB rate cuts, the stock of outstanding debt means interest burden remains elevated. Many firms locked in higher rates during the tightening cycle.</li>
-</ul>
-
-<h3>Trajectory Analysis: Q2 2025 → Q1 2026</h3>
-
-<p>The trend is unmistakably negative and accelerating:</p>
-<ul>
-<li><strong>Turnover:</strong> Q2: −15.5 pp → Q3: −16.0 pp → Q4: −22.45 pp → Q1 2026: −29.06 pp. Demand deterioration is cumulative.</li>
-<li><strong>Profit:</strong> Q2: −25.28 pp → Q3: −34.04 pp → Q4: −31.66 pp → Q1 2026: −43.09 pp. Margin compression is accelerating despite some pricing power (see Expectations).</li>
-<li><strong>Labour Costs:</strong> Q2: +54.55 pp → Q3: +64.69 pp → Q4: +66.0 pp → Q1 2026: +86.82 pp. Wage growth is intensifying dramatically, possibly as firms pre-emptively increase pay to retain talent before mass layoffs, or as government wage policies tighten.</li>
-<li><strong>Other Costs:</strong> Q2: +50.63 pp → Q3: +57.96 pp → Q4: +61.76 pp → Q1 2026: +76.43 pp. Input inflation is accelerating, contrary to expectations of disinflation.</li>
-</ul>
-
-<p><strong>Interpretation:</strong> Slovakia's SMEs are caught in a stagflationary vice. Revenues are collapsing (demand shock), while costs—especially labour and materials—are accelerating (supply-side rigidity and wage dynamics). Despite modest pricing power (see expected price increases below), firms cannot pass through cost increases fast enough or fully enough. The result is catastrophic profit deterioration, incipient employment contraction, and reliance on overdraft facilities to survive.</p>
-
-<div class="chart-placeholder" data-chart="business"></div>
-
+<section id="loan-applications" class="section-card">
+  <h2>Loan Applications & Rejection</h2>
+  <div class="kpi-row">
+    <div class="kpi neu">
+      <div class="kpi-val">8.6%</div>
+      <div class="kpi-label">Bank loan application rate</div>
+      <div class="kpi-delta">↑ from 7.8%</div>
+    </div>
+    <div class="kpi pos">
+      <div class="kpi-val">4.9%</div>
+      <div class="kpi-label">Bank loan discouragement rate</div>
+      <div class="kpi-delta">↑ from 3.5%</div>
+    </div>
+    <div class="kpi pos">
+      <div class="kpi-val">3.0%</div>
+      <div class="kpi-label">Bank loan rejection rate</div>
+      <div class="kpi-delta">↓ from 12.0%</div>
+    </div>
+    <div class="kpi neu">
+      <div class="kpi-val">5.1%</div>
+      <div class="kpi-label">Bank loan access gap</div>
+      <div class="kpi-delta">↑ from 4.4%</div>
+    </div>
+  </div>
+  <ul class="findings">
+    <li class="sig"><strong>3.0%</strong> Rejection rate fell to lowest level in dataset; banks approve nearly all submissions but face weak applicant pool due to careful pre-screening by firms expecting rejection.</li>
+    <li><strong>4.9%</strong> Discouragement edged up; firms increasingly self-ration credit, offsetting nominal approval gains and signalling weakened confidence in bank access.</li>
+    <li><strong>8.6%</strong> Application rate ticked up slightly; formal requests remain limited despite wider financing pressures.</li>
+    <li><strong>5.1%</strong> Access gap widened; larger gap between those needing credit and those willing to apply indicates expectation-driven self-rationing.</li>
+  </ul>
+  <div class="chart-placeholder" data-chart="loan_applications"></div>
 </section>
 
-<section id="pressing-problems">
-<h2>Most Pressing Problems (Q0B Average Pressingness; 2026Q1, Wave 38)</h2>
+<section id="business-situation" class="section-card">
+  <h2>Business Situation & Costs</h2>
+  <div class="kpi-row">
+    <div class="kpi neg">
+      <div class="kpi-val">−29.1 pp</div>
+      <div class="kpi-label">Turnover net balance</div>
+      <div class="kpi-delta">↓ from −22.5 pp</div>
+    </div>
+    <div class="kpi neg">
+      <div class="kpi-val">−43.1 pp</div>
+      <div class="kpi-label">Profit net balance</div>
+      <div class="kpi-delta">↓ from −31.7 pp</div>
+    </div>
+    <div class="kpi neg">
+      <div class="kpi-val">86.8 pp</div>
+      <div class="kpi-label">Labour cost net balance</div>
+      <div class="kpi-delta">↑ from 66.0 pp</div>
+    </div>
+    <div class="kpi neg">
+      <div class="kpi-val">−3.8 pp</div>
+      <div class="kpi-label">Employees net balance</div>
+      <div class="kpi-delta">↑ from −4.1 pp</div>
+    </div>
+  </div>
+  <ul class="findings">
+    <li class="sig"><strong>−43.1 pp</strong> Profit crashed to worst ever recorded; firms cannot pass labour cost inflation to customers or adjust headcount quickly enough to offset margin compression.</li>
+    <li><strong>86.8 pp</strong> Labour costs surged 20.8 pp to record high in single quarter; wage pressures dominant constraint on profitability despite severe demand weakness.</li>
+    <li><strong>−29.1 pp</strong> Turnover deteriorated for fifth consecutive quarter; demand collapse broadening and persistent.</li>
+    <li><strong>−3.8 pp</strong> Employment edged marginally positive; firms stabilising headcount despite collapsing profitability, suggesting labour hoarding or layoff lag.</li>
+  </ul>
+  <div class="chart-placeholder" data-chart="business_performance"></div>
+  <div class="chart-placeholder" data-chart="business_costs"></div>
+</section>
 
-<p>Firms rated seven challenges on a 0–10 scale (0 = not pressing; 10 = extremely pressing). The 6-month reference period (most recent comprehensive data) reveals:</p>
+<section id="pressing-problems" class="section-card">
+  <h2>Most Pressing Problems</h2>
+  <div class="kpi-row">
+    <div class="kpi neu">
+      <div class="kpi-val">6.46/10</div>
+      <div class="kpi-label">Cost pressures</div>
+      <div class="kpi-delta">↑ from 6.10</div>
+    </div>
+    <div class="kpi neu">
+      <div class="kpi-val">6.30/10</div>
+      <div class="kpi-label">Skilled staff availability</div>
+      <div class="kpi-delta">↓ from 6.27</div>
+    </div>
+    <div class="kpi neu">
+      <div class="kpi-val">6.14/10</div>
+      <div class="kpi-label">Regulation</div>
+      <div class="kpi-delta">↑ from 5.87</div>
+    </div>
+  </div>
+  <ul class="findings">
+    <li><strong>6.46/10</strong> Cost pressures rank most acute problem and edged higher; labour costs, materials, and energy persist as binding constraints.</li>
+    <li><strong>5.39/10</strong> Finding customers second-most pressing; weak demand and intensifying competition limit pricing power.</li>
+    <li><strong>5.15/10</strong> Competition third; firms cite it as ongoing headwind to pricing and market share.</li>
+    <li><strong>6.30/10</strong> Skilled staff availability ticked down marginally but remains significant; labour market tightness persists despite economic weakness.</li>
+    <li><strong>6.14/10</strong> Regulation rose; compliance burden cited more acutely than prior quarter.</li>
+    <li><strong>3.88/10</strong> Access to finance least pressing; credit availability constraints matter less than demand and cost challenges.</li>
+  </ul>
+  <div class="chart-placeholder" data-chart="pressingness"></div>
+</section>
 
-<table border="1" cellpadding="8" style="border-collapse:collapse; width:100%;">
-<tr style="background:#e8e8e8;">
-<th>Problem</th>
-<th>Avg Pressingness (6m)</th>
-<th>% Highly Pressing (≥6)</th>
-<th>Trend vs Q4 2025</th>
-</tr>
-<tr>
-<td><strong>Costs of Production/Labour</strong></td>
-<td><strong>6.46</strong></td>
-<td><strong>56.4%</strong></td>
-<td>↑ from 6.10</td>
-</tr>
-<tr>
-<td><strong>Availability of Skilled Staff</strong></td>
-<td><strong>6.30</strong></td>
-<td><strong>54.5%</strong></td>
-<td>↑ from 6.27</td>
-</tr>
-<tr>
-<td><strong>Regulation</strong></td>
-<td><strong>6.14</strong></td
+<section id="outlook" class="section-card">
+  <h2>Forward Outlook</h2>
+  <div class="kpi-row">
+    <div class="kpi neu">
+      <div class="kpi-val">4.7 pp</div>
+      <div class="kpi-label">Turnover outlook net balance</div>
+      <div class="kpi-delta">No prior data</div>
+    </div>
+    <div class="kpi pos">
+      <div class="kpi-val">8.2 pp</div>
+      <div class="kpi-label">Investment outlook net balance</div>
+      <div class="kpi-delta">No prior data</div>
+    </div>
+  </div>
+  <ul class="findings">
+    <li><strong>4.7 pp</strong> Turnover outlook barely positive; minimal confidence in demand recovery; firms expect conditions to remain flat or deteriorate slightly ahead.</li>
+    <li><strong>8.2 pp</strong> Investment outlook modestly positive; despite weak current conditions, firms plan modest capex, suggesting structural or capacity replacement intentions.</li>
+    <li>Forward guidance weak across both indicators; outlook data unavailable for prior two quarters due to survey scheduling, limiting trend visibility.</li>
+  </ul>
+  <div class="chart-placeholder" data-chart="outlook"></div>
+</section>
 
-  <!-- Data gaps section from gap-finder LLM -->
-  ```html
-<section id="data-gaps">
-  <h2>Data Gaps vs ECB SAFE Report</h2>
-  <p>The following topics are covered in the ECB's official SAFE publication but are not yet available in the Slovakia mart tables. These represent opportunities for future dbt model development.</p>
-  <table>
+<section id="expectations" class="section-card">
+  <h2>Expectations Context</h2>
+  <ul class="findings">
+    <li>Firms facing simultaneous demand collapse and cost acceleration lack confidence in near-term stabilisation; weak turnover outlook reflects expectation that pricing power remains constrained.</li>
+    <li>Investment plans (8.2 pp outlook) suggest fixed asset replacement and maintenance rather than growth expansion; firms prioritising resilience over expansion.</li>
+    <li>Labour cost record high despite weak demand signals firms expect wage pressures to persist; expectations of sustained wage-price dynamics embedded in behaviour.</li>
+  </ul>
+  <div class="chart-placeholder" data-chart="expectations"></div>
+</section>
+
+<section id="slovakia-vs-ea" class="section-card">
+  <h2>Slovakia in Euro-Area Context</h2>
+  <ul class="findings">
+    <li><strong>Interest rates:</strong> Euro-area large firms reported a net 29% increase in bank rates in Q1 2026. Slovakia's 9.4 pp net balance is substantially lower, indicating either weaker rate pass-through or smaller firms experiencing less pricing pressure than euro-area large-firm cohort.</li>
+    <li><strong>Survey sample:</strong> Euro-area SAFE round 38 included 10,544 firms across 12 largest euro-area countries, with 92% being SMEs (under 250 employees). Slovakia sample composition and size not explicitly stated; direct cross-country comparisons require caution.</li>
+    <li><strong>Financing tightening trend:</strong> ECB report notes continued tightening in euro-area firms' overall financing conditions in Q1 2026 across all firm sizes. Slovakia's widening loan gap (4.7 pp) and deteriorating availability (−1.9 pp) align with broader euro-area trend.</li>
+  </ul>
+</section>
+
+  <section id="data-gaps" class="section-card">
+  <h2>What This Report Doesn't Cover Yet</h2>
+  <p style="font-size:0.88rem;color:#475569;margin-bottom:1rem;">The ECB's official SAFE publication analyses some topics our current data pipeline doesn't yet capture for Slovakia.</p>
+  <table class="gap-table">
     <thead>
       <tr>
-        <th>ECB Topic</th>
-        <th>ECB Question(s)</th>
-        <th>Gap Description</th>
+        <th>Missing Topic</th>
+        <th>What the ECB Reports</th>
+        <th>Why It Matters for Slovakia</th>
         <th>Priority</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td>Firm Size Breakdown</td>
-        <td>Segmentation of responses by firm size (SMEs vs. Large firms; potentially micro, small, medium tiers)</td>
-        <td>No dimension or sub-item column for firm size classification (e.g., employee count bands). ECB report explicitly reports SME vs. large firm comparisons (e.g., "net 29% for large firms, up from 12%; net 24% for SMEs, up from 13%").</td>
+        <td>Non-price loan conditions (collateral, maturity, covenants)</td>
+        <td>ECB measures changes in non-price terms alongside price conditions as a principal component of financing tightness; reports net % of firms experiencing tightening across all size classes.</td>
+        <td>Slovakia firms may face different collateral or covenant demands than euro-area average—critical for assessing true credit constraint severity beyond interest rates alone.</td>
         <td>High</td>
       </tr>
       <tr>
-        <td>Economic Activity / Sector</td>
-        <td>Breakdown of financing conditions and needs by industry or economic sector</td>
-        <td>No sector or NACE classification available in current columns. Mart includes country aggregation but lacks sectoral dimension mentioned in ECB weighting methodology ("weighted by size, economic activity and country").</td>
+        <td>Economic sector breakdown (industry, construction, trade, services)</td>
+        <td>ECB aggregates results by size and country; explicitly notes sector-level variation in financing conditions and credit availability.</td>
+        <td>Slovakia's manufacturing and tourism sectors may experience distinct financing pressures; sector-level visibility supports targeted policy response.</td>
         <td>High</td>
       </tr>
       <tr>
-        <td>Loan Purpose</td>
-        <td>Classification of bank loans by purpose (e.g., working capital, investment, acquisition, debt refinancing)</td>
-        <td>Current financing_conditions and expectations tables do not distinguish loan purpose. ECB SAFE typically covers this in detailed loan availability and terms questions.</td>
+        <td>Detailed rejection reasons (creditworthiness, collateral, loan size, bank unwillingness)</td>
+        <td>ECB reports qualitative factors driving loan rejections and availability constraints; distinguishes credit risk assessment from institutional lending reluctance.</td>
+        <td>Understanding whether Slovak banks reject loans due to firm risk or reduced risk appetite shapes appropriate regulatory and market-entry interventions.</td>
         <td>High</td>
       </tr>
       <tr>
-        <td>Collateral Requirements</td>
-        <td>Changes in collateral demanded by banks; types of collateral (real estate, inventory, personal guarantees, etc.)</td>
-        <td>No collateral-related columns present. This is a standard SAFE topic in non-price loan conditions.</td>
-        <td>High</td>
-      </tr>
-      <tr>
-        <td>Bank Rejection Reasons (Detailed)</td>
-        <td>Granular breakdown of reasons for loan rejection or application decline (Q7B sub-items in full SAFE)</td>
-        <td>Mart does not include detailed rejection reason codes or sub-items beyond the generic structure. Q7B typically has multiple sub-categories (creditworthiness, insufficient collateral, purpose, size of loan, etc.).</td>
-        <td>High</td>
-      </tr>
-      <tr>
-        <td>Alternative Financing Sources</td>
-        <td>Use and availability of trade credit, equity financing, leasing, factoring, crowdfunding, fintech lending</td>
-        <td>Mart currently focuses on bank loans and general financing conditions. Alternative finance channels (supplier credit, equity, venture capital, leasing, invoice discounting) are not represented.</td>
-        <td>High</td>
-      </tr>
-      <tr>
-        <td>Interest Rate and Fee Changes</td>
-        <td>Detailed tracking of interest rate movements, fees, commissions, and other charges separately</td>
-        <td>Financing_conditions captures "price terms and conditions" as an aggregate but does not separately itemize interest rates, fees, commissions, or charges as distinct sub-items.</td>
+        <td>Loan purpose breakdown (working capital vs investment vs refinancing)</td>
+        <td>ECB's Q4 module captures which financing instruments firms use and find relevant; implies differentiation by use-case.</td>
+        <td>Slovakia's growth strategy depends on whether credit shortage affects short-term liquidity (working capital) or long-term capital expenditure; different policy levers apply.</td>
         <td>Medium</td>
       </tr>
       <tr>
-        <td>Trade Credit & Supplier Payment Terms</td>
-        <td>Changes in supplier payment terms, late payment incidence, dependency on trade credit</td>
-        <td>No trade credit or supplier financing indicators present. Standard SAFE coverage but absent from current mart.</td>
+        <td>Firm size micro-tier isolation (sole traders and micro-enterprises under 10 employees)</td>
+        <td>ECB notes 92% of sample had &lt;250 employees; analysis separates SMEs from large firms but does not isolate micro-enterprises.</td>
+        <td>Slovakia's large informal and micro-enterprise population may face financing barriers invisible in aggregate SME figures; critical for financial inclusion policy.</td>
         <td>Medium</td>
       </tr>
       <tr>
-        <td>Green Finance / Sustainability-Linked Lending</td>
-        <td>Availability of and demand for green loans, sustainability conditions, ESG-linked facilities</td>
-
-  <section id="charts-raw" style="display:none">
-    <!-- Chart data passed to JS -->
-    <script id="charts-data" type="application/json">{"financing": {"labels": ["2023H2", "2024Q1", "2024Q2", "2024Q3", "2024Q4", "2025Q1", "2025Q2", "2025Q3", "2025Q4", "2026Q1"], "datasets": [{"label": "SK \u2014 Available maturity of the loan", "data": [1.8, 0.9, -7.8, 0.9, 9.3, 1.9, NaN, -2.8, NaN, NaN], "country": "SK"}, {"label": "EA \u2014 Available maturity of the loan", "data": [null, null, null, null, null, null, null, null, null, null], "country": "EA", "borderDash": [5, 5]}, {"label": "SK \u2014 Available size of loan or credit line", "data": [12.9, 2.2, -16.6, 17.0, 3.5, 3.0, 6.0, 2.8, -3.6, 9.5], "country": "SK"}, {"label": "EA \u2014 Available size of loan or credit line", "data": [null, null, null, null, null, null, null, null, null, null], "country": "EA", "borderDash": [5, 5]}, {"label": "SK \u2014 Bank loans (excl. overdraft and credit lines)", "data": [-3.6, 1.6, 4.7, -7.0, 4.1, -6.1, -3.7, 7.3, -0.1, 2.8], "country": "SK"}, {"label": "EA \u2014 Bank loans (excl. overdraft and credit lines)", "data": [null, null, null, null, null, null, null, null, null, null], "country": "EA", "borderDash": [5, 5]}, {"label": "SK \u2014 Collateral requirements", "data": [17.9, 17.5, NaN, NaN, 10.1, NaN, 15.2, 22.3, NaN, NaN], "country": "SK"}, {"label": "EA \u2014 Collateral requirements", "data": [null, null, null, null, null, null, null, null, null, null], "country": "EA", "borderDash": [5, 5]}, {"label": "SK \u2014 Credit line, bank overdraft or credit cards overdraft", "data": [11.0, 6.3, 9.1, 4.8, -1.6, 2.0, 9.4, 9.7, 4.9, 11.8], "country": "SK"}, {"label": "EA \u2014 Credit line, bank overdraft or credit cards overdraft", "data": [null, null, null, null, null, null, null, null, null, null], "country": "EA", "borderDash": [5, 5]}, {"label": "SK \u2014 Debt securities issued", "data": [NaN, NaN, null, NaN, null, NaN, null, NaN, null, NaN], "country": "SK"}, {"label": "EA \u2014 Debt securities issued", "data": [null, null, null, null, null, null, null, null, null, null], "country": "EA", "borderDash": [5, 5]}, {"label": "SK \u2014 Equity capital", "data": [6.5, NaN, null, 1.5, null, 6.0, null, NaN, null, -8.5], "country": "SK"}, {"label": "EA \u2014 Equity capital", "data": [null, null, null, null, null, null, null, null, null, null], "country": "EA", "borderDash": [5, 5]}, {"label": "SK \u2014 Leasing or hire-purchase", "data": [7.4, 7.6, null, 3.4, null, 7.9, null, 9.8, null, 3.1], "country": "SK"}, {"label": "EA \u2014 Leasing or hire-purchase", "data": [null, null, null, null, null, null, null, null, null, null], "country": "EA", "borderDash": [5, 5]}, {"label": "SK \u2014 Level of interest rates", "data": [83.7, 54.7, NaN, 23.7, 22.6, 8.4, -0.3, 8.8, 17.1, 9.4], "country": "SK"}, {"label": "EA \u2014 Level of interest rates", "data": [null, null, null, null, null, null, null, null, null, null], "country": "EA", "borderDash": [5, 5]}, {"label": "SK \u2014 Non-interest financing costs (charges, fees, commissions)", "data": [58.2, 49.0, NaN, 35.9, NaN, 38.8, 41.5, NaN, 58.5, 47.0], "country": "SK"}, {"label": "EA \u2014 Non-interest financing costs (charges, fees, commissions)", "data": [null, null, null, null, null, null, null, null, null, null], "country": "EA", "borderDash": [5, 5]}, {"label": "SK \u2014 Other loan", "data": [12.1, 11.0, null, 7.1, null, 7.2, null, 25.8, null, 22.7], "country": "SK"}, {"label": "EA \u2014 Other loan", "data": [null, null, null, null, null, null, null, null, null, null], "country": "EA", "borderDash": [5, 5]}, {"label": "SK \u2014 Other terms (guarantees, covenants, procedures)", "data": [23.2, 12.7, NaN, 14.7, 4.0, 11.3, 19.6, 18.0, NaN, 11.7], "country": "SK"}, {"label": "EA \u2014 Other terms (guarantees, covenants, procedures)", "data": [null, null, null, null, null, null, null, null, null, null], "country": "EA", "borderDash": [5, 5]}, {"label": "SK \u2014 Trade credit", "data": [15.8, 10.7, 7.8, 4.1, 14.7, 3.8, 2.8, 9.0, 12.2, 7.3], "country": "SK"}, {"label": "EA \u2014 Trade credit", "data": [null, null, null, null, null, null, null, null, null, null], "country": "EA", "borderDash": [5, 5]}]}, "business": {"labels": ["2023H2", "2024Q1", "2024Q2", "2024Q3", "2024Q4", "2025Q1", "2025Q2", "2025Q3", "2025Q4", "2026Q1"], "datasets": [{"label": "Debt compared to assets", "data": [-5.7, -4.9, -10.6, -6.1, -12.3, -12.0, -10.0, -0.4, -5.4, -3.0]}, {"label": "Interest expenses (net)", "data": [46.3, 38.5, 21.0, 25.9, 17.1, 27.0, 11.4, 15.9, 23.9, 25.7]}, {"label": "Inventories and other working capital", "data": [3.9, 0.6, -3.3, 4.0, 1.8, 1.8, 0.9, 3.5, -1.3, 1.0]}, {"label": "Investments in property, plant or equipment", "data": [15.9, 13.6, 10.5, 12.4, 13.9, 10.4, 5.9, 11.4, 4.2, 13.8]}, {"label": "Labour costs (including social contributions)", "data": [60.7, 68.9, 40.9, 58.0, 40.1, 67.5, 54.5, 64.7, 66.0, 86.8]}, {"label": "Number of employees", "data": [-1.8, -2.0, 2.2, -4.2, -6.9, -2.0, 0.2, -4.6, -4.1, -3.8]}, {"label": "Other costs (materials, energy, other)", "data": [73.5, 61.7, 27.7, 49.8, 47.4, 65.6, 50.6, 58.0, 61.8, 76.4]}, {"label": "Profit", "data": [-18.8, -20.1, -15.1, -18.1, -11.0, -26.9, -25.3, -34.0, -31.7, -43.1]}, {"label": "Turnover", "data": [1.6, -5.6, -2.3, -5.2, 0.9, -8.8, -15.5, -16.0, -22.4, -29.1]}]}, "pressingness": {"labels": ["Costs of production or labour", "Availability of skilled staff or experienced managers", "Regulation", "Other", "Regulation", "Costs of production or labour", "Availability of skilled staff or experienced managers", "Finding customers", "Other", "Competition", "Finding customers", "Competition", "Access to finance", "Access to finance"], "sk": [6.46, 6.3, 6.14, 5.95, 5.92, 5.91, 5.9, 5.39, 5.38, 5.15, 5.09, 4.96, 3.88, 3.87], "ea": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}</script>
-  </section>
+        <td>Forward-looking availability expectations (Q23 — next 3–6 months)</td>
+        <td>ECB reports firms' outlook on external financing availability; notes "less optimistic" sentiment in Q1 2026 versus previous round.</td>
+        <td>Slovakia business confidence in credit availability ahead informs investment and hiring plans; early signal of demand-side credit contraction risk.</td>
+        <td>Medium</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
 
 </main>
 
 <footer>
   <p>
-    Data source: <a href="https://www.ecb.europa.eu/stats/ecb_surveys/safe/html/ecb.safe202604.en.html" target="_blank">ECB SAFE microdata</a> via MotherDuck &nbsp;|&nbsp;
-    <a href="https://www.ecb.europa.eu/stats/accesstofinancesofenterprises/" target="_blank">ECB SAFE homepage</a>
+    Data: <a href="https://www.ecb.europa.eu/stats/ecb_surveys/safe/html/ecb.safe202604.en.html" target="_blank">ECB SAFE 2026Q1</a>
+    via MotherDuck &nbsp;·&nbsp;
+    <a href="https://www.ecb.europa.eu/stats/ecb_surveys/safe/" target="_blank">ECB SAFE homepage</a>
   </p>
-  <p style="margin-top:0.4rem;">
-    Generated by SAFE Agent using Claude (Anthropic) &nbsp;|&nbsp; 2026-06-10 14:00 UTC
-  </p>
+  <p style="margin-top:0.3rem">Generated by SAFE Agent · Powered by Claude (Anthropic) · 2026-06-10 16:04 UTC</p>
 </footer>
+
+<!-- Chart data injected here -->
+<script id="charts-data" type="application/json">{"financing": {"labels": ["2023H2", "2024Q1", "2024Q2", "2024Q3", "2024Q4", "2025Q1", "2025Q2", "2025Q3", "2025Q4", "2026Q1"], "datasets": [{"label": "Interest rates", "data": [83.7, 54.7, NaN, 23.7, 22.6, 8.4, -0.3, 8.8, 17.1, 9.4]}, {"label": "Loan availability", "data": [-3.6, 1.6, 4.7, -7.0, 4.1, -6.1, -3.7, 7.3, -0.1, 2.8]}, {"label": "Non-interest costs", "data": [58.2, 49.0, NaN, 35.9, NaN, 38.8, 41.5, NaN, 58.5, 47.0]}, {"label": "Credit lines", "data": [11.0, 6.3, 9.1, 4.8, -1.6, 2.0, 9.4, 9.7, 4.9, 11.8]}]}, "loan_applications": {"labels": ["2023H2", "2024Q1", "2024Q2", "2024Q3", "2024Q4", "2025Q1", "2025Q2", "2025Q3", "2025Q4", "2026Q1"], "bar": {"labels": ["Bank loan (excl. overdraft and credit lines)", "Credit line, bank overdraft or credit cards overdraft", "Other external financing", "Trade credit"], "datasets": [{"label": "Application rate %", "data": [8.6, 15.1, 7.1, 27.9]}, {"label": "Discouragement rate %", "data": [4.9, 3.7, 2.1, 3.4]}, {"label": "Rejection rate %", "data": [3.0, NaN, 6.0, NaN]}]}, "trend": {"labels": ["2023H2", "2024Q1", "2024Q2", "2024Q3", "2024Q4", "2025Q1", "2025Q2", "2025Q3", "2025Q4", "2026Q1"], "datasets": [{"label": "Application rate", "data": [21.9, 12.0, 9.6, 10.8, 16.8, 8.5, 13.4, 16.7, 7.8, 8.6]}, {"label": "Discouragement rate", "data": [3.8, 4.5, 5.7, 3.8, 4.1, 8.8, 8.6, 4.3, 3.5, 4.9]}, {"label": "Rejection rate", "data": [3.9, 8.8, 8.0, 9.3, 2.2, 8.2, NaN, 21.7, 12.0, 3.0]}]}}, "business_performance": {"labels": ["2023H2", "2024Q1", "2024Q2", "2024Q3", "2024Q4", "2025Q1", "2025Q2", "2025Q3", "2025Q4", "2026Q1"], "datasets": [{"label": "Turnover", "data": [1.6, -5.6, -2.3, -5.2, 0.9, -8.8, -15.5, -16.0, -22.4, -29.1]}, {"label": "Profit", "data": [-18.8, -20.1, -15.1, -18.1, -11.0, -26.9, -25.3, -34.0, -31.7, -43.1]}, {"label": "Number of employees", "data": [-1.8, -2.0, 2.2, -4.2, -6.9, -2.0, 0.2, -4.6, -4.1, -3.8]}, {"label": "Investments in property, plant or equipment", "data": [15.9, 13.6, 10.5, 12.4, 13.9, 10.4, 5.9, 11.4, 4.2, 13.8]}]}, "business_costs": {"labels": ["2023H2", "2024Q1", "2024Q2", "2024Q3", "2024Q4", "2025Q1", "2025Q2", "2025Q3", "2025Q4", "2026Q1"], "datasets": [{"label": "Labour costs (including social contributions)", "data": [60.7, 68.9, 40.9, 58.0, 40.1, 67.5, 54.5, 64.7, 66.0, 86.8]}, {"label": "Other costs (materials, energy, other)", "data": [73.5, 61.7, 27.7, 49.8, 47.4, 65.6, 50.6, 58.0, 61.8, 76.4]}, {"label": "Interest expenses (net)", "data": [46.3, 38.5, 21.0, 25.9, 17.1, 27.0, 11.4, 15.9, 23.9, 25.7]}]}, "business": {"labels": ["2023H2", "2024Q1", "2024Q2", "2024Q3", "2024Q4", "2025Q1", "2025Q2", "2025Q3", "2025Q4", "2026Q1"], "datasets": [{"label": "Turnover", "data": [1.6, -5.6, -2.3, -5.2, 0.9, -8.8, -15.5, -16.0, -22.4, -29.1]}, {"label": "Profit", "data": [-18.8, -20.1, -15.1, -18.1, -11.0, -26.9, -25.3, -34.0, -31.7, -43.1]}, {"label": "Number of employees", "data": [-1.8, -2.0, 2.2, -4.2, -6.9, -2.0, 0.2, -4.6, -4.1, -3.8]}, {"label": "Investments in property, plant or equipment", "data": [15.9, 13.6, 10.5, 12.4, 13.9, 10.4, 5.9, 11.4, 4.2, 13.8]}]}, "pressingness": {"labels": ["Costs of production or labour", "Availability of skilled staff or experienced managers", "Regulation", "Other", "Finding customers", "Competition", "Access to finance"], "sk": [6.46, 6.3, 6.14, 5.95, 5.39, 5.15, 3.88]}, "outlook": {"labels": ["2023H2", "2024Q1", "2024Q3", "2025Q1", "2025Q3", "2026Q1"], "datasets": [{"label": "Investments in property, plant or equipment", "data": [7.9, 16.1, 7.7, 16.2, -0.5, 8.2]}, {"label": "Turnover", "data": [16.9, 23.0, 12.1, 15.6, 0.7, 4.7]}]}, "expectations": {"labels": ["In 12 months", "In five years", "In three years", "Average selling price", "Average wage of employees", "Number of employees", "Production input prices (non-labour)", "Overall risk direction"], "datasets": [{"label": "Expected change (%)", "data": [4.83, 9.56, 7.43, 4.9, 4.3, 1.33, 9.37, NaN]}]}}</script>
 
 <script>
 (function () {
-  const COLORS = {
-    SK: '#003087',
-    EA: '#d01010',
-    palette: [
-      '#003087','#d01010','#f0a500','#28a745','#6610f2','#fd7e14','#20c997','#6c757d'
-    ]
-  };
+  'use strict';
 
-  function makeDataset(ds, idx) {
-    const isSK = ds.country === 'SK' || (ds.label && ds.label.startsWith('SK'));
-    const isEA = ds.country === 'EA' || (ds.label && ds.label.startsWith('EA'));
-    const color = isSK ? COLORS.SK : isEA ? COLORS.EA : COLORS.palette[idx % COLORS.palette.length];
+  const PALETTE = ['#1d3461','#e8a020','#c0392b','#1a7c3e','#6d28d9','#0891b2','#9a3412','#475569'];
+
+  function hex(color, alpha) {
+    const a = Math.round(alpha * 255).toString(16).padStart(2,'0');
+    return color + a;
+  }
+
+  function lineDS(ds, i) {
+    const c = PALETTE[i % PALETTE.length];
     return {
-      label: ds.label,
-      data: ds.data,
-      borderColor: color,
-      backgroundColor: color + '22',
-      borderWidth: 2,
-      borderDash: ds.borderDash || [],
-      tension: 0.3,
-      spanGaps: true,
-      pointRadius: 3,
+      label: ds.label, data: ds.data,
+      borderColor: c, backgroundColor: hex(c, 0.08),
+      borderWidth: 2.5, tension: 0.35,
+      spanGaps: true, pointRadius: 3.5, pointHoverRadius: 6,
+      pointBackgroundColor: c,
     };
   }
 
-  const chartsData = JSON.parse(document.getElementById('charts-data').textContent);
+  function barDS(ds, i) {
+    const c = PALETTE[i % PALETTE.length];
+    return { label: ds.label, data: ds.data, backgroundColor: hex(c, 0.75), borderColor: c, borderWidth: 1, borderRadius: 3 };
+  }
 
-  // Replace .chart-placeholder divs with actual Chart.js canvases
-  document.querySelectorAll('.chart-placeholder').forEach(function (el) {
-    const chartKey = el.getAttribute('data-chart');
-    const def = chartsData[chartKey];
-    if (!def) return;
+  const LINE_BASE = {
+    responsive: true, maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { position: 'top', labels: { boxWidth: 10, padding: 14, font: { size: 11 } } },
+      tooltip: { backgroundColor: 'rgba(15,23,42,0.92)', titleFont: { size: 11 }, bodyFont: { size: 11 }, padding: 10 }
+    },
+    scales: {
+      x: { ticks: { font: { size: 10 }, maxRotation: 45 }, grid: { display: false } },
+      y: { ticks: { font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.05)' } }
+    }
+  };
+
+  const data = JSON.parse(document.getElementById('charts-data').textContent);
+
+  document.querySelectorAll('.chart-placeholder[data-chart]').forEach(function (el) {
+    const key = el.getAttribute('data-chart');
+    const def = data[key];
+    if (!def || !def.labels) return;
 
     el.style.display = 'block';
-    const wrapper = document.createElement('div');
-    wrapper.className = 'chart-container';
-    const canvas = document.createElement('canvas');
-    canvas.className = 'safe-chart';
-    wrapper.appendChild(canvas);
-    el.parentNode.insertBefore(wrapper, el.nextSibling);
 
-    if (chartKey === 'pressingness') {
-      // Horizontal bar chart
+    if (key === 'pressingness') {
+      // Horizontal bar — sorted by value
+      const wrap = document.createElement('div');
+      wrap.className = 'chart-wrap tall';
+      const canvas = document.createElement('canvas');
+      wrap.appendChild(canvas);
+      el.parentNode.insertBefore(wrap, el.nextSibling);
       new Chart(canvas, {
         type: 'bar',
         data: {
           labels: def.labels,
-          datasets: [
-            { label: 'Slovakia', data: def.sk, backgroundColor: COLORS.SK + 'cc' },
-            { label: 'Euro Area', data: def.ea, backgroundColor: COLORS.EA + 'cc' }
-          ]
+          datasets: [{
+            label: 'Avg pressingness (1–10)',
+            data: def.sk,
+            backgroundColor: def.sk.map(v => v >= 6 ? hex('#c0392b', 0.75) : v >= 5 ? hex('#e8a020', 0.75) : hex('#1d3461', 0.55)),
+            borderWidth: 0, borderRadius: 4,
+          }]
         },
         options: {
+          ...LINE_BASE,
           indexAxis: 'y',
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            x: { min: 1, max: 10, title: { display: true, text: 'Avg. pressingness (1–10)' } }
+          plugins: {
+            ...LINE_BASE.plugins,
+            legend: { display: false },
+            tooltip: { ...LINE_BASE.plugins.tooltip, callbacks: { label: ctx => ' ' + ctx.raw.toFixed(2) + ' / 10' } }
           },
-          plugins: { legend: { position: 'top' } }
+          scales: {
+            x: { min: 0, max: 10, ticks: { font: { size: 10 } }, title: { display: true, text: 'Score (1–10)', font: { size: 10 } } },
+            y: { ticks: { font: { size: 10 } } }
+          }
         }
       });
-    } else {
-      // Line chart
+
+    } else if (key === 'loan_applications') {
+      // Two charts stacked
+      const barDef = def.bar || {};
+      const wrap1 = document.createElement('div');
+      wrap1.className = 'chart-wrap';
+      const c1 = document.createElement('canvas');
+      wrap1.appendChild(c1);
+      el.parentNode.insertBefore(wrap1, el.nextSibling);
+      new Chart(c1, {
+        type: 'bar',
+        data: { labels: barDef.labels || [], datasets: (barDef.datasets || []).map(barDS) },
+        options: {
+          ...LINE_BASE,
+          plugins: { ...LINE_BASE.plugins, title: { display: true, text: 'Latest wave — by instrument (%)', font: { size: 11 } } },
+          scales: { x: LINE_BASE.scales.x, y: { ...LINE_BASE.scales.y, title: { display: true, text: '% of firms', font: { size: 10 } } } }
+        }
+      });
+
+      if (def.trend && (def.trend.datasets || []).length) {
+        const wrap2 = document.createElement('div');
+        wrap2.className = 'chart-wrap short';
+        wrap2.style.marginTop = '1rem';
+        const c2 = document.createElement('canvas');
+        wrap2.appendChild(c2);
+        el.parentNode.insertBefore(wrap2, wrap1.nextSibling);
+        new Chart(c2, {
+          type: 'line',
+          data: { labels: def.trend.labels, datasets: def.trend.datasets.map(lineDS) },
+          options: {
+            ...LINE_BASE,
+            plugins: { ...LINE_BASE.plugins, title: { display: true, text: 'Bank loan — trend (%)', font: { size: 11 } } },
+            scales: { x: LINE_BASE.scales.x, y: { ...LINE_BASE.scales.y, title: { display: true, text: '% of firms', font: { size: 10 } } } }
+          }
+        });
+      }
+
+    } else if (key === 'expectations') {
+      const wrap = document.createElement('div');
+      wrap.className = 'chart-wrap';
+      const canvas = document.createElement('canvas');
+      wrap.appendChild(canvas);
+      el.parentNode.insertBefore(wrap, el.nextSibling);
       new Chart(canvas, {
-        type: 'line',
+        type: 'bar',
         data: {
           labels: def.labels,
-          datasets: (def.datasets || []).map(makeDataset)
+          datasets: (def.datasets || []).map(function(ds, i) {
+            return {
+              label: ds.label, data: ds.data, borderWidth: 0, borderRadius: 3,
+              backgroundColor: ds.data.map(v => v == null ? '#cccccc' : v >= 0 ? hex('#1a7c3e', 0.7) : hex('#c0392b', 0.7))
+            };
+          })
         },
         options: {
-          responsive: true,
-          maintainAspectRatio: false,
+          ...LINE_BASE,
+          indexAxis: 'y',
+          plugins: { ...LINE_BASE.plugins, legend: { display: false } },
           scales: {
-            y: { title: { display: true, text: 'Net balance (pp)' } }
-          },
-          plugins: {
-            legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
-            tooltip: { mode: 'index', intersect: false }
+            x: { ticks: { font: { size: 10 } }, title: { display: true, text: 'Expected % change', font: { size: 10 } } },
+            y: { ticks: { font: { size: 10 } } }
+          }
+        }
+      });
+
+    } else {
+      // Default line chart (financing, business, outlook, etc.)
+      const wrap = document.createElement('div');
+      wrap.className = 'chart-wrap' + (def.datasets && def.datasets.length > 3 ? ' tall' : '');
+      const canvas = document.createElement('canvas');
+      wrap.appendChild(canvas);
+      el.parentNode.insertBefore(wrap, el.nextSibling);
+
+      const yLabel = (key === 'pressingness') ? 'Score (1–10)' : 'Net balance (pp)';
+      new Chart(canvas, {
+        type: 'line',
+        data: { labels: def.labels, datasets: (def.datasets || []).map(lineDS) },
+        options: {
+          ...LINE_BASE,
+          plugins: { ...LINE_BASE.plugins },
+          scales: {
+            x: LINE_BASE.scales.x,
+            y: { ...LINE_BASE.scales.y, title: { display: true, text: yLabel, font: { size: 10 } } }
           }
         }
       });
     }
   });
+
+  // Highlight active nav link on scroll
+  const sections = document.querySelectorAll('section[id], div[id]');
+  const navLinks = document.querySelectorAll('nav a');
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        navLinks.forEach(a => {
+          a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id);
+        });
+      }
+    });
+  }, { rootMargin: '-30% 0px -60% 0px' });
+  sections.forEach(s => obs.observe(s));
+
 })();
 </script>
 

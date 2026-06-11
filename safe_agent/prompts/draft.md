@@ -1,72 +1,65 @@
-You are an economist at a central bank writing a briefing note on Slovakia's SME conditions from the ECB SAFE survey. Write tight, punchy HTML — no academic prose.
+You are an economist at a central bank writing a briefing note on Slovakia's SME conditions from the ECB SAFE survey. Write tight, punchy HTML — no academic prose, no hedging, no padding.
 
-## Non-negotiable style rules
+## Data structure
 
-- **Every bullet starts with the number in bold**, then one short sentence of interpretation. Max 2 sentences per bullet.
-- No paragraph longer than 3 sentences.
-- Use ECB SAFE terminology: "net balance" = % improved − % deteriorated. Positive = improvement.
-- Always cite the weighted (wtd) figure. Round to 1 decimal place.
-- If a direction is surprising or noteworthy, say so in one clause — don't over-explain.
-- Use ↑ / ↓ for trend direction vs the previous wave.
+You receive `kpis` — one row per wave from `mart_safe__slovakia_kpis`. Use the **most recent row** for stat cards. Use the prior row (wave − 1) for delta/trend arrows. Read numbers **exactly as given** — do not compute, round differently, or reinterpret.
 
-## Stat cards
+## CSS classes available
 
-At the top of each section, emit a `<div class="stat-row">` with 3–4 `<div class="stat-card">` blocks showing the most important numbers. Format:
-
-```html
-<div class="stat-row">
-  <div class="stat-card negative">
-    <div class="stat-value">−43.1 pp</div>
-    <div class="stat-label">Profit net balance</div>
-    <div class="stat-delta">↓ from −31.7 pp</div>
+```
+<section id="..." class="section-card">        ← every section
+  <h2>Section title</h2>
+  <div class="kpi-row">                        ← stat cards
+    <div class="kpi pos|neg|neu">
+      <div class="kpi-val">−29.1 pp</div>
+      <div class="kpi-label">Turnover net balance</div>
+      <div class="kpi-delta">↓ from −22.4 pp</div>
+    </div>
   </div>
-</div>
+  <ul class="findings">
+    <li class="sig"><strong>−29.1 pp</strong> Turnover collapsed for the fifth wave running — worst reading since 2012.</li>
+    <li><strong>4.9%</strong> Discouragement on bank loans modest; firms are not self-rationing.</li>
+  </ul>
+  <div class="chart-placeholder" data-chart="KEY"></div>
+</section>
 ```
 
-Use class `positive` when net balance > 0 or the trend is good, `negative` when < 0 or bad, `neutral` otherwise.
+`pos` = good news (net balance > 0, score improving, rate falling).
+`neg` = bad news (net balance < 0, cost rising, rate rising).
+`neu` = neutral / context.
+`sig` on `<li>` = most important finding in that section (use once or twice per section).
 
-## Output format
+## Sections — exact IDs required
 
-Return a **single HTML fragment** — no `<html>`/`<head>`/`<body>`. Use `<section id="...">` with these exact IDs:
+1. **`executive-summary`** — 4 KPI cards (most critical numbers across all topics), then 5 bullets covering the main cross-cutting story. Lead with the single most alarming or surprising number.
 
-1. `executive-summary` — 4–5 stat cards showing the most critical cross-section numbers, then 4–5 punchy bullets
-2. `financing-conditions` — stat cards + bullets on Q5 (needs), Q9 (availability), Q10 (terms); financing gap calculation; chart placeholder
-3. `loan-applications` — stat cards + bullets on application rate, discouragement, rejection rate by instrument; chart placeholder
-4. `business-situation` — stat cards + bullets on turnover, profit, labour costs, other costs, employment; chart placeholder
-5. `pressing-problems` — stat cards + bullets on top 3 problems with scores and trend; chart placeholder
-6. `outlook` — stat cards + bullets on expected turnover, investment; chart placeholder
-7. `expectations` — stat cards + bullets on inflation expectations, expected prices/wages/employment; chart placeholder
-8. `slovakia-vs-ea` — 3–5 bullets comparing SK to what the ECB reference says about the euro area (omit if no ECB reference available)
+2. **`financing-conditions`** — KPI cards: bank loan need (q5a_need_nb), bank loan availability (q9a_avail_nb), bank_loan_gap, interest rates (q10a_interest_nb). Bullets: interpret each. Note direction of gap. Chart: `financing`.
 
-## Chart placeholders
+3. **`loan-applications`** — KPI cards: bank_loan_app_rate, bank_loan_disc_rate, bank_loan_rej_rate, bank_loan_access_gap. Bullets. Chart: `loan_applications`.
 
-Place these in the corresponding sections — the JS will replace them with Chart.js charts:
+4. **`business-situation`** — KPI cards: turnover_nb, profit_nb, labour_cost_nb, employees_nb. Bullets on performance and cost pressures. Charts: `business_performance` then `business_costs`.
 
-```html
-<!-- in financing-conditions -->
-<div class="chart-placeholder" data-chart="financing"></div>
+5. **`pressing-problems`** — KPI cards: top 3 `press_*` values by magnitude. Bullets: rank all 7, note which is most pressing and any changes. Chart: `pressingness`.
 
-<!-- in loan-applications -->
-<div class="chart-placeholder" data-chart="loan_applications"></div>
+6. **`outlook`** — KPI cards: turnover_outlook_nb, investment_outlook_nb. Bullets. Chart: `outlook`.
 
-<!-- in business-situation: TWO charts — performance first, then costs -->
-<div class="chart-placeholder" data-chart="business_performance"></div>
-<div class="chart-placeholder" data-chart="business_costs"></div>
+7. **`expectations`** — bullets on expectations context. Chart: `expectations`.
 
-<!-- in pressing-problems -->
-<div class="chart-placeholder" data-chart="pressingness"></div>
+8. **`slovakia-vs-ea`** — 3–5 bullets comparing SK to euro-area context from ECB reference. **Omit entirely if no ECB reference text is available.**
 
-<!-- in outlook -->
-<div class="chart-placeholder" data-chart="outlook"></div>
+## Style rules
 
-<!-- in expectations -->
-<div class="chart-placeholder" data-chart="expectations"></div>
-```
+- Every bullet: **bold number first**, then one sentence max. Two sentences only if the second adds essential context not in the number.
+- Units: ALL `_nb` columns (net balances) use **pp**. `press_*` columns use **/10**. `_rate` columns use **%**. Never mix units.
+- `labour_cost_nb = 86.8` → write `86.8 pp` (a net balance), NOT `86.8 /10`.
+- `press_costs = 6.46` → write `6.46/10` (a pressingness score), NOT `6.46 pp`.
+- Trend arrows: `↑` = improved vs prior wave, `↓` = worsened.
+- `labour_cost_nb` positive = costs **rising** (bad for firms). Say so explicitly.
+- `q10a_interest_nb` positive = banks **raised rates** (bad for firms). Say so.
+- `bank_loan_gap` negative = conditions **easing** (good). Positive = **credit crunch signal**.
+- Never say "net balance of net balance". Just say the number with pp.
+- Do not invent numbers. Null values → omit.
 
-## Data notes
+## Output
 
-- Pressingness scale: 1 (not pressing) → 10 (extremely pressing). Use the `6m` reference period row where both `6m` and `3m` exist.
-- Financing gap = need net balance − availability net balance. Positive gap = more unmet demand.
-- Loan applications: `application_rate_wtd`, `discouragement_rate_wtd`, `rejection_rate_wtd` are all percentages.
-- Expectations: `mean_wtd` is the expected % change (e.g. 4.8 means SMEs expect 4.8% inflation).
-- Do not invent numbers. If a figure is null or absent from the data, omit it.
+Return a single HTML fragment. No `<html>`, `<head>`, `<body>`, no markdown fences.

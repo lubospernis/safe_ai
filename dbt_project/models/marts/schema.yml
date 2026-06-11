@@ -2,14 +2,299 @@ version: 2
 
 models:
 
+  - name: mart_safe__slovakia_kpis
+    description: >
+      One row per survey wave for Slovakia SMEs only (country_code = 'SK',
+      employee_band_code 1–3).  All series choices have been made by a human
+      analyst — the AI agent MUST read KPI values from this table rather than
+      recomputing from raw mart tables.
+
+      Financing conditions (source: mart_safe__financing_conditions):
+        q5a_need_nb     = Q5 sub_item='a' net balance (need for bank loans).
+                          Positive means net increase in need (firms borrowing more).
+        q9a_avail_nb    = Q9 sub_item='a' net balance (availability of bank loans).
+                          Positive means availability improved.
+        bank_loan_gap   = q5a_need_nb − q9a_avail_nb.
+                          Positive = credit crunch signal.  Negative = conditions easing.
+        q10a_interest_nb= Q10 sub_item='a' (interest rate level).
+                          Positive = banks raised rates (tightening).
+                          Negative = banks cut rates (easing).
+
+      Business situation (source: mart_safe__business_situation, sub_items):
+        a=Turnover, b=Labour costs, e=Profit, g=Investment, i=Employees.
+        Net balance = % increased − % decreased.  Positive = improving.
+        WARNING: labour_cost_nb positive means costs RISING (bad for firms).
+
+      Pressing problems (source: mart_safe__q0b_pressingness, 6m preferred):
+        Weighted average pressingness score, scale 1–10.
+        Higher value = more pressing.  Seven fixed categories.
+
+      Loan access (source: mart_safe__loan_applications, sub_item='a'=bank loan):
+        All rates are percentages (0–100) of valid respondents.
+        bank_loan_access_gap = discouragement_rate + rejection share of all respondents
+          (ECB headline financing-gap indicator; higher = worse access).
+
+      Outlook (source: mart_safe__outlook):
+        Expected change in turnover and investment over next two quarters.
+        Net balance = % expecting increase − % expecting decrease.
+
+    config:
+      tags: ["safe", "ecb", "survey", "mart", "slovakia", "kpis"]
+
+    columns:
+      - name: wave_number
+        description: Survey wave number. Uniquely identifies one row.
+        tests:
+          - not_null
+          - unique
+
+      - name: survey_period_label
+        description: "Human-readable period label (e.g. '2026Q1')."
+        tests:
+          - not_null
+
+      # ── Financing conditions ──────────────────────────────────────────
+      - name: q5a_need_nb
+        description: >
+          Net balance: change in need for bank loans (Q5 sub_item='a').
+          Unit: percentage points (pp). Range: −100 to +100.
+          Positive = net increase in need.  Negative = net decrease.
+        meta:
+          unit: pp
+          scale: net_balance
+          source_question: Q5a
+          positive_means: "firms' need for bank loans increased on net"
+          negative_means: "firms' need for bank loans decreased on net"
+
+      - name: q9a_avail_nb
+        description: >
+          Net balance: availability of bank loans (Q9 sub_item='a').
+          Unit: pp. Range: −100 to +100.
+          Positive = availability improved.  Negative = availability deteriorated.
+        meta:
+          unit: pp
+          scale: net_balance
+          source_question: Q9a
+          positive_means: "bank loan availability improved on net"
+          negative_means: "bank loan availability deteriorated on net"
+
+      - name: bank_loan_gap
+        description: >
+          Financing conditions gap for bank loans = q5a_need_nb − q9a_avail_nb.
+          Unit: pp.
+          Positive = needs rising faster than supply (credit crunch signal).
+          Negative = supply easing relative to demand (conditions loosening).
+          This is NOT the ECB loan-access financing gap (that is bank_loan_access_gap).
+        meta:
+          unit: pp
+          scale: net_balance_difference
+          positive_means: "credit crunch signal — needs outpacing supply"
+          negative_means: "conditions easing — supply keeping up with demand"
+
+      - name: q10a_interest_nb
+        description: >
+          Net balance: level of interest rates on bank loans (Q10 sub_item='a').
+          Unit: pp. Range: −100 to +100.
+          Positive = banks raised rates on net (monetary tightening passing through).
+          Negative = banks cut rates on net (easing passing through).
+        meta:
+          unit: pp
+          scale: net_balance
+          source_question: Q10a
+          positive_means: "banks raised interest rates on net (tightening)"
+          negative_means: "banks cut interest rates on net (easing)"
+
+      # ── Business situation ────────────────────────────────────────────
+      - name: turnover_nb
+        description: >
+          Net balance: turnover change (Q2 sub_item='a').
+          Unit: pp. Positive = more firms report rising turnover than falling.
+        meta:
+          unit: pp
+          scale: net_balance
+          source_question: Q2a
+          positive_means: "turnover rising on net"
+
+      - name: profit_nb
+        description: >
+          Net balance: profit change (Q2 sub_item='e').
+          Unit: pp. Positive = more firms report rising profit than falling.
+        meta:
+          unit: pp
+          scale: net_balance
+          source_question: Q2e
+          positive_means: "profits rising on net"
+
+      - name: labour_cost_nb
+        description: >
+          Net balance: labour cost change (Q2 sub_item='b').
+          Unit: pp. CAUTION: positive here means costs are RISING — bad for firms.
+        meta:
+          unit: pp
+          scale: net_balance
+          source_question: Q2b
+          positive_means: "labour costs rising on net (cost pressure building)"
+          negative_means: "labour costs falling on net (cost relief)"
+
+      - name: employees_nb
+        description: >
+          Net balance: number of employees change (Q2 sub_item='i').
+          Unit: pp. Positive = net hiring. Negative = net shedding.
+        meta:
+          unit: pp
+          scale: net_balance
+          source_question: Q2i
+          positive_means: "net hiring"
+          negative_means: "net layoffs"
+
+      - name: investment_nb
+        description: >
+          Net balance: investment in property/plant change (Q2 sub_item='g').
+          Unit: pp. Positive = net investment increase.
+        meta:
+          unit: pp
+          scale: net_balance
+          source_question: Q2g
+          positive_means: "investment rising on net"
+
+      # ── Pressing problems ─────────────────────────────────────────────
+      - name: press_finding_customers
+        description: >
+          Weighted average pressingness of 'Finding customers' (problem_id=1).
+          Scale 1–10. 1 = not pressing at all. 10 = extremely pressing.
+          Prefers 6m reference period; falls back to 3m where unavailable.
+        meta:
+          unit: score_1_to_10
+          scale: pressingness
+          problem_id: 1
+          positive_means: "more pressing"
+
+      - name: press_competition
+        description: >
+          Weighted average pressingness of 'Competition' (problem_id=2). Scale 1–10.
+        meta:
+          unit: score_1_to_10
+          scale: pressingness
+          problem_id: 2
+
+      - name: press_access_to_finance
+        description: >
+          Weighted average pressingness of 'Access to finance' (problem_id=3). Scale 1–10.
+        meta:
+          unit: score_1_to_10
+          scale: pressingness
+          problem_id: 3
+
+      - name: press_costs
+        description: >
+          Weighted average pressingness of 'Costs of production or labour' (problem_id=4). Scale 1–10.
+        meta:
+          unit: score_1_to_10
+          scale: pressingness
+          problem_id: 4
+
+      - name: press_skilled_staff
+        description: >
+          Weighted average pressingness of 'Availability of skilled staff or experienced managers'
+          (problem_id=5). Scale 1–10.
+        meta:
+          unit: score_1_to_10
+          scale: pressingness
+          problem_id: 5
+
+      - name: press_regulation
+        description: >
+          Weighted average pressingness of 'Regulation' (problem_id=6). Scale 1–10.
+        meta:
+          unit: score_1_to_10
+          scale: pressingness
+          problem_id: 6
+
+      - name: press_other
+        description: >
+          Weighted average pressingness of 'Other' (problem_id=7). Scale 1–10.
+        meta:
+          unit: score_1_to_10
+          scale: pressingness
+          problem_id: 7
+
+      # ── Loan access ───────────────────────────────────────────────────
+      - name: bank_loan_app_rate
+        description: >
+          % of valid respondents that applied for a bank loan (Q7A=1, sub_item='a').
+          Unit: %. Range: 0–100.
+        meta:
+          unit: percent
+          scale: rate_0_100
+          source_question: Q7A_a
+
+      - name: bank_loan_disc_rate
+        description: >
+          % of valid respondents discouraged from applying (Q7A=2, sub_item='a').
+          Fear-of-rejection measure. Unit: %. Range: 0–100.
+        meta:
+          unit: percent
+          scale: rate_0_100
+          source_question: Q7A_a
+
+      - name: bank_loan_rej_rate
+        description: >
+          % of bank loan applicants that were rejected by lender (Q7B=4, sub_item='a').
+          Note: denominator is applicants, not all respondents.
+          Unit: %. Range: 0–100.
+        meta:
+          unit: percent
+          scale: rate_0_100
+          source_question: Q7B_a
+          denominator: applicants_only
+
+      - name: bank_loan_access_gap
+        description: >
+          ECB financing-gap indicator for bank loans = % discouraged + % of all respondents
+          who applied and were rejected (both as % of all valid Q7A respondents).
+          Higher = worse access.  Unit: %. Range: 0–100.
+          This is the ECB headline access-to-finance indicator, NOT the conditions gap.
+        meta:
+          unit: percent
+          scale: rate_0_100
+          positive_means: "worse access to bank loans"
+
+      # ── Outlook ───────────────────────────────────────────────────────
+      - name: turnover_outlook_nb
+        description: >
+          Net balance: expected turnover change over next two quarters (Q26 sub_item='a').
+          Unit: pp. Range: −100 to +100.
+          Positive = more firms expect growth than contraction.
+        meta:
+          unit: pp
+          scale: net_balance
+          source_question: Q26a
+          positive_means: "net expectation of turnover growth"
+
+      - name: investment_outlook_nb
+        description: >
+          Net balance: expected investment change over next two quarters (Q26 sub_item='b').
+          Unit: pp. Range: −100 to +100.
+        meta:
+          unit: pp
+          scale: net_balance
+          source_question: Q26b
+          positive_means: "net expectation of investment growth"
+
   - name: mart_safe__q0b_pressingness
     description: >
-      Weighted aggregated pressingness scores for Q0B by country × wave × problem.
-      All codes are decoded to human-readable labels so that AI tools querying MotherDuck
-      do not need a separate codebook.
+      Weighted aggregated pressingness scores for Q0B by country × wave × problem × reference_period.
       Source: ECB SAFE survey Q0B ("How pressing are the following problems for your firm?"
-      on a scale 1–10). Non-responses excluded from aggregations.
+      on a scale 1–10, where 1 = not pressing at all, 10 = extremely pressing).
+      Non-responses (-1, -2, 99) excluded from aggregations.
       Scope: SMEs only (employee_band_code 1–3: micro, small, medium — excludes large firms).
+      DEDUPLICATION NOTE: from wave 30 (2024H1) onward, some waves have BOTH a '6m' and a '3m'
+      row per problem.  When analysing a single wave's ranking, use reference_period = '6m'
+      and fall back to '3m' only where '6m' is absent.  Use mart_safe__slovakia_kpis for
+      pre-deduplicated values.
+      CAUTION for AI agents: avg_pressingness_wtd is a score on the 1–10 scale — it is NOT
+      a net balance or a percentage.  Do not compute differences between waves as if it were
+      a net balance.
 
     config:
       tags: ["safe", "ecb", "survey", "mart", "q0b"]
@@ -17,6 +302,8 @@ models:
     columns:
       - name: country_code
         description: ISO 3166-1 alpha-2 country code of the respondent enterprise.
+        tests:
+          - not_null
       - name: country_name_en
         description: Full English country name.
       - name: wave_number
@@ -58,6 +345,16 @@ models:
         description: >
           Weighted average pressingness score (1–10 scale), using weight_common.
           Higher = more pressing. Rounded to 2 decimal places.
+          This is a score, NOT a net balance or percentage.
+        meta:
+          unit: score_1_to_10
+          scale: pressingness
+          positive_means: "problem is more pressing (higher = worse)"
+        tests:
+          - dbt_utils.expression_is_true:
+              expression: ">= 1 and avg_pressingness_wtd <= 10"
+              config:
+                where: "avg_pressingness_wtd is not null"
       - name: avg_pressingness_unwtd
         description: >
           Unweighted average pressingness score (1–10 scale) for reference.
@@ -135,11 +432,16 @@ models:
         Net balance positive = net improvement in availability.
       Q10: "Were the [terms] of bank financing increased, unchanged or decreased by the bank?"
         Net balance positive = net tightening (e.g. interest rates rising, collateral rising).
-      financing_gap_wtd (Q9 rows only) = needs_nb − avail_nb = Q5.net_balance − Q9.net_balance.
+      financing_gap_wtd (Q9 rows only) = Q5.net_balance − Q9.net_balance for same instrument.
         Positive gap = needs rising faster than availability; a credit crunch signal.
+        Negative gap = availability easing relative to needs.
+        NULL for Q5 and Q10 rows — only populated on question_id = 'q9'.
       Scope: SMEs only (employee_band_code 1–3: micro, small, medium — excludes large firms).
       Aggregation: wave × country × question × sub-item.
       Sub-item labels verified from annex.xlsx.
+      CAUTION for AI agents: do NOT re-derive financing_gap_wtd — read the pre-computed column.
+        Do NOT present Q10 net_balance as a "financing availability" figure — it measures
+        terms (rates, collateral, etc.), not access.  Positive Q10 = tightening (bad for firms).
 
     config:
       tags: ["safe", "ecb", "survey", "mart", "financing_conditions"]
@@ -147,6 +449,8 @@ models:
     columns:
       - name: country_code
         description: ISO 3166-1 alpha-2 country code.
+        tests:
+          - not_null
       - name: country_name_en
         description: Full English country name.
       - name: wave_number
@@ -159,6 +463,10 @@ models:
         description: "Human-readable period label (e.g. '2024Q3')."
       - name: question_id
         description: "'q5' = change in financing need; 'q9' = availability of external financing; 'q10' = terms and conditions of bank financing."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['q5', 'q9', 'q10']
       - name: question_label
         description: Human-readable label for the question.
       - name: sub_item
@@ -189,15 +497,34 @@ models:
         description: >
           Weighted net balance = % code-1 − % code-3. Range: −100 to +100.
           Q5: positive = net increase in need. Q9: positive = net improvement in availability.
-          Q10: positive = net tightening by bank.
+          Q10: positive = net tightening by bank (e.g. rates up, collateral up).
+        meta:
+          unit: pp
+          range: "−100 to +100"
+          q5_positive_means: "financing need increased on net"
+          q9_positive_means: "financing availability improved on net"
+          q10_positive_means: "bank tightened terms on net (ADVERSE for firms)"
+        tests:
+          - dbt_utils.expression_is_true:
+              expression: ">= -100 and net_balance_wtd <= 100"
+              config:
+                where: "net_balance_wtd is not null"
       - name: net_balance_unwtd
         description: Unweighted net balance for reference.
       - name: financing_gap_wtd
         description: >
-          Financing gap = Q5.net_balance_wtd − Q9.net_balance_wtd for the same instrument and wave.
-          Populated only for question_id = 'q9' rows; NULL for Q5 and Q10.
-          Positive = needs rising faster than availability (gap opened, credit crunch signal).
-          Negative = availability improving relative to needs (conditions easing).
+          Financing conditions gap = Q5.net_balance_wtd − Q9.net_balance_wtd for the same
+          instrument and wave.  Populated ONLY for question_id = 'q9' rows; NULL for Q5 and Q10.
+          Positive = needs rising faster than availability (credit crunch signal).
+          Negative = availability easing relative to needs (conditions loosening).
+          Do NOT confuse with bank_loan_access_gap in mart_safe__loan_applications, which
+          is the ECB Q7 discouragement + rejection indicator.
+        meta:
+          unit: pp
+          range: "−200 to +200 (theoretical)"
+          null_when: "question_id in ('q5', 'q10')"
+          positive_means: "credit crunch signal"
+          negative_means: "conditions easing"
 
   - name: mart_safe__loan_applications
     description: >

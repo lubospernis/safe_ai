@@ -21,32 +21,23 @@ _RECIPIENTS_ENV = os.environ.get("REPORT_RECIPIENTS", "lubos.pernis@gmail.com")
 
 
 def _mart_schema_summary() -> str:
-    """Return a structured text summary of mart tables and their columns for gap analysis."""
+    """Return column-level schema of mart_safe__slovakia_kpis for the gap-finder prompt.
+
+    The gap finder needs to know what KPIs the pipeline *already* covers so it
+    doesn't hallucinate gaps.  We use the KPI mart (not raw marts) because it
+    contains exactly the series the agent surfaces — nothing ambiguous.
+    """
     from query_marts import _connect
     con = _connect()
-    tables = [
-        "main_safe.mart_safe__financing_conditions",
-        "main_safe.mart_safe__business_situation",
-        "main_safe.mart_safe__q0b_pressingness",
-        "main_safe.mart_safe__loan_applications",
-        "main_safe.mart_safe__outlook",
-        "main_safe.mart_safe__expectations",
-    ]
-    lines = []
-    for t in tables:
-        short = t.split(".")[-1]
-        cols = [r[0] for r in con.execute(f"DESCRIBE {t}").fetchall()]
-        # Also pull distinct sub_item_label / instrument_label / problem_label values
-        for label_col in ("sub_item_label", "instrument_label", "problem_label", "question_label"):
-            if label_col in cols:
-                try:
-                    vals = [r[0] for r in con.execute(
-                        f"SELECT DISTINCT {label_col} FROM {t} WHERE {label_col} IS NOT NULL ORDER BY 1"
-                    ).fetchall()]
-                    lines.append(f"\n{short} — {label_col} values: {', '.join(vals)}")
-                except Exception:
-                    pass
-        lines.append(f"{short} columns: {', '.join(cols)}")
+    kpi_table = "main_safe.mart_safe__slovakia_kpis"
+    try:
+        cols = con.execute(f"DESCRIBE {kpi_table}").fetchall()
+        # col tuple: (name, type, null, key, default, extra)
+        lines = [f"mart_safe__slovakia_kpis — pre-selected KPIs for Slovakia SMEs:"]
+        for col in cols:
+            lines.append(f"  {col[0]}  ({col[1]})")
+    except Exception as exc:
+        lines = [f"[schema_summary] could not describe {kpi_table}: {exc}"]
     con.close()
     return "\n".join(lines)
 

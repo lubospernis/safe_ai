@@ -420,6 +420,74 @@ models:
       - name: net_balance_unwtd
         description: Unweighted net balance for reference.
 
+  - name: mart_safe__ecb_net_balances
+    description: >
+      ECB-methodology net balances for Q5 (financing need) and Q9 (availability),
+      replicating the figures published in ECB Table 1 (SAFE country results).
+
+      KEY DIFFERENCES from mart_safe__financing_conditions:
+        1. SCOPE: all firms (no SME restriction) — ECB publishes country totals.
+        2. REFERENCE PERIOD: 6m and 3m are kept separate (one row each per wave).
+           Waves 30+ may have both a '6m' row and a '3m' row for the same wave.
+           ECB "white panel" = reference_period='6m'; "grey panel" = reference_period='3m'.
+           For waves 1–29 (biannual) only reference_period='6m' rows exist.
+        3. NON-RESPONSE: code 7 (not applicable) excluded from denominator — NOT treated
+           as "unchanged". Code 9 (DK) also excluded.
+        4. ROUNDING: rounded to 1 decimal place (ECB publishes integers; differences
+           of ±1 vs published are expected due to weight precision in microdata file).
+
+      USE THIS MART when replicating or benchmarking against ECB published tables.
+      USE mart_safe__financing_conditions for internal SME-focused analysis.
+
+      Instruments covered: a=bank loans, f=credit lines/overdraft (ECB Table 1 columns).
+      Aggregation: wave × country × question_id × sub_item × reference_period.
+
+    config:
+      tags: ["safe", "ecb", "survey", "mart", "ecb_published"]
+
+    columns:
+      - name: country_code
+        description: ISO 3166-1 alpha-2 country code.
+      - name: country_name_en
+        description: Full English country name.
+      - name: wave_number
+        description: Survey wave number (1=2009H1, 38=2026Q1).
+      - name: survey_year
+        description: Calendar year of the wave.
+      - name: survey_period
+        description: "Survey period code (H1, H2, Q1–Q4)."
+      - name: survey_period_label
+        description: "Human-readable label e.g. '2026Q1'."
+      - name: question_id
+        description: "'q5' = change in financing need; 'q9' = availability of financing."
+      - name: question_label
+        description: Human-readable question label.
+      - name: sub_item
+        description: "Instrument: a=bank loans, f=credit line/overdraft."
+      - name: sub_item_label
+        description: Human-readable instrument label.
+      - name: reference_period
+        description: >
+          '6m' = six-month questionnaire (ECB white panel).
+          '3m' = three-month questionnaire (ECB grey panel).
+          Waves 1–29 have only '6m'. Waves 30+ may have both.
+      - name: n_respondents
+        description: Count of firms with a valid substantive response (codes 1/2/3 only).
+      - name: net_balance_wtd
+        description: >
+          Weighted net balance = % code-1 − % code-3 (using weight_common).
+          Q5: positive = net increase in financing need.
+          Q9: positive = net improvement in availability.
+          Range: −100 to +100. Rounded to 1 decimal place.
+          Matches ECB Table 1 within ±1 pp (weight precision difference).
+        meta:
+          unit: pp
+          range: "−100 to +100"
+          q5_positive_means: "financing need increased on net"
+          q9_positive_means: "financing availability improved on net"
+      - name: net_balance_unwtd
+        description: Unweighted net balance for reference. Rounded to 1 decimal place.
+
   - name: mart_safe__financing_conditions
     description: >
       Weighted net balances for financing needs (Q5), financing availability (Q9), and bank loan
@@ -437,6 +505,9 @@ models:
         Negative gap = availability easing relative to needs.
         NULL for Q5 and Q10 rows — only populated on question_id = 'q9'.
       Scope: SMEs only (employee_band_code 1–3: micro, small, medium — excludes large firms).
+      NOTE: uses COALESCE(response_raw, response_3m) — mixes 6m and 3m respondents.
+        This differs from ECB published figures. Use mart_safe__ecb_net_balances to
+        replicate ECB Table 1 exactly.
       Aggregation: wave × country × question × sub-item.
       Sub-item labels verified from annex.xlsx.
       CAUTION for AI agents: do NOT re-derive financing_gap_wtd — read the pre-computed column.

@@ -88,8 +88,13 @@
   Net balance negative = net tightening of bank lending terms.
 
   Scope: SMEs only (employee_band_code 1–3: micro, small, medium).
-  Large firms (band 4, 250+ employees) are excluded for comparability with
-  the ECB's published SAFE data warehouse, which reports SME aggregates.
+  Large firms (band 4, 250+) are excluded.
+
+  NOTE — ECB published figures differ from this mart in two ways:
+    1. ECB uses ALL firms (no SME filter).
+    2. ECB keeps 6m and 3m reference periods separate; this mart coalesces them
+       (COALESCE(response_raw, response_3m)) into a single row per wave.
+  To replicate ECB Table 1 exactly, use mart_safe__ecb_net_balances instead.
 
   Aggregation: wave × country × question_id × sub_item.
 */

@@ -39,7 +39,7 @@ with source as (
         country_code,
         country_name_en,
         sub_item,
-        response_raw                                                as response_raw,
+        response_raw,
         weight_common,
         is_nonresponse
     from {{ ref('int_safe__core_questions_long') }}

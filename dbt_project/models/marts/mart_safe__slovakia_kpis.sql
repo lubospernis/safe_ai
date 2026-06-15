@@ -17,11 +17,15 @@
 
   Series choices (all verified against annex.xlsx):
   ─────────────────────────────────────────────────────────────────────────
-  FINANCING CONDITIONS  (from mart_safe__financing_conditions)
+  FINANCING CONDITIONS
     q5a_need_nb         : Q5 sub_item='a' net balance — change in need for
                           BANK LOANS.  Positive = net increase in need.
+                          Source: mart_safe__ecb_net_balances (ECB methodology:
+                          all firms, reference_period preferred: 3m where
+                          available, else 6m). Matches ECB Table 1 within ±1pp.
     q9a_avail_nb        : Q9 sub_item='a' net balance — availability of
                           BANK LOANS.  Positive = availability improved.
+                          Same source and methodology as q5a_need_nb.
     bank_loan_gap       : q5a_need_nb − q9a_avail_nb.
                           Positive = needs rising faster than supply
                           (credit crunch signal).
@@ -29,6 +33,8 @@
     q10a_interest_nb    : Q10 sub_item='a' net balance — level of interest
                           rates.  Positive = rates RISING (tightening).
                           Negative = rates FALLING (easing).
+                          Source: mart_safe__financing_conditions (SME-only,
+                          coalesced; Q10 not in ECB net balances mart).
 
   BUSINESS SITUATION    (from mart_safe__business_situation)
     turnover_nb         : Q2 sub_item='a' — Turnover net balance.
@@ -57,27 +63,52 @@
 
 with
 
+-- Q5/Q9 bank loans: ECB methodology (all firms, 3m preferred over 6m).
+-- Preference rule: when a wave has both reference periods, 3m matches ECB Table 1.
+ecb_nb as (
+    select
+        wave_number,
+        survey_period_label,
+        question_id,
+        net_balance_wtd,
+        row_number() over (
+            partition by wave_number, question_id
+            order by case when reference_period = '3m' then 1 else 2 end
+        ) as rn
+    from {{ ref('mart_safe__ecb_net_balances') }}
+    where country_code = 'SK'
+      and sub_item = 'a'
+),
+
+-- Q10 interest rates: no ECB equivalent mart, use financing_conditions (SME).
+q10 as (
+    select
+        wave_number,
+        max(case when question_id = 'q10' and sub_item = 'a'
+                 then net_balance_wtd end)                  as q10a_interest_nb
+    from {{ ref('mart_safe__financing_conditions') }}
+    where country_code = 'SK'
+    group by wave_number
+),
+
 fin as (
     select
         wave_number,
         survey_period_label,
-        max(case when question_id = 'q5'  and sub_item = 'a' then net_balance_wtd end) as q5a_need_nb,
-        max(case when question_id = 'q9'  and sub_item = 'a' then net_balance_wtd end) as q9a_avail_nb,
-        max(case when question_id = 'q10' and sub_item = 'a' then net_balance_wtd end) as q10a_interest_nb
-    from {{ ref('mart_safe__financing_conditions') }}
-    where country_code = 'SK'
+        max(case when question_id = 'q5' then net_balance_wtd end) as q5a_need_nb,
+        max(case when question_id = 'q9' then net_balance_wtd end) as q9a_avail_nb
+    from ecb_nb
+    where rn = 1
     group by wave_number, survey_period_label
 ),
 
 fin_with_gap as (
     select
-        *,
-        -- Gap = need_nb − avail_nb.
-        -- Computed here rather than reading pre-computed financing_gap_wtd because
-        -- that column is only on q9 rows and can't be pivoted directly.
-        -- Positive = credit crunch signal. Negative = conditions easing.
-        round(q5a_need_nb - q9a_avail_nb, 2) as bank_loan_gap
-    from fin
+        f.*,
+        q.q10a_interest_nb,
+        round(f.q5a_need_nb - f.q9a_avail_nb, 2)           as bank_loan_gap
+    from fin f
+    left join q10 q using (wave_number)
 ),
 
 biz as (

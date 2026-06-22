@@ -1,5 +1,6 @@
 # ECB SAFE microdata — dlt pipeline dependencies
-dlt[motherduck]>=1.0,<2
+dlt[sqlalchemy]>=1.0,<2
+python-oracledb>=2.0,<3      # thin-mode Oracle driver (no Instant Client needed)
 requests>=2.31,<3
 beautifulsoup4>=4.12,<5
 lxml>=5.0,<6

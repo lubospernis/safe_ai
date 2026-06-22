@@ -5,3 +5,8 @@ request_timeout     = 60
 
 [load]
 workers = 3
+
+[destination.sqlalchemy]
+# Snake-case column names are quoted so Oracle preserves case; remove quoting
+# if you prefer all-caps Oracle-native identifiers.
+naming_convention = "snake_case"

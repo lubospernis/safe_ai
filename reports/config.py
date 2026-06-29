@@ -137,21 +137,4 @@ SECTIONS = [
             "If Q11a (economic outlook) is also deteriorating, note that as a macro-level drag on supply."
         ),
     },
-    {
-        "id": "loan_applications",
-        "sql_file": "loan_applications.sql",
-        "title": "Bank Loan Access: Applications and Financing Gap (Q7A/Q7B)",
-        "sign_note": (
-            "financing_gap_wtd = share of firms that are discouraged or rejected (ECB headline access indicator). "
-            "Higher = worse access to bank loans. Values are % of firms, not net balances."
-        ),
-        "value_col": "financing_gap_wtd",
-        "panel_col": None,
-        "panel_label_col": None,
-        "series_col": "country_code",
-        "pinned_panels": [],
-        "max_panels": 1,
-        "always_include": False,
-        "focus": "Focus on Slovakia financing gap vs EA. Note any divergence in rejection vs discouragement.",
-    },
 ]

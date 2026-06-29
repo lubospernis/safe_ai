@@ -63,52 +63,42 @@
 
 with
 
--- Q5/Q9 bank loans: ECB methodology (all firms, 3m preferred over 6m).
+-- Q5/Q9/Q10 bank loans: ECB methodology (all firms, 3m preferred over 6m).
 -- Preference rule: when a wave has both reference periods, 3m matches ECB Table 1.
-ecb_nb as (
+fin_raw as (
     select
         wave_number,
         survey_period_label,
         question_id,
+        sub_item,
         net_balance_wtd,
         row_number() over (
-            partition by wave_number, question_id
+            partition by wave_number, question_id, sub_item
             order by case when reference_period = '3m' then 1 else 2 end
         ) as rn
-    from {{ ref('mart_safe__ecb_net_balances') }}
-    where country_code = 'SK'
-      and sub_item = 'a'
-),
-
--- Q10 interest rates: no ECB equivalent mart, use financing_conditions (SME).
-q10 as (
-    select
-        wave_number,
-        max(case when question_id = 'q10' and sub_item = 'a'
-                 then net_balance_wtd end)                  as q10a_interest_nb
     from {{ ref('mart_safe__financing_conditions') }}
     where country_code = 'SK'
-    group by wave_number
+      and sub_item = 'a'
+      and question_id in ('q5', 'q9', 'q10')
 ),
 
 fin as (
     select
         wave_number,
         survey_period_label,
-        max(case when question_id = 'q5' then net_balance_wtd end) as q5a_need_nb,
-        max(case when question_id = 'q9' then net_balance_wtd end) as q9a_avail_nb
-    from ecb_nb
+        max(case when question_id = 'q5'  then net_balance_wtd end) as q5a_need_nb,
+        max(case when question_id = 'q9'  then net_balance_wtd end) as q9a_avail_nb,
+        max(case when question_id = 'q10' then net_balance_wtd end) as q10a_interest_nb
+    from fin_raw
     where rn = 1
     group by wave_number, survey_period_label
 ),
 
 fin_with_gap as (
     select
-        f.*,
-        q.q10a_interest_nb,
-        round(f.q5a_need_nb - f.q9a_avail_nb, 2)           as bank_loan_gap
-    from fin f
-    left join q10 q using (wave_number)
+        *,
+        round(q5a_need_nb - q9a_avail_nb, 2)                as bank_loan_gap
+    from fin
 ),
 
 biz as (

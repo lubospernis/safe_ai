@@ -29,8 +29,8 @@ on prior knowledge — the actual codes differ from common assumptions.
 
 | Goal | Mart |
 |---|---|
-| Replicate ECB Table 1 (needs/availability net balances) | `mart_safe__ecb_net_balances` |
-| SME-focused financing needs/availability/terms analysis | `mart_safe__financing_conditions` |
+| Financing needs/availability/terms (ECB methodology, all firms) | `mart_safe__financing_conditions` |
+| Financing purpose breakdown by country (Q6A) | `mart_safe__financing_purpose` |
 | Headline Slovakia KPIs (pre-selected, AI-ready) | `mart_safe__slovakia_kpis` |
 | Pressing business problems (Q0B pressingness scores) | `mart_safe__q0b_pressingness` |
 | Loan application rates, discouragement, rejection | `mart_safe__loan_applications` |
@@ -40,50 +40,28 @@ on prior knowledge — the actual codes differ from common assumptions.
 
 ---
 
-### mart_safe__ecb_net_balances
-
-Replicates ECB published country net balances (Table 1). Use this when the user references
-ECB published figures or wants to compare with the official report.
-
-**Key rules**:
-- Scope: **all firms** (no SME filter)
-- Reference periods kept **separate**: `reference_period = '6m'` (ECB white panel) or `'3m'` (grey panel)
-- Waves 1–29: only `'6m'` rows. Waves 30+: may have both `'6m'` and `'3m'` rows for the same wave
-- Non-response (codes 7, 9) excluded from denominator
-- Rounded to 1 decimal place; published ECB integers differ by ±1 due to weight precision in microdata
-
-**Instruments**: `sub_item = 'a'` (bank loans), `sub_item = 'f'` (credit lines)
-
-**Net balance sign**:
-- Q5: positive = financing need increased on net
-- Q9: positive = availability improved on net
-
-```sql
--- ECB Table 1 equivalent for Slovakia Q1 2026 (3m grey panel)
-SELECT question_id, sub_item_label, net_balance_wtd
-FROM main_safe.mart_safe__ecb_net_balances
-WHERE country_code = 'SK' AND wave_number = 38 AND reference_period = '3m'
-ORDER BY question_id, sub_item
-```
-
----
-
 ### mart_safe__financing_conditions
 
-SME-only financing analysis across Q5 (need), Q9 (availability), Q10 (bank loan terms).
+ECB-methodology net balances for Q5 (financing need), Q9 (availability), Q10 (bank loan terms).
 
 **Key rules**:
-- Scope: **SMEs only** (employee_band_code 1–3)
-- Mixes 6m and 3m respondents via COALESCE — do not use to replicate ECB published figures
+- `firm_size`: `'all'` = ECB-comparable (all firms), `'sme'` = bands 1–3, `'large'` = band 4
+- Reference periods **separate**: `reference_period = '6m'` (ECB white panel) or `'3m'` (grey panel)
+- Waves 1–29: only `'6m'` rows. Waves 30+: may have both. Use `'3m'` to match ECB grey panel.
+- Non-response codes 7 (N/A) and 9 (DK) excluded from denominator
+- Rounded to 1 dp; ECB publishes integers — ±1pp residual expected due to weight precision
 - `financing_gap_wtd` on Q9 rows = Q5.net_balance − Q9.net_balance (pre-computed; do not re-derive)
 - Q10 net_balance positive = bank **tightened** terms (adverse for firms)
 
 **Instruments**: a, b, c, d, f, g, h (Q5/Q9); a–f (Q10)
 
 ```sql
-SELECT question_id, sub_item_label, net_balance_wtd, financing_gap_wtd
+-- ECB Table 1 equivalent for Slovakia Q1 2026 (3m grey panel)
+SELECT question_id, sub_item_label, net_balance_wtd
 FROM main_safe.mart_safe__financing_conditions
-WHERE country_code = 'SK' AND wave_number = 38
+WHERE country_code = 'SK' AND wave_number = 38 AND reference_period = '3m'
+  AND question_id IN ('q5', 'q9') AND sub_item IN ('a', 'f')
+  AND firm_size = 'all'
 ORDER BY question_id, sub_item
 ```
 
@@ -120,6 +98,31 @@ SELECT problem_label, avg_pressingness_wtd
 FROM main_safe.mart_safe__q0b_pressingness
 WHERE country_code = 'SK' AND wave_number = 38 AND reference_period = '6m'
 ORDER BY avg_pressingness_wtd DESC
+```
+
+---
+
+### mart_safe__financing_purpose
+
+Weighted % of firms citing each purpose for financing (Q6A multi-select). All firms, 6m/3m separate.
+
+**Key rules**:
+- Multi-select: each purpose is independent; percentages across purposes can sum to >100%
+- `pct_cited_wtd` = share of valid respondents (codes 1 or 2) who cited the purpose (code=1)
+- DK/NA (code 99) and null excluded from denominator
+- `firm_size`: `'all'` = all firms, `'sme'` = bands 1–3, `'large'` = band 4
+- For regional comparison, filter `country_code IN ('SK','CZ','HU','PL','AT','DE')`
+
+**Purposes** (purpose_id): 1=Fixed investment, 2=Inventory and working capital,
+3=Hiring and training, 4=New products/services, 5=Refinancing, 6=Other
+
+```sql
+-- Slovakia vs neighbours, latest wave, SMEs only
+SELECT country_code, purpose_label, pct_cited_wtd, n_respondents
+FROM main_safe.mart_safe__financing_purpose
+WHERE country_code IN ('SK','CZ','HU','PL','AT','DE')
+  AND wave_number = 38 AND reference_period = '6m' AND firm_size = 'sme'
+ORDER BY country_code, purpose_id
 ```
 
 ---

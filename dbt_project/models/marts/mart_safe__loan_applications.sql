@@ -64,11 +64,14 @@ with q7a as (
         country_code,
         country_name_en,
         sub_item,
-        coalesce(response_raw, response_3m)                         as q7a_response,
+        response_3m                                                 as q7a_response,
         weight_common,
         is_nonresponse                                              as q7a_nonresponse
     from {{ ref('int_safe__core_questions_long') }}
-    where question_id = 'q7a' and employee_band_code BETWEEN 1 and 3
+    where question_id = 'q7a'
+      and employee_band_code between 1 and 3
+      and wave_number >= 30
+      and response_3m is not null
 
 ),
 
@@ -78,10 +81,13 @@ q7b as (
         permid,
         wave_number,
         sub_item,
-        coalesce(response_raw, response_3m)                         as q7b_response,
-        coalesce(response_raw, response_3m) in (-1, -2, -99, 7, 9, 99) as q7b_nonresponse
+        response_3m                                                 as q7b_response,
+        response_3m in (-1, -2, -99, 7, 9, 99)                     as q7b_nonresponse
     from {{ ref('int_safe__core_questions_long') }}
-    where question_id = 'q7b' and employee_band_code BETWEEN 1 and 3
+    where question_id = 'q7b'
+      and employee_band_code between 1 and 3
+      and wave_number >= 30
+      and response_3m is not null
 ),
 
 combined as (

@@ -39,12 +39,14 @@ with source as (
         country_code,
         country_name_en,
         sub_item,
-        response_raw,
+        response_3m                                                         as response_raw,
         weight_common,
         is_nonresponse
     from {{ ref('int_safe__core_questions_long') }}
     where question_id = 'q26'
       and employee_band_code between 1 and 3
+      and wave_number >= 30
+      and response_3m is not null
 
 ),
 

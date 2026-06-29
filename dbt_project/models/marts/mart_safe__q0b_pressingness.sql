@@ -27,6 +27,8 @@ with int_q0b as (
 
     select * from {{ ref('int_safe__q0b_pressingness') }}
     where employee_band_code between 1 and 3
+      and wave_number >= 30
+      and reference_period = '3m'
 
 ),
 

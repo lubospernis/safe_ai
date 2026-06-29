@@ -62,17 +62,19 @@ with source as (
         country_name_en,
         question_id,
         sub_item,
-        -- For Q34, prefer confirmed value (response_rec) over raw when available
+        -- For Q34, prefer confirmed value (response_3m_rec) over raw 3m where available
         case
-            when question_id = 'q34' and response_rec is not null
-                then response_rec
-            else response_raw
+            when question_id = 'q34' and response_3m_rec is not null
+                then response_3m_rec
+            else response_3m
         end                                                         as response_value,
         weight_common,
         is_nonresponse
     from {{ ref('int_safe__core_questions_long') }}
     where question_id in ('q31', 'q33', 'q34')
       and employee_band_code between 1 and 3
+      and wave_number >= 30
+      and response_3m is not null
 
 ),
 

@@ -63,25 +63,6 @@
 
 with
 
--- Q5/Q9/Q10 bank loans: ECB methodology (all firms, 3m preferred over 6m).
--- Preference rule: when a wave has both reference periods, 3m matches ECB Table 1.
-fin_raw as (
-    select
-        wave_number,
-        survey_period_label,
-        question_id,
-        sub_item,
-        net_balance_wtd,
-        row_number() over (
-            partition by wave_number, question_id, sub_item
-            order by case when reference_period = '3m' then 1 else 2 end
-        ) as rn
-    from {{ ref('mart_safe__financing_conditions') }}
-    where country_code = 'SK'
-      and sub_item = 'a'
-      and question_id in ('q5', 'q9', 'q10')
-),
-
 fin as (
     select
         wave_number,
@@ -89,8 +70,11 @@ fin as (
         max(case when question_id = 'q5'  then net_balance_wtd end) as q5a_need_nb,
         max(case when question_id = 'q9'  then net_balance_wtd end) as q9a_avail_nb,
         max(case when question_id = 'q10' then net_balance_wtd end) as q10a_interest_nb
-    from fin_raw
-    where rn = 1
+    from {{ ref('mart_safe__financing_conditions') }}
+    where country_code = 'SK'
+      and sub_item = 'a'
+      and question_id in ('q5', 'q9', 'q10')
+      and firm_size = 'all'
     group by wave_number, survey_period_label
 ),
 
@@ -115,7 +99,6 @@ biz as (
 ),
 
 press as (
-    -- Keep 6m reference period; fall back to 3m where 6m absent (waves 30, 37+)
     select
         wave_number,
         max(case when problem_id = 1 then avg_pressingness_wtd end) as press_finding_customers,
@@ -125,17 +108,8 @@ press as (
         max(case when problem_id = 5 then avg_pressingness_wtd end) as press_skilled_staff,
         max(case when problem_id = 6 then avg_pressingness_wtd end) as press_regulation,
         max(case when problem_id = 7 then avg_pressingness_wtd end) as press_other
-    from (
-        -- deduplicate: one row per wave × problem, preferring 6m
-        select *,
-            row_number() over (
-                partition by wave_number, problem_id
-                order by case when reference_period = '6m' then 1 else 2 end
-            ) as rn
-        from {{ ref('mart_safe__q0b_pressingness') }}
-        where country_code = 'SK'
-    ) deduped
-    where rn = 1
+    from {{ ref('mart_safe__q0b_pressingness') }}
+    where country_code = 'SK'
     group by wave_number
 ),
 

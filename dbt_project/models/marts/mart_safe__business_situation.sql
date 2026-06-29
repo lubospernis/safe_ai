@@ -32,12 +32,8 @@
   Net balance = % increased − % decreased (standard ECB definition).
 
   Scope: SMEs only (employee_band_code 1–3: micro, small, medium).
-  Large firms (band 4, 250+ employees) are excluded for comparability with
-  the ECB's published SAFE data warehouse, which reports SME aggregates.
-
+  Three-month reference period only (wave 30 / 2024Q1 onward).
   Aggregation: wave × country × sub_item.
-  Non-responses (response_raw in -1, -2, -99, 7, 99) excluded from aggregation metrics
-  but counted in n_nonresponse.
 */
 
 with source as (
@@ -50,12 +46,15 @@ with source as (
         country_code,
         country_name_en,
         sub_item,
-        coalesce(response_raw, response_3m)                         as response_raw,
+        response_3m                                                 as response_raw,
         weight_common,
         is_nonresponse,
         employee_band_code
     from {{ ref('int_safe__core_questions_long') }}
-    where question_id = 'q2' and employee_band_code BETWEEN 1 and 3
+    where question_id = 'q2'
+      and employee_band_code between 1 and 3
+      and wave_number >= 30
+      and response_3m is not null
 
 ),
 

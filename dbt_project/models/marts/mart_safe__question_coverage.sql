@@ -29,48 +29,42 @@
 with core as (
 
     select
-        q.wave_number,
-        q.question_id,
-        q.sub_item,
-        q.response_3m,
-        q.response_3m in (-1, -2, -99, 7, 9, 99)       as is_nonresponse,
-        f.survey_year,
-        f.survey_period,
-        f.survey_period_label,
-        f.country_code,
-        f.country_name_en,
-        f.is_sme,
-        f.is_euro_area,
-        f.weight_common
-    from {{ ref('int_safe__core_questions_long') }} q
-    join {{ ref('int_safe__firm_survey_responses') }} f
-        using (permid, wave_number)
-    where q.wave_number >= 30
-      and q.response_3m is not null
+        wave_number,
+        question_id,
+        sub_item,
+        response_3m,
+        response_3m in (-1, -2, -99, 7, 9, 99)         as is_nonresponse,
+        survey_year,
+        survey_period,
+        survey_period_label,
+        country_code,
+        country_name_en,
+        is_sme,
+        weight_common
+    from {{ ref('int_safe__core_questions_long') }}
+    where wave_number >= 30
+      and response_3m is not null
 
 ),
 
 q0b as (
 
     select
-        p.wave_number,
+        wave_number,
         'q0b'                                           as question_id,
-        p.problem_id::varchar                           as sub_item,
-        p.pressingness_score                            as response_3m,
-        p.is_nonresponse,
-        p.survey_year,
-        p.survey_period,
-        p.survey_period_label,
-        p.country_code,
-        p.country_name_en,
-        (p.employee_band_code between 1 and 3)          as is_sme,
-        f.is_euro_area,
-        p.weight_common
-    from {{ ref('int_safe__q0b_pressingness') }} p
-    join {{ ref('int_safe__firm_survey_responses') }} f
-        using (permid, wave_number)
-    where p.wave_number >= 30
-      and p.reference_period = '3m'
+        problem_id::varchar                             as sub_item,
+        pressingness_score                              as response_3m,
+        is_nonresponse,
+        survey_year,
+        survey_period,
+        survey_period_label,
+        country_code,
+        country_name_en,
+        (employee_band_code between 1 and 3)            as is_sme,
+        weight_common
+    from {{ ref('int_safe__q0b_pressingness') }}
+    where wave_number >= 30
+      and reference_period = '3m'
 
 ),
 
@@ -82,26 +76,10 @@ all_questions as (
 
 ),
 
-with_ea as (
-
-    select * from all_questions
-
-    union all
-
-    select wave_number, question_id, sub_item, response_3m, is_nonresponse,
-           survey_year, survey_period, survey_period_label,
-           'EA'        as country_code,
-           'Euro Area' as country_name_en,
-           is_sme, is_euro_area, weight_common
-    from all_questions
-    where is_euro_area
-
-),
-
 sized as (
 
     select s.*, sc.firm_size
-    from with_ea s
+    from all_questions s
     cross join (values ('all'), ('sme'), ('large')) as sc(firm_size)
     where
         sc.firm_size = 'all'

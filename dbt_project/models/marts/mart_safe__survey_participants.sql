@@ -30,36 +30,16 @@ with base as (
         country_code,
         country_name_en,
         is_sme,
-        is_euro_area,
         weight_common
     from {{ ref('int_safe__firm_survey_responses') }}
     where wave_number >= 30
 
 ),
 
-with_ea as (
-
-    -- Country-level rows
-    select wave_number, survey_year, survey_period, survey_period_label,
-           country_code, country_name_en, is_sme, weight_common
-    from base
-
-    union all
-
-    -- Euro area aggregate pseudo-row
-    select wave_number, survey_year, survey_period, survey_period_label,
-           'EA'        as country_code,
-           'Euro Area' as country_name_en,
-           is_sme, weight_common
-    from base
-    where is_euro_area
-
-),
-
 sized as (
 
     select s.*, sc.firm_size
-    from with_ea s
+    from base s
     cross join (values ('all'), ('sme'), ('large')) as sc(firm_size)
     where
         sc.firm_size = 'all'

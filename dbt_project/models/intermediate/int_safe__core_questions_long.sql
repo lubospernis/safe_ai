@@ -45,6 +45,7 @@ firm as (
         wave_number,
         country_code,
         country_name_en,
+        is_euro_area,
         employee_band_code,
         firm_size_en,
         is_sme,
@@ -516,13 +517,14 @@ unpivoted as (
 
 ),
 
-final as (
+country_rows as (
 
     select
         u.permid,
         u.wave_number,
         f.country_code,
         f.country_name_en,
+        f.is_euro_area,
         f.employee_band_code,
         f.firm_size_en,
         f.is_sme,
@@ -539,12 +541,6 @@ final as (
         u.response_3m,
         u.response_3m_rec,
 
-        -- Non-response flag based on whichever response column is populated.
-        -- For most questions: -1 (N/A), -2 (don't know), -99 (refused),
-        --   7 (not asked/routing), 99 (not asked/routing).
-        -- Exception — q4rec: code 7 = "not relevant" is a valid substantive answer;
-        --   only 9 and 99 are non-response.
-        -- Exception — q31, q34: continuous numeric variables; non-response is -9999.
         case
             when u.question_id = 'q4rec'
                 then coalesce(u.response_raw, u.response_3m) in (9, 99)
@@ -556,6 +552,31 @@ final as (
 
     from unpivoted u
     left join firm f using (permid, wave_number)
+    -- Exclude EA pseudo-rows from firm spine — EA is added via UNION below
+    where f.country_code != 'EA'
+
+),
+
+final as (
+
+    select * from country_rows
+
+    union all
+
+    -- Euro Area pseudo-rows: duplicate every EA-member firm's question rows
+    -- with country_code = 'EA' so marts can GROUP BY country_code without
+    -- special-casing an aggregate.
+    select
+        permid, wave_number,
+        'EA'          as country_code,
+        'Euro Area'   as country_name_en,
+        is_euro_area,
+        employee_band_code, firm_size_en, is_sme, sector_code, sector_en,
+        survey_year, survey_period, survey_period_label, weight_common,
+        question_id, sub_item, response_raw, response_rec, response_3m, response_3m_rec,
+        is_nonresponse
+    from country_rows
+    where is_euro_area
 
 )
 

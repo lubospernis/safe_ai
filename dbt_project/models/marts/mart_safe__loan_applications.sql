@@ -56,25 +56,22 @@
 with q7a as (
 
     select
-        q.permid,
-        q.wave_number,
-        f.survey_year,
-        f.survey_period,
-        f.survey_period_label,
-        f.country_code,
-        f.country_name_en,
-        q.sub_item,
-        q.response_3m                                               as q7a_response,
-        q.weight_common,
-        q.is_nonresponse                                            as q7a_nonresponse,
-        f.is_euro_area
-    from {{ ref('int_safe__core_questions_long') }} q
-    join {{ ref('int_safe__firm_survey_responses') }} f
-        using (permid, wave_number)
-    where q.question_id = 'q7a'
-      and f.employee_band_code between 1 and 3
-      and q.wave_number >= 30
-      and q.response_3m is not null
+        permid,
+        wave_number,
+        survey_year,
+        survey_period,
+        survey_period_label,
+        country_code,
+        country_name_en,
+        sub_item,
+        response_3m                                                 as q7a_response,
+        weight_common,
+        is_nonresponse                                              as q7a_nonresponse
+    from {{ ref('int_safe__core_questions_long') }}
+    where question_id = 'q7a'
+      and employee_band_code between 1 and 3
+      and wave_number >= 30
+      and response_3m is not null
 
 ),
 
@@ -115,27 +112,10 @@ combined as (
         a.q7a_nonresponse,
         b.q7b_response,
         b.q7b_nonresponse,
-        a.weight_common,
-        a.is_euro_area
+        a.weight_common
 
     from q7a a
     left join q7b b using (permid, wave_number, sub_item)
-
-),
-
-with_ea as (
-
-    select * from combined
-
-    union all
-
-    select wave_number, survey_year, survey_period, survey_period_label,
-           'EA' as country_code, 'Euro Area' as country_name_en,
-           sub_item, instrument_label,
-           q7a_response, q7a_nonresponse, q7b_response, q7b_nonresponse, weight_common,
-           is_euro_area
-    from combined
-    where is_euro_area
 
 ),
 
@@ -217,7 +197,7 @@ aggregated as (
             2
         )                                                               as financing_gap_wtd
 
-    from with_ea
+    from combined
     group by all
 
 )

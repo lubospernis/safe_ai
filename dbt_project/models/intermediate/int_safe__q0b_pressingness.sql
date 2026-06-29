@@ -46,6 +46,7 @@ firm as (
         wave_number,
         country_code,
         country_name_en,
+        is_euro_area,
         employee_band_code,
         firm_size_en,
         sector_code,
@@ -55,6 +56,8 @@ firm as (
         survey_period_label,
         weight_common
     from {{ ref('int_safe__firm_survey_responses') }}
+    -- Exclude EA pseudo-rows — EA is added via UNION in final
+    where country_code != 'EA'
 
 ),
 
@@ -129,6 +132,7 @@ final as (
         -- Firm context
         f.country_code,
         f.country_name_en,
+        f.is_euro_area,
         f.employee_band_code,
         f.firm_size_en,
         f.sector_code,
@@ -143,6 +147,24 @@ final as (
         on u.permid = f.permid
         and u.wave_number = f.wave_number
 
+),
+
+ea as (
+
+    -- Euro Area pseudo-rows
+    select
+        permid, wave_number, reference_period, problem_id, problem_label,
+        pressingness_score, is_nonresponse, q0b_open,
+        'EA'          as country_code,
+        'Euro Area'   as country_name_en,
+        is_euro_area,
+        employee_band_code, firm_size_en, sector_code, sector_en,
+        survey_year, survey_period, survey_period_label, weight_common
+    from final
+    where is_euro_area
+
 )
 
 select * from final
+union all
+select * from ea

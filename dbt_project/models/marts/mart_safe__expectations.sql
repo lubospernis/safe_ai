@@ -54,44 +54,27 @@
 with source as (
 
     select
-        q.wave_number,
-        f.survey_year,
-        f.survey_period,
-        f.survey_period_label,
-        f.country_code,
-        f.country_name_en,
-        q.question_id,
-        q.sub_item,
+        wave_number,
+        survey_year,
+        survey_period,
+        survey_period_label,
+        country_code,
+        country_name_en,
+        question_id,
+        sub_item,
         -- For Q34, prefer confirmed value (response_3m_rec) over raw 3m where available
         case
-            when q.question_id = 'q34' and q.response_3m_rec is not null
-                then q.response_3m_rec
-            else q.response_3m
+            when question_id = 'q34' and response_3m_rec is not null
+                then response_3m_rec
+            else response_3m
         end                                                         as response_value,
-        q.weight_common,
-        q.is_nonresponse,
-        f.is_euro_area
-    from {{ ref('int_safe__core_questions_long') }} q
-    join {{ ref('int_safe__firm_survey_responses') }} f
-        using (permid, wave_number)
-    where q.question_id in ('q31', 'q33', 'q34')
-      and f.employee_band_code between 1 and 3
-      and q.wave_number >= 30
-      and q.response_3m is not null
-
-),
-
-with_ea as (
-
-    select * from source
-
-    union all
-
-    select wave_number, survey_year, survey_period, survey_period_label,
-           'EA' as country_code, 'Euro Area' as country_name_en,
-           question_id, sub_item, response_value, weight_common, is_nonresponse, is_euro_area
-    from source
-    where is_euro_area
+        weight_common,
+        is_nonresponse
+    from {{ ref('int_safe__core_questions_long') }}
+    where question_id in ('q31', 'q33', 'q34')
+      and employee_band_code between 1 and 3
+      and wave_number >= 30
+      and response_3m is not null
 
 ),
 
@@ -116,7 +99,7 @@ labels as (
             when question_id = 'q34' and sub_item = 'd' then 'Number of employees'
         end                                                         as sub_item_label
 
-    from with_ea
+    from source
 
 ),
 

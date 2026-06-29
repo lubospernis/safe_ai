@@ -221,3 +221,37 @@ decoded as (
 )
 
 select * from decoded
+
+union all
+
+-- Euro Area pseudo-rows: duplicate every EA-member firm with country_code = 'EA'.
+-- This lets all downstream marts treat EA as a regular country without any
+-- special-casing — just GROUP BY country_code.
+select
+    permid,
+    wave_number,
+    survey_year,
+    survey_period,
+    survey_period_label,
+    interview_date,
+    is_latest_wave,
+    is_euro_area,
+    'EA'          as country_code,
+    'Euro Area'   as country_name_en,
+    employee_band_code,
+    firm_size_en,
+    is_sme,
+    sector_code,
+    sector_en,
+    firm_age_code,
+    firm_age_en,
+    ownership_code,
+    ownership_en,
+    turnover_code,
+    turnover_en,
+    profitable_6m,
+    vulnerable_6m,
+    weight_common,
+    weight_enterprise
+from decoded
+where is_euro_area

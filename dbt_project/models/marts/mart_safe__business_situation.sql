@@ -39,38 +39,21 @@
 with source as (
 
     select
-        q.wave_number,
-        f.survey_year,
-        f.survey_period,
-        f.survey_period_label,
-        f.country_code,
-        f.country_name_en,
-        q.sub_item,
-        q.response_3m                                               as response_raw,
-        q.weight_common,
-        q.is_nonresponse,
-        f.is_euro_area
-    from {{ ref('int_safe__core_questions_long') }} q
-    join {{ ref('int_safe__firm_survey_responses') }} f
-        using (permid, wave_number)
-    where q.question_id = 'q2'
-      and f.employee_band_code between 1 and 3
-      and q.wave_number >= 30
-      and q.response_3m is not null
-
-),
-
-with_ea as (
-
-    select * from source
-
-    union all
-
-    select wave_number, survey_year, survey_period, survey_period_label,
-           'EA' as country_code, 'Euro Area' as country_name_en,
-           sub_item, response_raw, weight_common, is_nonresponse, is_euro_area
-    from source
-    where is_euro_area
+        wave_number,
+        survey_year,
+        survey_period,
+        survey_period_label,
+        country_code,
+        country_name_en,
+        sub_item,
+        response_3m                                                 as response_raw,
+        weight_common,
+        is_nonresponse
+    from {{ ref('int_safe__core_questions_long') }}
+    where question_id = 'q2'
+      and employee_band_code between 1 and 3
+      and wave_number >= 30
+      and response_3m is not null
 
 ),
 
@@ -91,7 +74,7 @@ labels as (
             when 'j' then 'Debt compared to assets'
         end                                                         as sub_item_label
 
-    from with_ea
+    from source
 
 ),
 

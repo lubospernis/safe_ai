@@ -78,21 +78,42 @@ SECTIONS = [
         "focus": "Lead with Slovakia turnover trend. Compare profit and cost indicators to EA.",
     },
     {
-        "id": "outlook",
-        "sql_file": "outlook.sql",
-        "title": "Expected Changes in Turnover and Investment (Q26)",
+        "id": "financing_gap",
+        "sql_file": "financing_gap.sql",
+        "title": "Financing Need vs Availability Gap (Q5/Q9)",
         "sign_note": (
-            "positive net balance = more firms expect increase over next 2 quarters; "
-            "negative = more firms expect decrease."
+            "financing_gap_wtd = Q5 net balance (need) minus Q9 net balance (availability). "
+            "Positive = need exceeds availability (adverse). "
+            "net_balance_wtd on Q5 rows: positive = more firms report increased need. "
+            "net_balance_wtd on Q9 rows: positive = more firms report improved availability (favourable). "
+            "Values are net balances in percentage points."
         ),
-        "value_col": "net_balance_wtd",
+        "value_col": "financing_gap_wtd",
         "panel_col": "sub_item",
         "panel_label_col": "sub_item_label",
         "series_col": "country_code",
-        "pinned_panels": ["a", "b"],
+        "pinned_panels": ["a"],
         "max_panels": 2,
         "always_include": False,
-        "focus": "Focus on Slovakia vs EA outlook for investment and turnover.",
+        "routed": True,
+        "focus": "Lead with Slovakia bank loan financing gap vs EA. Positive gap = need outstrips supply.",
+    },
+    {
+        "id": "financing_purpose",
+        "sql_file": "financing_purpose.sql",
+        "title": "Purpose of Financing (Q6A)",
+        "sign_note": (
+            "pct_cited_wtd = % of firms that cited this purpose (multi-select, so percentages can sum > 100%). "
+            "Not a net balance. Higher = more firms used financing for this purpose."
+        ),
+        "value_col": "pct_cited_wtd",
+        "panel_col": "purpose_id",
+        "panel_label_col": "purpose_label",
+        "series_col": "country_code",
+        "pinned_panels": ["2"],
+        "max_panels": 2,
+        "always_include": False,
+        "focus": "Focus on Slovakia vs EA. Highlight where SK financing purpose mix differs from the euro area.",
     },
     {
         "id": "loan_applications",

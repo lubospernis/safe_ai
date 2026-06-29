@@ -421,7 +421,7 @@ ANNEX_GROUPS = [
     ("Financing needs &amp; availability", ["Q4", "Q5", "Q9", "Q11"]),
     ("Financing conditions &amp; terms", ["Q10", "Q23"]),
     ("Financing applications", ["Q7A", "Q7B", "Q6A"]),
-    ("Outlook &amp; expectations", ["Q26", "Q31", "Q33", "Q34"]),
+    ("Outlook &amp; expectations", ["Q31", "Q33", "Q34"]),
 ]
 ANNEX_Q_IDS = {q for _, qs in ANNEX_GROUPS for q in qs}
 

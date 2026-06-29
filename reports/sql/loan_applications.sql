@@ -21,7 +21,7 @@ SELECT
     f.discouragement_rate_wtd,
     f.rejection_rate_wtd,
     f.financing_gap_wtd,
-    f.n_respondents
+    f.n_total AS n_respondents
 FROM main_safe.mart_safe__loan_applications f
 WHERE f.country_code IN ('SK', 'EA', 'DE')
   AND f.sub_item = 'a'

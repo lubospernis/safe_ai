@@ -805,6 +805,87 @@ models:
           'sme'   = micro, small, medium firms (employee_band_code 1–3, up to 249 employees).
           'large' = large firms (employee_band_code 4, 250+ employees).
 
+  - name: mart_safe__q11_factors
+    description: >
+      Net balances for Q11 — self-assessed factors affecting the availability of external
+      financing. Question: "For each of the following factors, would you say that they have
+      improved, remained unchanged or deteriorated over the past period?"
+      Response codes: 1=Improved, 2=Remained unchanged, 3=Deteriorated, 7=N/A, 9=DK.
+      Codes 7 and 9 excluded from denominator.
+      Net balance = % improved − % deteriorated (weighted by weight_common).
+      Positive = factor improving (FAVOURABLE for financing access).
+      Negative = factor deteriorating (ADVERSE — potential credit supply constraint).
+
+      Key sub-items for credit supply analysis:
+        f = Willingness of banks to provide credit  — direct bank supply signal
+        a = General economic outlook (insofar as it affects financing availability)
+        b = Access to public financial support, including guarantees
+        e = Enterprise's credit history                — demand-side creditworthiness
+        c = Enterprise-specific outlook (sales/profitability)
+        d = Enterprise's own capital
+
+      Scope: all firms ('all') and SMEs only ('sme'). Waves 30+ (2024Q1 onward).
+      Aggregation: wave × country × sub_item × firm_size.
+
+    config:
+      tags: ["safe", "ecb", "survey", "mart", "q11", "credit_supply"]
+
+    columns:
+      - name: country_code
+        description: ISO 3166-1 alpha-2 country code.
+        tests:
+          - not_null
+      - name: country_name_en
+        description: Full English country name.
+      - name: wave_number
+        description: Survey wave (30 = 2024Q1 onward).
+      - name: survey_year
+        description: Calendar year of the survey wave.
+      - name: survey_period
+        description: "Survey quarter (Q1–Q4)."
+      - name: survey_period_label
+        description: "Human-readable period label (e.g. '2026Q1')."
+      - name: sub_item
+        description: >
+          Factor code: a=General economic outlook, b=Access to public support/guarantees,
+          c=Enterprise-specific outlook (sales/profitability), d=Enterprise's own capital,
+          e=Enterprise's credit history, f=Willingness of banks to provide credit,
+          g=Willingness of business partners (trade credit), h=Willingness of investors,
+          i=Willingness to extend credit to customers (wave 29+).
+      - name: sub_item_label
+        description: Human-readable label for the factor.
+      - name: firm_size
+        description: "'all' = all firms; 'sme' = micro/small/medium (bands 1–3)."
+        tests:
+          - accepted_values:
+              values: ['all', 'sme']
+      - name: n_respondents
+        description: Count of valid responses (codes 7 and 9 excluded).
+      - name: n_nonresponse
+        description: Count of non-responses (codes 7=N/A and 9=DK) excluded from metrics.
+      - name: pct_improved_wtd
+        description: Weighted % reporting the factor improved (code 1). Range 0–100.
+      - name: pct_unchanged_wtd
+        description: Weighted % reporting the factor unchanged (code 2). Range 0–100.
+      - name: pct_deteriorated_wtd
+        description: Weighted % reporting the factor deteriorated (code 3). Range 0–100.
+      - name: net_balance_wtd
+        description: >
+          Weighted net balance = pct_improved − pct_deteriorated. Range −100 to +100.
+          Positive = factor improving on net (favourable for access to financing).
+          Negative = factor deteriorating on net (adverse — potential credit supply constraint).
+          For sub_item='f' (bank willingness): negative is the key credit supply warning signal.
+        meta:
+          unit: pp
+          range: "−100 to +100"
+          positive_means: "factor improving (favourable for financing access)"
+          negative_means: "factor deteriorating (adverse, potential credit supply constraint)"
+        tests:
+          - dbt_utils.expression_is_true:
+              expression: ">= -100 and net_balance_wtd <= 100"
+              config:
+                where: "net_balance_wtd is not null"
+
   - name: mart_safe__survey_participants
     description: >
       Firm-level participation counts by wave × country × firm_size.

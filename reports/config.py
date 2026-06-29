@@ -116,6 +116,28 @@ SECTIONS = [
         "focus": "Focus on Slovakia vs EA. Highlight where SK financing purpose mix differs from the euro area.",
     },
     {
+        "id": "q11_factors",
+        "sql_file": "q11_factors.sql",
+        "title": "Factors Affecting Access to External Financing (Q11)",
+        "sign_note": (
+            "positive net balance = factor IMPROVED (more firms say better than worse — FAVOURABLE for financing access). "
+            "negative net balance = factor DETERIORATED (more firms say worse — ADVERSE, potential credit supply constraint). "
+            "Key sub-items: f=willingness of banks (direct supply signal), "
+            "a=general economic outlook (macro drag), b=access to public support/guarantees."
+        ),
+        "value_col": "net_balance_wtd",
+        "panel_col": "sub_item",
+        "panel_label_col": "sub_item_label",
+        "series_col": "country_code",
+        "pinned_panels": ["f"],
+        "max_panels": 2,
+        "always_include": False,
+        "focus": (
+            "Lead with Q11f (willingness of banks) for Slovakia vs EA — this is the key credit supply indicator. "
+            "If Q11a (economic outlook) is also deteriorating, note that as a macro-level drag on supply."
+        ),
+    },
+    {
         "id": "loan_applications",
         "sql_file": "loan_applications.sql",
         "title": "Bank Loan Access: Applications and Financing Gap (Q7A/Q7B)",

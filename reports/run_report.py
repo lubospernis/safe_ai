@@ -418,7 +418,8 @@ def get_exec_summary(rendered_sections: list[dict]) -> str:
 # Questions to include, grouped into display blocks
 ANNEX_GROUPS = [
     ("Business situation", ["Q0b", "Q2"]),
-    ("Financing needs &amp; availability", ["Q4", "Q5", "Q9", "Q11"]),
+    ("Financing needs &amp; availability", ["Q4", "Q5", "Q9"]),
+    ("Credit supply factors", ["Q11"]),
     ("Financing conditions &amp; terms", ["Q10", "Q23"]),
     ("Financing applications", ["Q7A", "Q7B", "Q6A"]),
     ("Outlook &amp; expectations", ["Q31", "Q33", "Q34"]),

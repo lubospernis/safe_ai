@@ -38,8 +38,6 @@ COUNTRY_COLORS = {"SK": "#bd4e35", "EA": "#0777b3", "AT": "#2d7a00", "DE": "#e18
 # sub_item 'a' (interest rates) is always shown regardless of interest check
 ALWAYS_SHOW = {"a"}
 
-# Wave filter is applied in q10.sql; this constant is kept for reference only
-CHART_WAVE_MIN = 34
 
 MOTHERDUCK_TOKEN = os.environ["MOTHERDUCK_TOKEN"]
 ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]

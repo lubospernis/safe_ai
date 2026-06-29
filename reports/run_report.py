@@ -5,7 +5,9 @@ Loops over SECTIONS in config.py:
   1. Fetch data for all sections via MotherDuck
   2. Parallel Haiku interest checks — returns interesting flag, chart_type, best_panel
   3. For interesting sections: build chart + generate Sonnet bullets
-  4. Assemble single multi-section HTML report
+  4. Generate executive summary (Sonnet prose) from all rendered sections
+  5. Build collapsible question annex from annex.csv
+  6. Assemble single multi-section HTML report
 
 Required environment variables:
   MOTHERDUCK_TOKEN   — MotherDuck service token
@@ -13,6 +15,7 @@ Required environment variables:
 """
 
 import base64
+import csv
 import io
 import json
 import os
@@ -39,6 +42,7 @@ from config import SECTIONS  # noqa: E402  (local import after matplotlib setup)
 
 SQL_DIR = Path(__file__).parent / "sql"
 OUTPUT_DIR = Path(__file__).parent / "output"
+ANNEX_CSV = Path(__file__).parent.parent / "collateral" / "annex.csv"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 COUNTRIES = {"SK": "Slovakia", "EA": "Euro Area", "DE": "Germany"}
@@ -47,6 +51,12 @@ COUNTRY_ORDER = ["SK", "EA", "DE"]
 
 MOTHERDUCK_TOKEN = os.environ["MOTHERDUCK_TOKEN"]
 ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
+
+ROUTED_FOOTNOTE = (
+    "<p class=\"footnote\">* Only firms that have used or applied for this type of financing "
+    "in the past are asked this question. A lower n relative to the total sample is by design "
+    "and does not indicate a data quality issue — see ECB SAFE methodology for details.</p>"
+)
 
 
 # ---------------------------------------------------------------------------
@@ -363,7 +373,133 @@ def get_bullets(sec: dict, df: pd.DataFrame) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# 5. Build HTML
+# 5. Executive summary (Sonnet prose)
+# ---------------------------------------------------------------------------
+
+EXEC_SUMMARY_SYSTEM = textwrap.dedent("""
+    You are a senior ECB economist writing an executive summary for a technical director
+    reviewing the latest ECB SAFE survey results for Slovakia.
+
+    The summary should:
+    - Open with the single most important finding for Slovakia in this wave
+    - Cover financing conditions, access to finance, and business situation where notable
+    - Compare Slovakia to the euro area average; highlight any significant divergence
+    - Use precise language: "a net X% of firms reported..." not "the index rose to X"
+    - Positive net balance = net tightening/rising (adverse for firms unless stated otherwise)
+    - Negative net balance = net easing/falling (favourable for firms unless stated otherwise)
+    - Tone: concise, analytical, no hedging. Flowing prose — no bullet points, no headers.
+    - Max 130 words.
+""").strip()
+
+
+def get_exec_summary(rendered_sections: list[dict]) -> str:
+    lines = ["Below are the key findings per topic from the latest wave:\n"]
+    for s in rendered_sections:
+        lines.append(f"## {s['title']}")
+        lines.append(f"Sign convention: {s['sign_note']}")
+        for b in s["bullets"]:
+            lines.append(f"  {b}")
+        lines.append("")
+
+    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    msg = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=300,
+        system=EXEC_SUMMARY_SYSTEM,
+        messages=[{"role": "user", "content": "\n".join(lines)}],
+    )
+    return msg.content[0].text.strip()
+
+
+# ---------------------------------------------------------------------------
+# 6. Collapsible question annex
+# ---------------------------------------------------------------------------
+
+# Questions to include, grouped into display blocks
+ANNEX_GROUPS = [
+    ("Business situation", ["Q0b", "Q2"]),
+    ("Financing needs &amp; availability", ["Q4", "Q5", "Q9", "Q11"]),
+    ("Financing conditions &amp; terms", ["Q10", "Q23"]),
+    ("Financing applications", ["Q7A", "Q7B", "Q6A"]),
+    ("Outlook &amp; expectations", ["Q26", "Q31", "Q33", "Q34"]),
+]
+ANNEX_Q_IDS = {q for _, qs in ANNEX_GROUPS for q in qs}
+
+
+def _clean_question_text(text: str) -> str:
+    """Strip the 'Qxx/Qxx_g1.' or 'Qxx.' prefix from question text."""
+    import re
+    # Remove patterns like "Q0b/Q0b_g1. " or "Q10. " or "Q7A/Q7A_g1. "
+    text = re.sub(r'^[A-Za-z0-9]+(?:/[A-Za-z0-9_]+)*\.\s*', '', text)
+    # Also remove leading "Looking ahead, " style if it came from Q34 which has no prefix
+    return text.strip()
+
+
+def build_annex_html(annex_csv_path: Path) -> str:
+    # Read annex and extract one question text per question ID (round 30 = col index 7)
+    q_texts: dict[str, tuple[str, str]] = {}  # q_id -> (sample, text)
+    try:
+        with open(annex_csv_path, newline="", encoding="utf-8-sig") as f:
+            reader = csv.reader(f)
+            rows = list(reader)
+        for row in rows[1:]:
+            if len(row) > 7 and row[1] == "question":
+                q_id = row[2].strip()
+                # Normalise: Q0b -> Q0b, Q7A -> Q7A  (keep case)
+                # Check against ANNEX_Q_IDS case-insensitively
+                matched = next((k for k in ANNEX_Q_IDS if k.lower() == q_id.lower()), None)
+                if matched and matched not in q_texts:
+                    sample = row[4].strip()
+                    text = row[7].strip()
+                    if text:
+                        q_texts[matched] = (sample, _clean_question_text(text))
+    except FileNotFoundError:
+        return ""
+
+    # Build HTML groups
+    group_rows = []
+    for group_label, q_ids in ANNEX_GROUPS:
+        first = True
+        for q_id in q_ids:
+            entry = q_texts.get(q_id)
+            if not entry:
+                continue
+            sample, text = entry
+            sample_badge = (
+                '<span class="badge-ecb">ECB module</span>'
+                if "ECB" in sample
+                else '<span class="badge-common">Common</span>'
+            )
+            group_cell = f'<td class="group-cell">{group_label}</td>' if first else '<td class="group-cell"></td>'
+            first = False
+            group_rows.append(
+                f"    <tr>{group_cell}"
+                f'<td><strong>{q_id}</strong></td>'
+                f"<td>{text[:200]}{'…' if len(text) > 200 else ''}</td>"
+                f"<td>{sample_badge}</td></tr>"
+            )
+
+    if not group_rows:
+        return ""
+
+    rows_html = "\n".join(group_rows)
+    return textwrap.dedent(f"""
+<details>
+  <summary>Survey questions collected on a 3-month basis ({len(q_texts)} questions)</summary>
+  <table>
+    <thead>
+      <tr><th>Topic</th><th>ID</th><th>Question</th><th>Module</th></tr>
+    </thead>
+    <tbody>
+{rows_html}
+    </tbody>
+  </table>
+</details>
+""").strip()
+
+
+# ---------------------------------------------------------------------------
+# 7. Build HTML
 # ---------------------------------------------------------------------------
 
 HTML_PAGE = textwrap.dedent("""
@@ -372,22 +508,47 @@ HTML_PAGE = textwrap.dedent("""
 <head>
 <meta charset="UTF-8">
 <style>
-  body    {{ font-family: Arial, sans-serif; background: #f4f4f4; color: #231f20;
-             max-width: 960px; margin: 40px auto; padding: 0 24px; }}
-  h1      {{ font-size: 22px; font-weight: bold; margin-bottom: 4px; }}
-  .meta   {{ color: #6a6a6a; font-size: 13px; margin-bottom: 36px; }}
-  section {{ background: #fff; border: 1px solid #e0e0e0; border-radius: 6px;
-             padding: 24px 28px; margin-bottom: 28px; }}
-  h2      {{ font-size: 16px; font-weight: bold; margin: 0 0 12px 0; color: #231f20; }}
-  ul      {{ padding-left: 20px; margin: 0 0 16px 0; }}
-  li      {{ margin-bottom: 6px; font-size: 13.5px; line-height: 1.5; }}
-  img     {{ width: 100%; margin-top: 8px; }}
-  .footer {{ color: #adadad; font-size: 11px; margin-top: 32px; text-align: center; }}
+  body        {{ font-family: Arial, sans-serif; background: #f4f4f4; color: #231f20;
+                 max-width: 960px; margin: 40px auto; padding: 0 24px; }}
+  h1          {{ font-size: 22px; font-weight: bold; margin-bottom: 4px; }}
+  .meta       {{ color: #6a6a6a; font-size: 13px; margin-bottom: 20px; }}
+  section     {{ background: #fff; border: 1px solid #e0e0e0; border-radius: 6px;
+                 padding: 24px 28px; margin-bottom: 28px; }}
+  h2          {{ font-size: 16px; font-weight: bold; margin: 0 0 12px 0; color: #231f20; }}
+  ul          {{ padding-left: 20px; margin: 0 0 16px 0; }}
+  li          {{ margin-bottom: 6px; font-size: 13.5px; line-height: 1.5; }}
+  img         {{ width: 100%; margin-top: 8px; }}
+  .footnote   {{ font-size: 11px; color: #888; margin-top: 10px; line-height: 1.4; }}
+  .footer     {{ color: #adadad; font-size: 11px; margin-top: 32px; text-align: center; }}
+
+  /* Executive summary */
+  #exec-summary               {{ background: #eef4fb; border-left: 4px solid #0777b3; }}
+  #exec-summary h2            {{ color: #0777b3; }}
+  #exec-summary p             {{ font-size: 14px; line-height: 1.8; margin: 0; }}
+
+  /* Collapsible annex */
+  details     {{ background: #fff; border: 1px solid #e0e0e0; border-radius: 6px;
+                 padding: 14px 22px; margin-bottom: 20px; }}
+  summary     {{ font-weight: bold; font-size: 13px; cursor: pointer; color: #555;
+                 user-select: none; }}
+  summary:hover {{ color: #231f20; }}
+  details table           {{ width: 100%; border-collapse: collapse; margin-top: 12px;
+                             font-size: 12px; }}
+  details td, details th  {{ padding: 5px 8px; border-bottom: 1px solid #f0f0f0;
+                             vertical-align: top; }}
+  details th              {{ font-weight: bold; background: #f8f8f8; text-align: left; }}
+  .group-cell             {{ color: #888; font-style: italic; white-space: nowrap; }}
+  .badge-common           {{ background: #e8f4e8; color: #2d7a00; padding: 1px 6px;
+                             border-radius: 3px; font-size: 11px; }}
+  .badge-ecb              {{ background: #eef4fb; color: #0777b3; padding: 1px 6px;
+                             border-radius: 3px; font-size: 11px; }}
 </style>
 </head>
 <body>
 <h1>ECB SAFE Survey — Automatic Report</h1>
 <p class="meta">Slovakia · Euro Area · Germany &nbsp;|&nbsp; Generated {date}</p>
+{annex}
+{exec_summary_section}
 {sections}
 <p class="footer">Source: ECB SAFE microdata. Net balance = % reporting increase minus % reporting decrease.
 Positive = tightening/rising (adverse for firms unless noted). Negative = easing/falling.</p>
@@ -401,25 +562,43 @@ SECTION_TMPL = textwrap.dedent("""
   <ul>
 {bullets}
   </ul>
-  <img src="data:image/png;base64,{chart_b64}" alt="{title} chart">
+{footnote}  <img src="data:image/png;base64,{chart_b64}" alt="{title} chart">
+</section>
+""").strip()
+
+EXEC_SUMMARY_TMPL = textwrap.dedent("""
+<section id="exec-summary">
+  <h2>Executive Summary</h2>
+  <p>{text}</p>
 </section>
 """).strip()
 
 
-def build_html(rendered_sections: list[dict]) -> str:
+def build_html(
+    rendered_sections: list[dict],
+    annex_html: str,
+    exec_summary: str,
+) -> str:
     section_html = "\n\n".join(
         SECTION_TMPL.format(
             title=s["title"],
             bullets="\n".join(f"    <li>{b.lstrip('• ').strip()}</li>" for b in s["bullets"]),
+            footnote=ROUTED_FOOTNOTE + "\n" if s.get("routed") else "",
             chart_b64=base64.b64encode(s["chart_png"]).decode(),
         )
         for s in rendered_sections
     )
-    return HTML_PAGE.format(date=date.today().strftime("%d %b %Y"), sections=section_html)
+    exec_section = EXEC_SUMMARY_TMPL.format(text=exec_summary) if exec_summary else ""
+    return HTML_PAGE.format(
+        date=date.today().strftime("%d %b %Y"),
+        annex=annex_html,
+        exec_summary_section=exec_section,
+        sections=section_html,
+    )
 
 
 # ---------------------------------------------------------------------------
-# 6. Main
+# 8. Main
 # ---------------------------------------------------------------------------
 
 def main() -> None:
@@ -450,10 +629,23 @@ def main() -> None:
         for b in bullets:
             print(f"    {b}")
 
-        rendered.append({"title": sec["title"], "bullets": bullets, "chart_png": chart_png})
+        rendered.append({
+            "title": sec["title"],
+            "bullets": bullets,
+            "chart_png": chart_png,
+            "sign_note": sec["sign_note"],
+            "routed": sec.get("routed", False),
+        })
+
+    print("Generating executive summary...")
+    exec_summary = get_exec_summary(rendered) if rendered else ""
+    print(f"  {exec_summary[:120]}...")
+
+    print("Building question annex...")
+    annex_html = build_annex_html(ANNEX_CSV)
 
     print("Assembling HTML...")
-    html = build_html(rendered)
+    html = build_html(rendered, annex_html, exec_summary)
 
     out_path = OUTPUT_DIR / "report_latest.html"
     out_path.write_text(html, encoding="utf-8")

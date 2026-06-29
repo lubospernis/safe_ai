@@ -14,6 +14,8 @@ Each entry defines one report section:
   max_panels     — hard cap on number of panels shown (≤ 2 recommended)
   always_include — if True, section shown even if interest check returns False
   focus          — country/topic focus injected into bullet prompt
+  routed         — if True, a methodology footnote is added explaining that only
+                   firms for which the instrument is relevant are asked (Q5/Q9/Q10)
 """
 
 SECTIONS = [
@@ -33,6 +35,7 @@ SECTIONS = [
         "pinned_panels": ["a"],
         "max_panels": 2,
         "always_include": True,
+        "routed": True,
         "focus": "Lead with Slovakia (SK). Compare to EA and DE primarily.",
     },
     {

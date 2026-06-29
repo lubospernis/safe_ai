@@ -205,21 +205,28 @@ def build_chart(df: pd.DataFrame, show_sub_items: set[str]) -> bytes:
 # ---------------------------------------------------------------------------
 
 BULLET_SYSTEM = textwrap.dedent("""
-    You are an ECB analyst writing concise bullets for a SAFE survey report.
+    You are an ECB analyst writing concise bullets for a SAFE survey report focused on Slovakia.
     Write at most 3 bullet points about the latest wave's Q10 results.
 
-    Language rules — follow these strictly:
-    - Frame net balances as firm behaviour, not as a metric movement.
-      CORRECT: "a net 26% of firms reported an increase in interest rates"
-      WRONG:   "the net balance widened to 26pp" / "the net balance rose"
-    - When comparing to prior wave: "compared with a net X% in the previous quarter"
-    - Positive net balance = more firms reported tightening (adverse for firms).
-      NEVER say "smoothing", "improving", or imply positive = good.
-    - Negative net balance = more firms reported easing (favourable for firms).
-    - Include sample size where meaningful: "a net 26% of firms (n=80) reported..."
-    - Focus on the most notable change or country divergence across sub-items.
-    - No headers, no preamble. Plain bullets starting with "•".
-    - Keep each bullet to one sentence, max ~25 words.
+    Sign convention — critical, never get this wrong:
+    - net_balance = pct_tightened minus pct_eased
+    - POSITIVE net balance = net TIGHTENING = more firms report conditions getting WORSE
+      → "a net X% of firms reported an INCREASE in interest rates / TIGHTER conditions"
+    - NEGATIVE net balance = net EASING = more firms report conditions getting BETTER
+      → "a net X% of firms reported a DECREASE in interest rates / EASIER conditions"
+    - If net_balance is +27, firms are reporting tightening — say "increase", not "decrease".
+
+    Language rules:
+    - Frame as firm behaviour: "a net 26% of firms reported an increase in interest rates"
+      NOT "the net balance widened to 26pp"
+    - Compare to prior wave: "compared with a net X% in the previous quarter"
+    - Include sample size: "a net 26% of firms (n=80) reported..."
+    - One sentence per bullet, max ~25 words. No headers, no preamble. Bullets start with "•".
+
+    Focus:
+    - Lead with Slovakia (SK). Compare SK to EA and DE primarily.
+    - Highlight where SK diverges from or converges with the euro area.
+    - Pick the most notable sub-item(s) — do not try to cover all six.
 """).strip()
 
 

@@ -43,6 +43,7 @@ with source as (
         f.country_name_en,
         f.weight_common,
         f.is_sme,
+        f.is_euro_area,
         s.q6a_1_3m,
         s.q6a_2_3m,
         s.q6a_3_3m,
@@ -69,6 +70,7 @@ unpivoted as (
         country_name_en,
         weight_common,
         is_sme,
+        is_euro_area,
         purpose_id,
         response
     from source
@@ -84,10 +86,24 @@ unpivoted as (
 
 ),
 
+with_ea as (
+
+    select * from unpivoted
+
+    union all
+
+    select permid, wave_number, survey_year, survey_period, survey_period_label,
+           'EA' as country_code, 'Euro Area' as country_name_en,
+           weight_common, is_sme, is_euro_area, purpose_id, response
+    from unpivoted
+    where is_euro_area
+
+),
+
 sized as (
 
     select u.*, sc.firm_size
-    from unpivoted u
+    from with_ea u
     cross join (values ('all'), ('sme'), ('large')) as sc(firm_size)
     where
         sc.firm_size = 'all'

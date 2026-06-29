@@ -43,6 +43,7 @@ with source as (
         f.country_code,
         f.country_name_en,
         f.is_sme,
+        f.is_euro_area,
         q.question_id,
         q.sub_item,
         q.response_3m                                   as response,
@@ -59,10 +60,24 @@ with source as (
 
 ),
 
+with_ea as (
+
+    select * from source
+
+    union all
+
+    select wave_number, survey_year, survey_period, survey_period_label,
+           'EA' as country_code, 'Euro Area' as country_name_en,
+           is_sme, is_euro_area, question_id, sub_item, response, is_nonresponse, weight_common
+    from source
+    where is_euro_area
+
+),
+
 source_sized as (
 
     select s.*, sc.firm_size
-    from source s
+    from with_ea s
     cross join (values ('all'), ('sme'), ('large')) as sc(firm_size)
     where
         sc.firm_size = 'all'

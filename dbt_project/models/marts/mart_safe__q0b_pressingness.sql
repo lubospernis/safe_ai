@@ -25,10 +25,31 @@
 
 with int_q0b as (
 
-    select * from {{ ref('int_safe__q0b_pressingness') }}
-    where employee_band_code between 1 and 3
-      and wave_number >= 30
-      and reference_period = '3m'
+    select
+        p.*,
+        f.is_euro_area
+    from {{ ref('int_safe__q0b_pressingness') }} p
+    join {{ ref('int_safe__firm_survey_responses') }} f
+        using (permid, wave_number)
+    where p.employee_band_code between 1 and 3
+      and p.wave_number >= 30
+      and p.reference_period = '3m'
+
+),
+
+with_ea as (
+
+    select * from int_q0b
+
+    union all
+
+    select wave_number, permid, reference_period, problem_id, problem_label,
+           pressingness_score, is_nonresponse, q0b_open,
+           'EA' as country_code, 'Euro Area' as country_name_en,
+           employee_band_code, firm_size_en, sector_code, sector_en,
+           survey_year, survey_period, survey_period_label, weight_common, is_euro_area
+    from int_q0b
+    where is_euro_area
 
 ),
 
@@ -41,7 +62,6 @@ aggregated as (
         survey_year,
         survey_period,
         survey_period_label,
-        reference_period,
         problem_id,
         problem_label,
 
@@ -72,7 +92,7 @@ aggregated as (
             / nullif(sum(weight_common) filter (where not is_nonresponse), 0),
         1)                                                      as pct_low_pressing
 
-    from int_q0b
+    from with_ea
     group by all
 
 )

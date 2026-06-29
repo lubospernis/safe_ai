@@ -1,6 +1,6 @@
 -- Chart 1: Changes in terms and conditions of bank financing (Q10)
 -- Countries: Slovakia (SK), Euro Area (EA), Austria (AT), Germany (DE)
--- All firm sizes combined (firm_size = 'all'), wave 30 onward
+-- All firm sizes combined (firm_size = 'all'), wave 35 onward (~last 4 quarters)
 --
 -- net_balance_wtd: positive = net tightening (adverse for firms)
 --                 negative = net easing (favourable for firms)
@@ -27,4 +27,5 @@ FROM main_safe.mart_safe__financing_conditions
 WHERE question_id = 'q10'
   AND country_code IN ('SK', 'EA', 'AT', 'DE')
   AND firm_size = 'all'
+  AND wave_number > 34
 ORDER BY sub_item, country_code, wave_number

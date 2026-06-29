@@ -38,7 +38,7 @@ COUNTRY_COLORS = {"SK": "#bd4e35", "EA": "#0777b3", "AT": "#2d7a00", "DE": "#e18
 # sub_item 'a' (interest rates) is always shown regardless of interest check
 ALWAYS_SHOW = {"a"}
 
-# Only plot waves after this threshold
+# Wave filter is applied in q10.sql; this constant is kept for reference only
 CHART_WAVE_MIN = 34
 
 MOTHERDUCK_TOKEN = os.environ["MOTHERDUCK_TOKEN"]
@@ -119,7 +119,7 @@ def build_chart(df: pd.DataFrame, show_sub_items: set[str]) -> bytes:
     Positive net balance = net tightening (adverse). Negative = net easing.
     Returns PNG bytes.
     """
-    plot_df = df[df["wave_number"] > CHART_WAVE_MIN].copy()
+    plot_df = df.copy()
 
     all_sub = df[["sub_item", "sub_item_label"]].drop_duplicates().sort_values("sub_item")
     visible = all_sub[all_sub["sub_item"].isin(show_sub_items)]
@@ -207,17 +207,21 @@ def build_chart(df: pd.DataFrame, show_sub_items: set[str]) -> bytes:
 # ---------------------------------------------------------------------------
 
 BULLET_SYSTEM = textwrap.dedent("""
-    You are an ECB analyst writing ultra-concise bullets for a SAFE survey report.
+    You are an ECB analyst writing concise bullets for a SAFE survey report.
     Write at most 3 bullet points about the latest wave's Q10 results.
 
-    Style rules — follow these strictly:
-    - Each bullet: max 12 words.
-    - Cite % figures and n: "30% of firms (n=80)..."
-    - Positive net balance = net tightening (more firms report rising rates/costs).
-      Never use the word "smoothing". Positive = adverse for firms.
-    - Negative net balance = easing (favourable for firms).
-    - Focus on the most notable change or country divergence.
+    Language rules — follow these strictly:
+    - Frame net balances as firm behaviour, not as a metric movement.
+      CORRECT: "a net 26% of firms reported an increase in interest rates"
+      WRONG:   "the net balance widened to 26pp" / "the net balance rose"
+    - When comparing to prior wave: "compared with a net X% in the previous quarter"
+    - Positive net balance = more firms reported tightening (adverse for firms).
+      NEVER say "smoothing", "improving", or imply positive = good.
+    - Negative net balance = more firms reported easing (favourable for firms).
+    - Include sample size where meaningful: "a net 26% of firms (n=80) reported..."
+    - Focus on the most notable change or country divergence across sub-items.
     - No headers, no preamble. Plain bullets starting with "•".
+    - Keep each bullet to one sentence, max ~25 words.
 """).strip()
 
 

@@ -32,8 +32,8 @@ SQL_DIR = Path(__file__).parent / "sql"
 OUTPUT_DIR = Path(__file__).parent / "output"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
-COUNTRIES = {"SK": "Slovakia", "EA": "Euro Area", "AT": "Austria", "DE": "Germany"}
-COUNTRY_COLORS = {"SK": "#bd4e35", "EA": "#0777b3", "AT": "#2d7a00", "DE": "#e18727"}
+COUNTRIES = {"SK": "Slovakia", "EA": "Euro Area", "DE": "Germany"}
+COUNTRY_COLORS = {"SK": "#bd4e35", "EA": "#0777b3", "DE": "#e18727"}
 
 # sub_item 'a' (interest rates) is always shown regardless of interest check
 ALWAYS_SHOW = {"a"}
@@ -83,7 +83,7 @@ def check_interest(df: pd.DataFrame) -> set[str]:
     for si, grp in df.groupby("sub_item"):
         label = grp["sub_item_label"].iloc[0]
         lines.append(f"sub_item={si} ({label}):")
-        for country in ["SK", "EA", "AT", "DE"]:
+        for country in ["SK", "EA", "DE"]:
             cdf = grp[grp["country_code"] == country].sort_values("wave_number")
             if cdf.empty:
                 continue
@@ -240,12 +240,13 @@ def get_bullets(df: pd.DataFrame) -> list[str]:
     def fmt(d: pd.DataFrame) -> str:
         rows = []
         for _, r in d.iterrows():
+            n_part = f" | n={r['n_respondents']}" if r['country_code'] in ('SK', 'EA') else ""
             rows.append(
                 f"  {r['country_code']} | {r['sub_item_label']} | "
                 f"net={r['net_balance_wtd']:+.1f}pp | "
                 f"%tightened={r['pct_deteriorated_wtd']:.1f}% | "
-                f"%eased={r['pct_improved_wtd']:.1f}% | "
-                f"n={r['n_respondents']}"
+                f"%eased={r['pct_improved_wtd']:.1f}%"
+                f"{n_part}"
             )
         return "\n".join(rows)
 
@@ -288,7 +289,7 @@ HTML_TEMPLATE = textwrap.dedent("""
 </head>
 <body>
 <h1>Changes in Terms and Conditions of Bank Financing (Q10)</h1>
-<p class="sub">Slovakia · Euro Area · Austria · Germany &nbsp;|&nbsp; Generated {date}</p>
+<p class="sub">Slovakia · Euro Area · Germany &nbsp;|&nbsp; Generated {date}</p>
 <ul>
 {bullets}
 </ul>

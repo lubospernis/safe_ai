@@ -33,7 +33,7 @@ SELECT
     f.n_respondents
 FROM main_safe.mart_safe__financing_conditions f
 WHERE f.question_id = 'q10'
-  AND f.country_code IN ('SK', 'EA', 'AT', 'DE')
+  AND f.country_code IN ('SK', 'EA', 'DE')
   AND f.firm_size = 'all'
   AND f.wave_number IN (SELECT wave_number FROM latest_waves)
 ORDER BY f.sub_item, f.country_code, f.wave_number

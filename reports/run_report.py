@@ -1,26 +1,17 @@
 """
 SAFE Survey Report Generator
-Runs Q10 SQL, generates chart, calls Claude for bullets, writes HTML, sends email.
+Runs Q10 SQL, generates chart, calls Claude for bullets, writes HTML to reports/output/.
 
 Required environment variables:
   MOTHERDUCK_TOKEN   — MotherDuck service token
   ANTHROPIC_API_KEY  — Anthropic API key
-  SMTP_HOST          — e.g. smtp.gmail.com
-  SMTP_PORT          — e.g. 587
-  SMTP_USER          — sender email address
-  SMTP_PASSWORD      — sender email password / app password
-  REPORT_TO_EMAIL    — recipient email address (comma-separated for multiple)
 """
 
 import base64
 import io
 import os
-import smtplib
 import textwrap
 from datetime import date
-from email.mime.image import MIMEImage
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 from pathlib import Path
 
 import anthropic
@@ -36,7 +27,6 @@ matplotlib.use("Agg")
 # Config
 # ---------------------------------------------------------------------------
 
-REPO_ROOT = Path(__file__).parent.parent
 SQL_DIR = Path(__file__).parent / "sql"
 OUTPUT_DIR = Path(__file__).parent / "output"
 OUTPUT_DIR.mkdir(exist_ok=True)
@@ -46,11 +36,6 @@ COUNTRY_COLORS = {"SK": "#bd4e35", "EA": "#0777b3", "AT": "#2d7a00", "DE": "#e18
 
 MOTHERDUCK_TOKEN = os.environ["MOTHERDUCK_TOKEN"]
 ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
-SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
-SMTP_USER = os.environ["SMTP_USER"]
-SMTP_PASSWORD = os.environ["SMTP_PASSWORD"]
-REPORT_TO = [e.strip() for e in os.environ["REPORT_TO_EMAIL"].split(",")]
 
 
 # ---------------------------------------------------------------------------
@@ -245,34 +230,7 @@ def build_html(bullets: list[str], chart_png: bytes) -> str:
 
 
 # ---------------------------------------------------------------------------
-# 5. Send email
-# ---------------------------------------------------------------------------
-
-def send_email(subject: str, html_body: str, chart_png: bytes) -> None:
-    msg = MIMEMultipart("related")
-    msg["Subject"] = subject
-    msg["From"] = SMTP_USER
-    msg["To"] = ", ".join(REPORT_TO)
-
-    alt = MIMEMultipart("alternative")
-    alt.attach(MIMEText(html_body, "html"))
-    msg.attach(alt)
-
-    img = MIMEImage(chart_png, name="q10_chart.png")
-    img.add_header("Content-Disposition", "attachment", filename="q10_chart.png")
-    msg.attach(img)
-
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-        server.ehlo()
-        server.starttls()
-        server.login(SMTP_USER, SMTP_PASSWORD)
-        server.sendmail(SMTP_USER, REPORT_TO, msg.as_string())
-
-    print(f"Email sent to {', '.join(REPORT_TO)}")
-
-
-# ---------------------------------------------------------------------------
-# Main
+# 5. Main
 # ---------------------------------------------------------------------------
 
 def main() -> None:
@@ -294,15 +252,6 @@ def main() -> None:
     out_path = OUTPUT_DIR / "report_q10.html"
     out_path.write_text(html, encoding="utf-8")
     print(f"Saved → {out_path}")
-
-    print("Sending email...")
-    latest_wave = df["wave_number"].max()
-    label = df[df["wave_number"] == latest_wave]["survey_period_label"].iloc[0]
-    send_email(
-        subject=f"SAFE Survey Q10 Report — {label}",
-        html_body=html,
-        chart_png=chart_png,
-    )
 
     print("Done.")
 

@@ -38,6 +38,8 @@ on prior knowledge — the actual codes differ from common assumptions.
 | Business situation (turnover, profit, labour costs, etc.) | `mart_safe__business_situation` |
 | Expected changes in turnover and investment (Q26) | `mart_safe__outlook` |
 | Inflation expectations and risk direction (Q31/Q33/Q34) | `mart_safe__expectations` |
+| Firm counts and SME/large composition per wave × country | `mart_safe__survey_participants` |
+| Response rates per question × sub-item × country | `mart_safe__question_coverage` |
 
 ---
 
@@ -158,6 +160,45 @@ Net balance = % expecting increase − % expecting decrease. SMEs only.
 
 Q31 (inflation rate expectations), Q33 (inflation risk direction), Q34 (expected % changes
 in prices, wages, employment). Includes weighted mean and unweighted percentiles. SMEs only.
+
+---
+
+### mart_safe__survey_participants
+
+Firm counts and SME/large composition by wave × country × firm_size.
+Includes an `'EA'` pseudo-country row summing all euro-area countries.
+Use this to understand sample sizes before quoting net balances.
+
+**Key columns**: `n_firms`, `n_firms_wtd`, `pct_sme`, `pct_large`
+**Note**: `pct_sme`/`pct_large` are only meaningful on `firm_size = 'all'` rows.
+
+```sql
+-- Slovakia vs EA sample sizes, latest wave
+SELECT country_code, firm_size, n_firms, n_firms_wtd, pct_sme
+FROM main_safe.mart_safe__survey_participants
+WHERE wave_number = 38 AND country_code IN ('SK', 'EA') AND firm_size = 'all'
+```
+
+---
+
+### mart_safe__question_coverage
+
+Response rates for every question × sub-item by wave × country × firm_size.
+Covers all questions (Q2, Q5, Q6A, Q7A/B, Q9, Q10, Q26, Q31, Q33, Q34, Q0B).
+Includes an `'EA'` pseudo-country row.
+
+**Key columns**: `n_total`, `n_valid`, `n_nonresponse`, `response_rate_wtd`
+**Note**: routed questions (Q5/Q9/Q10) have `n_total` << total participants because
+only firms for whom the instrument is relevant are asked.
+
+```sql
+-- Coverage for Q5/Q9 bank loans in Slovakia, wave 38
+SELECT question_id, sub_item, firm_size, n_total, n_valid, response_rate_wtd
+FROM main_safe.mart_safe__question_coverage
+WHERE wave_number = 38 AND country_code = 'SK'
+  AND question_id IN ('q5', 'q9') AND sub_item = 'a'
+ORDER BY question_id, firm_size
+```
 
 ---
 

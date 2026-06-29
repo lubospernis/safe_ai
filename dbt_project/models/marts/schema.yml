@@ -804,3 +804,75 @@ models:
           'all'   = all firms regardless of size — use this to match ECB published aggregates.
           'sme'   = micro, small, medium firms (employee_band_code 1–3, up to 249 employees).
           'large' = large firms (employee_band_code 4, 250+ employees).
+
+  - name: mart_safe__survey_participants
+    description: >
+      Firm-level participation counts by wave × country × firm_size.
+      Three-month reference period only (wave 30 / 2024Q1 onward).
+
+      Includes an 'EA' pseudo-country row aggregating all euro-area countries.
+      Use this table to understand sample sizes and SME/large composition before
+      interpreting net balances from other marts.
+
+      firm_size values: 'all', 'sme' (bands 1–3), 'large' (band 4).
+      pct_sme and pct_large are only meaningful on firm_size = 'all' rows.
+    columns:
+      - name: wave_number
+        description: Survey wave number (30 = 2024Q1).
+      - name: country_code
+        description: ISO 2-letter country code, or 'EA' for the euro-area aggregate.
+      - name: country_name_en
+        description: Country name in English, or 'Euro Area'.
+      - name: firm_size
+        description: "'all', 'sme' (bands 1–3), or 'large' (band 4)."
+      - name: n_firms
+        description: Unweighted headcount of survey respondents in this wave/country/size.
+      - name: n_firms_wtd
+        description: Sum of weight_common — ECB-weighted effective count.
+      - name: pct_sme
+        description: >
+          Share of SMEs among all respondents (%). Meaningful on firm_size = 'all' rows only;
+          100 on 'sme' rows, 0 on 'large' rows.
+      - name: pct_large
+        description: >
+          Share of large firms among all respondents (%). Complement of pct_sme on
+          firm_size = 'all' rows.
+
+  - name: mart_safe__question_coverage
+    description: >
+      Response coverage for every question × sub-item by wave × country × firm_size.
+      Three-month reference period only (wave 30 / 2024Q1 onward).
+
+      Covers all questions in int_safe__core_questions_long (Q2, Q5, Q6A, Q7A, Q7B,
+      Q9, Q10, Q11, Q23, Q26, Q31, Q33, Q34, Q4rec) plus Q0B.
+
+      Includes an 'EA' pseudo-country row aggregating all euro-area countries.
+
+      Use this table to understand how many firms answered a given question before
+      quoting a net balance — especially for routed questions (Q5/Q9/Q10) where
+      n_total << total survey respondents because only relevant-instrument firms are asked.
+
+      firm_size values: 'all', 'sme' (bands 1–3), 'large' (band 4).
+    columns:
+      - name: wave_number
+        description: Survey wave number (30 = 2024Q1).
+      - name: country_code
+        description: ISO 2-letter country code, or 'EA' for the euro-area aggregate.
+      - name: question_id
+        description: Question identifier (e.g. 'q5', 'q9', 'q0b').
+      - name: sub_item
+        description: Sub-item code within the question (e.g. 'a' for bank loans).
+      - name: firm_size
+        description: "'all', 'sme' (bands 1–3), or 'large' (band 4)."
+      - name: n_total
+        description: Firms for whom the question was asked (response_3m is not null).
+      - name: n_valid
+        description: Firms giving a codeable answer (DK/NA/not-applicable excluded).
+      - name: n_nonresponse
+        description: Firms answering DK, NA, or not applicable.
+      - name: response_rate_wtd
+        description: >
+          Weighted response rate: n_valid / n_total as a % using weight_common.
+          Range 0–100.
+      - name: response_rate_unwtd
+        description: Unweighted response rate for reference. Range 0–100.

@@ -1,0 +1,64 @@
+name: SAFE — Generate Q10 Report
+
+on:
+  # Triggers automatically when dbt transformations finish successfully.
+  workflow_run:
+    workflows: ["ECB SAFE — dbt Transformations"]
+    types:
+      - completed
+
+  # Manual trigger from the Actions tab.
+  workflow_dispatch:
+
+jobs:
+  report:
+    name: Generate and publish Q10 report
+    runs-on: ubuntu-latest
+
+    # For workflow_run triggers, skip if upstream failed.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Need push access — use default GITHUB_TOKEN
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install anthropic duckdb pandas matplotlib seaborn
+
+      - name: Pre-cache MotherDuck extension
+        run: |
+          DUCKDB_VERSION=$(python -c "import duckdb; print(duckdb.__version__)")
+          EXT_DIR="$HOME/.duckdb/extensions/v${DUCKDB_VERSION}/linux_amd64"
+          mkdir -p "$EXT_DIR"
+          curl -fsSL \
+            "https://extensions.duckdb.org/v${DUCKDB_VERSION}/linux_amd64/motherduck.duckdb_extension.gz" \
+            | gunzip > "$EXT_DIR/motherduck.duckdb_extension"
+
+      - name: Run report
+        env:
+          MOTHERDUCK_TOKEN:  ${{ secrets.MOTHERDUCK_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SMTP_HOST:         ${{ secrets.SMTP_HOST }}
+          SMTP_PORT:         ${{ secrets.SMTP_PORT }}
+          SMTP_USER:         ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD:     ${{ secrets.SMTP_PASSWORD }}
+          REPORT_TO_EMAIL:   ${{ secrets.REPORT_TO_EMAIL }}
+        run: python reports/run_report.py
+
+      - name: Commit report HTML
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add reports/output/report_q10.html
+          # Only commit if there's actually a change
+          git diff --cached --quiet || git commit -m "chore: update Q10 report [skip ci]"
+          git push

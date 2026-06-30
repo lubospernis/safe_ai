@@ -34,7 +34,7 @@ REPORT_HTML = Path(__file__).parent / "output" / "report_latest.html"
 SUBSCRIBERS_JSON = ROOT / "newsletter" / "subscribers.json"
 
 PAGES_URL = os.environ.get("PAGES_URL", "https://lubospernis.github.io/safe_ai/")
-FROM_ADDRESS = os.environ.get("NEWSLETTER_FROM", "newsletter@yourdomain.com")
+FROM_ADDRESS = os.environ.get("NEWSLETTER_FROM", "newsletteri@nbs.sk")
 
 
 # ---------------------------------------------------------------------------

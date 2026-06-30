@@ -53,6 +53,11 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python reports/run_report.py
 
+      - name: Run gap analysis
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python reports/gap_agent.py --ecb-url "$(cat reports/ecb_url.txt)"
+
       - name: Rename report for Pages
         run: mv reports/output/report_latest.html reports/output/index.html
 

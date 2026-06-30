@@ -36,7 +36,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install anthropic duckdb pandas matplotlib numpy seaborn
+        run: pip install -r requirements.txt
 
       - name: Pre-cache MotherDuck extension
         run: |

@@ -329,54 +329,36 @@ def build_chart(sec: dict, df: pd.DataFrame, chart_type: str, best_panel) -> byt
 # 3b. Custom chart: financing gap (grouped bars + gap line)
 # ---------------------------------------------------------------------------
 
-def build_financing_gap_chart(sec: dict, df: pd.DataFrame) -> bytes:
+def _financing_gap_bars(df: pd.DataFrame) -> bytes:
     """
-    For the financing_gap section: grouped bars showing need_nb and availability_nb
-    per country per wave, with financing_gap_wtd overlaid as a line.
-    One subplot per sub_item (pinned panel only, since chart is already complex).
+    Chart 1: grouped bars (need/availability) + gap line for bank loans (sub_item='a'),
+    SK, EA, DE, last 4 waves.
     """
-    panels = sec["pinned_panels"][:1]  # one panel keeps it readable
-    panel_col = sec["panel_col"]
-    panel_label_col = sec.get("panel_label_col", panel_col)
+    import matplotlib.colors as mcolors
 
-    fig, ax = plt.subplots(1, 1, figsize=(9, 4.5))
-    fig.subplots_adjust(top=0.82, bottom=0.22, left=0.09, right=0.97)
-
-    panel_val = panels[0]
-    sub_df = df[df[panel_col].astype(str) == str(panel_val)].copy()
-    label_val = sub_df[panel_label_col].iloc[0] if not sub_df.empty else str(panel_val)
+    sub_df = df[df["sub_item"] == "a"].copy()
+    label_val = sub_df["sub_item_label"].iloc[0] if not sub_df.empty else "Bank loans"
 
     waves = sorted(sub_df["wave_number"].unique())
     wave_labels = (
         sub_df[["wave_number", "survey_period_label"]]
-        .drop_duplicates()
-        .sort_values("wave_number")
+        .drop_duplicates().sort_values("wave_number")
         .set_index("wave_number")["survey_period_label"]
     )
 
-    n_waves = len(waves)
+    fig, ax = plt.subplots(1, 1, figsize=(9, 4.5))
+    fig.subplots_adjust(top=0.82, bottom=0.26, left=0.09, right=0.97)
+
     n_countries = len(COUNTRY_ORDER)
-    group_width = 0.7
-    bar_width = group_width / (n_countries * 2)  # 2 bars per country (need + avail)
     group_gap = 1.0
-
-    bar_handles = []
-    bar_labels_legend = []
-    line_handles = []
-    line_labels_legend = []
-
-    # Colour scheme: need = solid country colour, availability = lighter hatched version
-    NEED_HATCH = ""
-    AVAIL_HATCH = "//"
+    bar_width = 0.7 / (n_countries * 2)
+    bar_handles, bar_labels_leg, line_handles, line_labels_leg = [], [], [], []
 
     for c_idx, country in enumerate(COUNTRY_ORDER):
         cdf = sub_df[sub_df["country_code"] == country].sort_values("wave_number")
         if cdf.empty:
             continue
-
         base_color = COUNTRY_COLORS[country]
-        # Lighter version for availability bars
-        import matplotlib.colors as mcolors
         rgb = mcolors.to_rgb(base_color)
         light_color = tuple(min(1.0, v + 0.35) for v in rgb)
 
@@ -384,54 +366,90 @@ def build_financing_gap_chart(sec: dict, df: pd.DataFrame) -> bytes:
             row = cdf[cdf["wave_number"] == wave]
             if row.empty:
                 continue
-            need_val = row["need_nb"].iloc[0]
-            avail_val = row["availability_nb"].iloc[0]
-
-            x_center = w_idx * group_gap
-            # Offset within wave group: (country pair index) × (2 bar widths + small gap)
             pair_offset = (c_idx - n_countries / 2 + 0.5) * (2 * bar_width + 0.02)
-            x_need = x_center + pair_offset
-            x_avail = x_center + pair_offset + bar_width
-
-            b1 = ax.bar(x_need, need_val, bar_width, color=base_color,
-                        hatch=NEED_HATCH, edgecolor="white", linewidth=0.5, zorder=2)
-            b2 = ax.bar(x_avail, avail_val, bar_width, color=light_color,
-                        hatch=AVAIL_HATCH, edgecolor=base_color, linewidth=0.5, zorder=2)
-
+            x_center = w_idx * group_gap
+            b1 = ax.bar(x_center + pair_offset, row["need_nb"].iloc[0], bar_width,
+                        color=base_color, edgecolor="white", linewidth=0.5, zorder=2)
+            b2 = ax.bar(x_center + pair_offset + bar_width, row["availability_nb"].iloc[0], bar_width,
+                        color=light_color, hatch="//", edgecolor=base_color, linewidth=0.5, zorder=2)
             if w_idx == 0:
-                bar_handles.extend([b1, b2])
-                bar_labels_legend.extend([
-                    f"{COUNTRIES[country]} — need",
-                    f"{COUNTRIES[country]} — availability",
-                ])
+                bar_handles += [b1, b2]
+                bar_labels_leg += [f"{COUNTRIES[country]} — need", f"{COUNTRIES[country]} — availability"]
 
-        # Gap line: plotted at wave group x centres
-        x_points = [w_idx * group_gap for w_idx, wave in enumerate(waves)
-                    if not cdf[cdf["wave_number"] == wave].empty]
-        gap_vals = [cdf[cdf["wave_number"] == wave]["financing_gap_wtd"].iloc[0]
-                    for w_idx, wave in enumerate(waves)
-                    if not cdf[cdf["wave_number"] == wave].empty]
-        line, = ax.plot(x_points, gap_vals, color=base_color, linewidth=2.2,
+        x_pts = [i * group_gap for i, w in enumerate(waves) if not cdf[cdf["wave_number"] == w].empty]
+        gap_vals = [cdf[cdf["wave_number"] == w]["financing_gap_wtd"].iloc[0] for w in waves
+                    if not cdf[cdf["wave_number"] == w].empty]
+        line, = ax.plot(x_pts, gap_vals, color=base_color, linewidth=2.2,
                         marker="D", markersize=5, linestyle="--", zorder=3)
         line_handles.append(line)
-        line_labels_legend.append(f"{COUNTRIES[country]} — gap (need−avail)")
+        line_labels_leg.append(f"{COUNTRIES[country]} — gap")
 
     ax.axhline(0, color="#adadad", linewidth=0.8, linestyle="--", zorder=1)
-    ax.set_xticks([w_idx * group_gap for w_idx in range(n_waves)])
+    ax.set_xticks([i * group_gap for i in range(len(waves))])
     ax.set_xticklabels([wave_labels[w] for w in waves], rotation=35, ha="right", fontsize=8)
     ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%+.0f"))
     ax.tick_params(axis="y", labelsize=8)
     ax.set_ylabel("Net balance (pp)", fontsize=7, color="#6a6a6a")
-    ax.set_title(f"{label_val} — financing need (bars) vs availability (hatched bars); gap (dashed line)", fontsize=9)
+    ax.set_title(f"{label_val} — need (solid bars) vs availability (hatched); gap (dashed)", fontsize=9)
     ax.spines[["top", "right"]].set_visible(False)
     ax.set_facecolor("#f8f8f8")
     fig.patch.set_facecolor("#f8f8f8")
+    fig.legend(bar_handles + line_handles, bar_labels_leg + line_labels_leg,
+               loc="lower center", bbox_to_anchor=(0.5, 0.0), ncol=3, fontsize=7.5, frameon=False)
 
-    # Two-row legend: bars on top row, gap lines below
-    all_handles = bar_handles + line_handles
-    all_labels = bar_labels_legend + line_labels_legend
-    fig.legend(all_handles, all_labels,
-               loc="lower center", bbox_to_anchor=(0.5, 0.0),
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    return buf.read()
+
+
+# Instrument colours for the SK breakdown chart
+INSTRUMENT_COLORS = {
+    "a": "#bd4e35", "b": "#0777b3", "f": "#e18727", "g": "#5a9e6f", "h": "#7b5ea7",
+}
+INSTRUMENT_LABELS = {
+    "a": "Bank loans", "b": "Trade credit", "f": "Credit lines",
+    "g": "Leasing/hire-purchase", "h": "Other loans",
+}
+
+
+def _financing_gap_sk_instruments(df_sk: pd.DataFrame) -> bytes:
+    """
+    Chart 2: financing gap (need − availability) for Slovakia by instrument, line chart.
+    """
+    waves = sorted(df_sk["wave_number"].unique())
+    wave_labels = (
+        df_sk[["wave_number", "survey_period_label"]]
+        .drop_duplicates().sort_values("wave_number")
+        .set_index("wave_number")["survey_period_label"]
+    )
+
+    fig, ax = plt.subplots(1, 1, figsize=(7, 4.2))
+    fig.subplots_adjust(top=0.84, bottom=0.22, left=0.1, right=0.97)
+
+    handles, labels = [], []
+    for sub_item, color in INSTRUMENT_COLORS.items():
+        idf = df_sk[df_sk["sub_item"] == sub_item].sort_values("wave_number")
+        if idf.empty:
+            continue
+        label = idf["sub_item_label"].iloc[0] if "sub_item_label" in idf.columns else INSTRUMENT_LABELS.get(sub_item, sub_item)
+        line, = ax.plot(idf["wave_number"], idf["financing_gap_wtd"],
+                        color=color, linewidth=2, marker="o", markersize=4, label=label)
+        handles.append(line)
+        labels.append(label)
+
+    ax.axhline(0, color="#adadad", linewidth=0.8, linestyle="--")
+    ax.set_xticks(waves)
+    ax.set_xticklabels([wave_labels[w] for w in waves], rotation=40, ha="right", fontsize=7)
+    ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%+.0f"))
+    ax.tick_params(axis="y", labelsize=8)
+    ax.set_ylabel("Financing gap (pp)", fontsize=7, color="#6a6a6a")
+    ax.set_title("Slovakia — financing gap by instrument (need − availability)", fontsize=9)
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.set_facecolor("#f8f8f8")
+    fig.patch.set_facecolor("#f8f8f8")
+    fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, 0.0),
                ncol=3, fontsize=7.5, frameon=False)
 
     buf = io.BytesIO()
@@ -441,113 +459,150 @@ def build_financing_gap_chart(sec: dict, df: pd.DataFrame) -> bytes:
     return buf.read()
 
 
+def build_financing_gap_chart(sec: dict, df: pd.DataFrame) -> bytes:
+    """
+    Returns a single PNG with two stacked charts:
+    - Top: grouped bar chart for bank loans (SK/EA/DE), need vs availability vs gap
+    - Bottom: SK-only gap line chart by instrument type
+    """
+    df_main = df[df["chart_type"] == "main"]
+    df_sk = df[df["chart_type"] == "sk_all"]
+
+    png1 = _financing_gap_bars(df_main)
+    png2 = _financing_gap_sk_instruments(df_sk)
+
+    # Stack vertically into a single PNG
+    from PIL import Image
+    img1 = Image.open(io.BytesIO(png1))
+    img2 = Image.open(io.BytesIO(png2))
+    combined = Image.new("RGB", (max(img1.width, img2.width), img1.height + img2.height), (248, 248, 248))
+    combined.paste(img1, (0, 0))
+    combined.paste(img2, (0, img1.height))
+    buf = io.BytesIO()
+    combined.save(buf, format="PNG")
+    buf.seek(0)
+    return buf.read()
+
+
 # ---------------------------------------------------------------------------
 # 4. Generate bullets (Sonnet, per section)
 # ---------------------------------------------------------------------------
 
-BULLET_TEMPLATE = textwrap.dedent("""
-    You are an ECB analyst writing concise bullets for a SAFE survey report focused on Slovakia.
-    Write at most 3 bullet points about the latest wave results for this section.
+SECTION_CONTENT_SYSTEM = textwrap.dedent("""
+    You are an ECB analyst writing content for a SAFE survey report focused on Slovakia.
+    Return a JSON object with exactly two fields:
+
+    "finding": A single declarative headline (max 12 words) summarising the most notable
+      finding for Slovakia. Use active voice, name the direction. Do NOT mention question
+      codes (Q10, Q5, etc.). Example: "Net tightening in interest rates reported by Slovak firms"
+
+    "bullets": A list of 3 strings, each a bullet point (starting with "•") about the latest
+      wave. Rules:
+      - Frame as firm behaviour: "a net 26% of firms reported..." NOT "the net balance rose"
+      - Compare to prior wave: "compared with a net X% in the previous quarter"
+      - Include sample size for SK and EA where available: "a net 26% of firms (n=80)..."
+      - One sentence per bullet, max ~25 words.
 
     Sign convention for this section:
     {sign_note}
 
-    Language rules:
-    - Frame as firm behaviour: "a net 26% of firms reported an increase in interest rates"
-      NOT "the net balance widened to 26pp"
-    - For net balances: compare to prior wave: "compared with a net X% in the previous quarter"
-    - Include sample size for SK and EA where available: "a net 26% of firms (n=80)..."
-    - One sentence per bullet, max ~25 words. No headers, no preamble. Bullets start with "•".
-
     Focus:
     {focus}
+
+    Return valid JSON only — no markdown fences, no commentary.
 """).strip()
 
 
-def _fmt_financing_gap(d: pd.DataFrame, wave_label: str) -> str:
-    """Format financing gap data rows for the bullet prompt (need + avail + gap per country)."""
-    rows = [f"{wave_label}:"]
-    for _, r in d.iterrows():
-        country = r["country_code"]
-        need = f"{r['need_nb']:+.1f}" if pd.notna(r.get("need_nb")) else "n/a"
-        avail = f"{r['availability_nb']:+.1f}" if pd.notna(r.get("availability_nb")) else "n/a"
-        gap = f"{r['financing_gap_wtd']:+.1f}" if pd.notna(r.get("financing_gap_wtd")) else "n/a"
-        n_need = int(r["n_respondents_need"]) if pd.notna(r.get("n_respondents_need")) else "?"
-        rows.append(f"  {country} | need={need}pp (n={n_need}) | availability={avail}pp | gap={gap}pp")
-    return "\n".join(rows)
-
-
-def get_bullets(sec: dict, df: pd.DataFrame) -> list[str]:
+def _fmt_data_for_prompt(sec: dict, df: pd.DataFrame) -> str:
+    """Serialize latest + previous wave data for the LLM prompt."""
     latest_wave = df["wave_number"].max()
     waves_sorted = sorted(df["wave_number"].unique())
     prev_wave = waves_sorted[-2] if len(waves_sorted) >= 2 else latest_wave
-
     latest = df[df["wave_number"] == latest_wave]
     prev = df[df["wave_number"] == prev_wave]
-    value_col = sec["value_col"]
 
-    # Financing gap section gets a richer prompt with need/avail decomposition
     if sec["id"] == "financing_gap":
-        user_msg = (
-            _fmt_financing_gap(latest, f"Wave {latest_wave} (latest)")
-            + "\n\n"
-            + _fmt_financing_gap(prev, f"Wave {prev_wave} (previous)")
-        )
-    else:
-        def fmt(d: pd.DataFrame) -> str:
-            rows = []
-            for _, r in d.iterrows():
-                n_part = f" | n={r['n_respondents']}" if r.get("country_code") in ("SK", "EA") and "n_respondents" in r else ""
-                val_str = f"{r[value_col]:+.2f}" if pd.notna(r[value_col]) else "n/a"
-                panel_col = sec["panel_col"]
-                panel_label_col = sec.get("panel_label_col", panel_col)
-                panel_part = f" | {r[panel_label_col]}" if panel_label_col and panel_label_col in r.index else ""
-                rows.append(f"  {r['country_code']}{panel_part} | {value_col}={val_str}{n_part}")
+        def fmt_gap(d: pd.DataFrame, label: str) -> str:
+            rows = [f"{label}:"]
+            # Cross-country rows (main chart type): SK/EA/DE for bank loans, credit lines, trade credit
+            main_rows = d[d.get("chart_type", "main") == "main"] if "chart_type" in d.columns else d
+            by_inst = main_rows.groupby("sub_item")
+            for sub_item, grp in sorted(by_inst, key=lambda x: x[0]):
+                inst_label = grp["sub_item_label"].iloc[0] if not grp.empty else sub_item
+                rows.append(f"  [{inst_label}]")
+                for _, r in grp.iterrows():
+                    need = f"{r['need_nb']:+.1f}" if pd.notna(r.get("need_nb")) else "n/a"
+                    avail = f"{r['availability_nb']:+.1f}" if pd.notna(r.get("availability_nb")) else "n/a"
+                    gap = f"{r['financing_gap_wtd']:+.1f}" if pd.notna(r.get("financing_gap_wtd")) else "n/a"
+                    n = int(r["n_respondents_need"]) if pd.notna(r.get("n_respondents_need")) else "?"
+                    rows.append(f"    {r['country_code']} | need={need}pp (n={n}) | avail={avail}pp | gap={gap}pp")
             return "\n".join(rows)
+        return fmt_gap(latest, f"Wave {latest_wave} (latest)") + "\n\n" + fmt_gap(prev, f"Wave {prev_wave} (previous)")
 
-        user_msg = (
-            f"Wave {latest_wave} (latest):\n{fmt(latest)}\n\n"
-            f"Wave {prev_wave} (previous):\n{fmt(prev)}"
-        )
+    value_col = sec["value_col"]
+    panel_col = sec["panel_col"]
+    panel_label_col = sec.get("panel_label_col", panel_col)
 
-    system_prompt = BULLET_TEMPLATE.format(
+    def fmt(d: pd.DataFrame, label: str) -> str:
+        rows = [f"{label}:"]
+        for _, r in d.iterrows():
+            n_part = f" | n={r['n_respondents']}" if r.get("country_code") in ("SK", "EA") and "n_respondents" in r else ""
+            val_str = f"{r[value_col]:+.2f}" if pd.notna(r[value_col]) else "n/a"
+            panel_part = f" | {r[panel_label_col]}" if panel_label_col and panel_label_col in r.index else ""
+            rows.append(f"  {r['country_code']}{panel_part} | {value_col}={val_str}{n_part}")
+        return "\n".join(rows)
+
+    return fmt(latest, f"Wave {latest_wave} (latest)") + "\n\n" + fmt(prev, f"Wave {prev_wave} (previous)")
+
+
+def get_section_content(sec: dict, df: pd.DataFrame) -> dict:
+    """Return {"finding": str, "bullets": [str, ...]} for a section via one Sonnet call."""
+    system_prompt = SECTION_CONTENT_SYSTEM.format(
         sign_note=sec["sign_note"],
         focus=sec["focus"],
     )
+    user_msg = _fmt_data_for_prompt(sec, df)
 
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     msg = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=220,
+        max_tokens=350,
         system=system_prompt,
         messages=[{"role": "user", "content": user_msg}],
     )
     raw = msg.content[0].text.strip()
-    bullets = [line.strip() for line in raw.splitlines() if line.strip().startswith("•")]
-    return bullets[:3]
+    try:
+        parsed = json.loads(raw)
+        finding = str(parsed.get("finding", sec["title"]))
+        bullets = [b for b in parsed.get("bullets", []) if str(b).strip().startswith("•")][:3]
+        if not bullets:
+            bullets = [b.strip() for b in str(parsed.get("bullets", "")).splitlines() if b.strip().startswith("•")][:3]
+    except (json.JSONDecodeError, AttributeError):
+        finding = sec["title"]
+        bullets = [line.strip() for line in raw.splitlines() if line.strip().startswith("•")][:3]
+    return {"finding": finding, "bullets": bullets}
 
 
 # ---------------------------------------------------------------------------
-# 5. Executive summary (Sonnet prose)
+# 5. Executive summary (Sonnet, bullet points)
 # ---------------------------------------------------------------------------
 
 EXEC_SUMMARY_SYSTEM = textwrap.dedent("""
     You are a senior ECB economist writing an executive summary for a technical director
     reviewing the latest ECB SAFE survey results for Slovakia.
 
-    The summary should:
-    - Open with the single most important finding for Slovakia in this wave
-    - Cover financing conditions, access to finance, and business situation where notable
-    - Compare Slovakia to the euro area average; highlight any significant divergence
+    Write 4–6 concise bullet points (each starting with "•"). Each bullet = one finding,
+    max 25 words. Order: financing conditions first, then access to finance, then business
+    situation. Rules:
     - Use precise language: "a net X% of firms reported..." not "the index rose to X"
     - Positive net balance = net tightening/rising (adverse for firms unless stated otherwise)
     - Negative net balance = net easing/falling (favourable for firms unless stated otherwise)
-    - Tone: concise, analytical, no hedging. Flowing prose — no bullet points, no headers.
-    - Max 130 words.
+    - Compare Slovakia to the euro area average; flag any significant divergence
+    - Tone: concise, analytical, no hedging. Bullets only — no prose, no headers.
 """).strip()
 
 
-def get_exec_summary(rendered_sections: list[dict]) -> str:
+def get_exec_summary(rendered_sections: list[dict]) -> list[str]:
     lines = ["Below are the key findings per topic from the latest wave:\n"]
     for s in rendered_sections:
         lines.append(f"## {s['title']}")
@@ -559,11 +614,12 @@ def get_exec_summary(rendered_sections: list[dict]) -> str:
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     msg = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=300,
+        max_tokens=350,
         system=EXEC_SUMMARY_SYSTEM,
         messages=[{"role": "user", "content": "\n".join(lines)}],
     )
-    return msg.content[0].text.strip()
+    raw = msg.content[0].text.strip()
+    return [line.strip() for line in raw.splitlines() if line.strip().startswith("•")][:6]
 
 
 # ---------------------------------------------------------------------------
@@ -655,7 +711,45 @@ def build_annex_html(annex_csv_path: Path) -> str:
 
 
 # ---------------------------------------------------------------------------
-# 7. Build HTML
+# 7. TOC
+# ---------------------------------------------------------------------------
+
+# Canonical group order for rendering
+GROUP_ORDER = ["Financing Conditions", "Economic Situation of Firms"]
+
+
+def build_toc(rendered_sections: list[dict]) -> str:
+    by_group: dict[str, list[dict]] = {}
+    for s in rendered_sections:
+        g = s.get("group", "Other")
+        by_group.setdefault(g, []).append(s)
+
+    items = []
+    for group in GROUP_ORDER:
+        secs = by_group.get(group, [])
+        if not secs:
+            continue
+        inner = "\n".join(
+            f'        <li><a href="#{s["section_id"]}">{s["finding"]}</a></li>'
+            for s in secs
+        )
+        items.append(f"    <li><strong>{group}</strong>\n      <ul>\n{inner}\n      </ul>\n    </li>")
+
+    if not items:
+        return ""
+    rows = "\n".join(items)
+    return textwrap.dedent(f"""
+<nav id="toc">
+  <p class="toc-title">Contents</p>
+  <ul>
+{rows}
+  </ul>
+</nav>
+""").strip()
+
+
+# ---------------------------------------------------------------------------
+# 8. Build HTML
 # ---------------------------------------------------------------------------
 
 HTML_PAGE = textwrap.dedent("""
@@ -669,8 +763,11 @@ HTML_PAGE = textwrap.dedent("""
   h1          {{ font-size: 22px; font-weight: bold; margin-bottom: 4px; }}
   .meta       {{ color: #6a6a6a; font-size: 13px; margin-bottom: 20px; }}
   section     {{ background: #fff; border: 1px solid #e0e0e0; border-radius: 6px;
-                 padding: 24px 28px; margin-bottom: 28px; }}
-  h2          {{ font-size: 16px; font-weight: bold; margin: 0 0 12px 0; color: #231f20; }}
+                 padding: 24px 28px; margin-bottom: 20px; }}
+  h2          {{ font-size: 18px; font-weight: bold; margin: 36px 0 12px 0; color: #231f20;
+                 border-bottom: 2px solid #0777b3; padding-bottom: 6px; }}
+  h3          {{ font-size: 15px; font-weight: bold; margin: 0 0 4px 0; color: #231f20; }}
+  .section-subtitle {{ font-size: 11px; color: #888; margin: 0 0 12px 0; }}
   ul          {{ padding-left: 20px; margin: 0 0 16px 0; }}
   li          {{ margin-bottom: 6px; font-size: 13.5px; line-height: 1.5; }}
   img         {{ width: 100%; margin-top: 8px; }}
@@ -679,8 +776,18 @@ HTML_PAGE = textwrap.dedent("""
 
   /* Executive summary */
   #exec-summary               {{ background: #eef4fb; border-left: 4px solid #0777b3; }}
-  #exec-summary h2            {{ color: #0777b3; }}
-  #exec-summary p             {{ font-size: 14px; line-height: 1.8; margin: 0; }}
+  #exec-summary h2            {{ font-size: 16px; color: #0777b3; border-bottom: none;
+                                 margin: 0 0 10px 0; padding-bottom: 0; }}
+  #exec-summary li            {{ font-size: 14px; line-height: 1.7; }}
+
+  /* TOC */
+  #toc        {{ background: #fff; border: 1px solid #e0e0e0; border-radius: 6px;
+                 padding: 16px 24px; margin-bottom: 20px; font-size: 13px; }}
+  .toc-title  {{ font-weight: bold; margin: 0 0 8px 0; color: #231f20; font-size: 13px; }}
+  #toc ul     {{ margin: 4px 0; padding-left: 18px; }}
+  #toc li     {{ margin-bottom: 3px; }}
+  #toc a      {{ color: #0777b3; text-decoration: none; }}
+  #toc a:hover {{ text-decoration: underline; }}
 
   /* Collapsible annex */
   details     {{ background: #fff; border: 1px solid #e0e0e0; border-radius: 6px;
@@ -705,6 +812,7 @@ HTML_PAGE = textwrap.dedent("""
 <p class="meta">Slovakia · Euro Area · Germany &nbsp;|&nbsp; Generated {date}</p>
 {annex}
 {exec_summary_section}
+{toc}
 {sections}
 <p class="footer">Source: ECB SAFE microdata. Net balance = % reporting increase minus % reporting decrease.
 Positive = tightening/rising (adverse for firms unless noted). Negative = easing/falling.</p>
@@ -713,8 +821,9 @@ Positive = tightening/rising (adverse for firms unless noted). Negative = easing
 """).strip()
 
 SECTION_TMPL = textwrap.dedent("""
-<section>
-  <h2>{title}</h2>
+<section id="{section_id}">
+  <h3>{finding}</h3>
+  <p class="section-subtitle">{title}</p>
   <ul>
 {bullets}
   </ul>
@@ -725,7 +834,9 @@ SECTION_TMPL = textwrap.dedent("""
 EXEC_SUMMARY_TMPL = textwrap.dedent("""
 <section id="exec-summary">
   <h2>Executive Summary</h2>
-  <p>{text}</p>
+  <ul>
+{bullets}
+  </ul>
 </section>
 """).strip()
 
@@ -733,23 +844,45 @@ EXEC_SUMMARY_TMPL = textwrap.dedent("""
 def build_html(
     rendered_sections: list[dict],
     annex_html: str,
-    exec_summary: str,
+    exec_bullets: list[str],
+    toc_html: str,
 ) -> str:
-    section_html = "\n\n".join(
-        SECTION_TMPL.format(
-            title=s["title"],
-            bullets="\n".join(f"    <li>{b.lstrip('• ').strip()}</li>" for b in s["bullets"]),
-            footnote=ROUTED_FOOTNOTE + "\n" if s.get("routed") else "",
-            chart_b64=base64.b64encode(s["chart_png"]).decode(),
+    # Group sections and emit h2 group headings between them
+    by_group: dict[str, list[dict]] = {}
+    for s in rendered_sections:
+        g = s.get("group", "Other")
+        by_group.setdefault(g, []).append(s)
+
+    sections_parts = []
+    for group in GROUP_ORDER:
+        secs = by_group.get(group, [])
+        if not secs:
+            continue
+        sections_parts.append(f"<h2>{group}</h2>")
+        for s in secs:
+            sections_parts.append(
+                SECTION_TMPL.format(
+                    section_id=s["section_id"],
+                    finding=s["finding"],
+                    title=s["title"],
+                    bullets="\n".join(f"    <li>{b.lstrip('• ').strip()}</li>" for b in s["bullets"]),
+                    footnote=ROUTED_FOOTNOTE + "\n" if s.get("routed") else "",
+                    chart_b64=base64.b64encode(s["chart_png"]).decode(),
+                )
+            )
+
+    exec_section = (
+        EXEC_SUMMARY_TMPL.format(
+            bullets="\n".join(f"    <li>{b.lstrip('• ').strip()}</li>" for b in exec_bullets)
         )
-        for s in rendered_sections
+        if exec_bullets else ""
     )
-    exec_section = EXEC_SUMMARY_TMPL.format(text=exec_summary) if exec_summary else ""
     return HTML_PAGE.format(
         date=date.today().strftime("%d %b %Y"),
         annex=annex_html,
         exec_summary_section=exec_section,
-        sections=section_html,
+        toc=toc_html,
+        sections="\n\n".join(sections_parts),
     )
 
 
@@ -793,28 +926,36 @@ def main() -> None:
         else:
             chart_png = build_chart(sec, data[sid], r["chart_type"], r["best_panel"])
 
-        print(f"  Generating bullets for {sid}...")
-        bullets = get_bullets(sec, data[sid])
-        for b in bullets:
+        print(f"  Generating finding + bullets for {sid}...")
+        content = get_section_content(sec, data[sid])
+        print(f"    finding: {content['finding']}")
+        for b in content["bullets"]:
             print(f"    {b}")
 
         rendered.append({
+            "section_id": sid,
             "title": sec["title"],
-            "bullets": bullets,
+            "group": sec.get("group", "Other"),
+            "finding": content["finding"],
+            "bullets": content["bullets"],
             "chart_png": chart_png,
             "sign_note": sec["sign_note"],
             "routed": sec.get("routed", False),
         })
 
     print("Generating executive summary...")
-    exec_summary = get_exec_summary(rendered) if rendered else ""
-    print(f"  {exec_summary[:120]}...")
+    exec_bullets = get_exec_summary(rendered) if rendered else []
+    for b in exec_bullets:
+        print(f"  {b}")
+
+    print("Building TOC...")
+    toc_html = build_toc(rendered)
 
     print("Building question annex...")
     annex_html = build_annex_html(ANNEX_CSV)
 
     print("Assembling HTML...")
-    html = build_html(rendered, annex_html, exec_summary)
+    html = build_html(rendered, annex_html, exec_bullets, toc_html)
 
     out_path = OUTPUT_DIR / "report_latest.html"
     out_path.write_text(html, encoding="utf-8")

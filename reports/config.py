@@ -22,6 +22,7 @@ SECTIONS = [
     {
         "id": "q10_terms",
         "sql_file": "q10.sql",
+        "group": "Financing Conditions",
         "title": "Changes in Terms and Conditions of Bank Financing (Q10)",
         "sign_note": (
             "positive net balance = net tightening (more firms report worse/tighter conditions, ADVERSE); "
@@ -41,6 +42,7 @@ SECTIONS = [
     {
         "id": "q0b_pressingness",
         "sql_file": "q0b_pressingness.sql",
+        "group": "Economic Situation of Firms",
         "title": "Most Pressing Business Problems (Q0B)",
         "sign_note": (
             "values are average pressingness scores on a 1–10 scale (NOT net balances). "
@@ -62,6 +64,7 @@ SECTIONS = [
     {
         "id": "business_situation",
         "sql_file": "business_situation.sql",
+        "group": "Economic Situation of Firms",
         "title": "Business Situation Indicators (Q2)",
         "sign_note": (
             "positive net balance = indicator rising (more firms report increase than decrease). "
@@ -80,6 +83,7 @@ SECTIONS = [
     {
         "id": "financing_gap",
         "sql_file": "financing_gap.sql",
+        "group": "Financing Conditions",
         "title": "Financing Need vs Availability Gap (Q5/Q9)",
         "sign_note": (
             "need_nb = Q5 net balance: positive = more firms report increased financing need. "
@@ -96,15 +100,17 @@ SECTIONS = [
         "always_include": False,
         "routed": True,
         "focus": (
-            "Lead with Slovakia bank loan financing gap vs EA. "
+            "Cover bank loans (a), credit lines (f), and trade credit (b) for Slovakia vs EA. "
             "CRITICALLY: diagnose WHETHER the gap changed because of need, availability, or both — "
             "e.g. 'Unchanged needs and a marginal decrease in availability led to a wider gap in SK.' "
-            "Name the direction of each component explicitly."
+            "Name the direction of each component for each instrument. "
+            "Note if credit lines or trade credit show a notably different pattern to bank loans."
         ),
     },
     {
         "id": "financing_purpose",
         "sql_file": "financing_purpose.sql",
+        "group": "Financing Conditions",
         "title": "Purpose of Financing (Q6A)",
         "sign_note": (
             "pct_cited_wtd = % of firms that cited this purpose (multi-select, so percentages can sum > 100%). "
@@ -122,6 +128,7 @@ SECTIONS = [
     {
         "id": "q11_factors",
         "sql_file": "q11_factors.sql",
+        "group": "Financing Conditions",
         "title": "Factors Affecting Access to External Financing (Q11)",
         "sign_note": (
             "positive net balance = factor IMPROVED (more firms say better than worse — FAVOURABLE for financing access). "

@@ -44,9 +44,11 @@ FROM_ADDRESS = os.environ.get("NEWSLETTER_FROM", "onboarding@resend.dev")
 def parse_report(html: str) -> dict:
     soup = BeautifulSoup(html, "lxml")
 
-    # Wave / date line from <p class="meta">
+    # Wave / date line from <p class="meta"> and report title from <h1>
     meta_el = soup.select_one("p.meta")
     meta_text = meta_el.get_text(" | ", strip=True) if meta_el else ""
+    h1_el = soup.select_one("h1")
+    h1_text = h1_el.get_text(strip=True) if h1_el else "ECB SAFE Survey"
 
     # Executive summary bullets
     exec_section = soup.select_one("#exec-summary")
@@ -70,6 +72,7 @@ def parse_report(html: str) -> dict:
 
     return {
         "meta": meta_text,
+        "h1": h1_text,
         "exec_bullets": exec_bullets,
         "findings": findings,
     }
@@ -177,7 +180,7 @@ def send_newsletter() -> None:
 
     # Build subject from meta line, e.g. "Slovakia · Euro Area · Germany  |  Generated 30 Jun 2026"
     meta = data["meta"]
-    subject = f"ECB SAFE Survey — Slovakia Report | {meta.split('|')[-1].strip()}"
+    subject = f"{data['h1']} — Slovakia | {meta.split('|')[-1].strip()}"
 
     email_html = build_email_html(data, PAGES_URL)
 

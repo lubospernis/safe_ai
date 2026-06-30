@@ -77,30 +77,54 @@ _PRICE = {
 }
 
 
-def _track_cost(tracker: dict, model: str, input_tok: int, output_tok: int) -> None:
+class _Usage:
+    """Minimal usage container for non-Anthropic calls (Mistral has different field names)."""
+    def __init__(self, input_tokens: int, output_tokens: int):
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
+        self.cache_creation_input_tokens = 0
+        self.cache_read_input_tokens = 0
+
+
+def _track_cost(tracker: dict, model: str, usage) -> None:
+    """Accept an Anthropic usage object (supports cache_creation/cache_read fields)."""
     p = _PRICE.get(model, {"input": 0.0, "output": 0.0})
-    usd = (input_tok * p["input"] + output_tok * p["output"]) / 1_000_000
-    tracker["input_tokens"] += input_tok
+    cache_write = getattr(usage, "cache_creation_input_tokens", 0) or 0
+    cache_read  = getattr(usage, "cache_read_input_tokens", 0) or 0
+    normal_in   = (getattr(usage, "input_tokens", 0) or 0) - cache_write - cache_read
+    output_tok  = getattr(usage, "output_tokens", 0) or 0
+    usd = (
+        normal_in   * p["input"]          +
+        cache_write * p["input"] * 1.25   +
+        cache_read  * p["input"] * 0.10   +
+        output_tok  * p["output"]
+    ) / 1_000_000
+    total_in = normal_in + cache_write + cache_read
+    tracker["input_tokens"] += total_in
     tracker["output_tokens"] += output_tok
     tracker["usd"] += usd
     tracker["calls"] += 1
-    m = tracker["by_model"].setdefault(model, {"calls": 0, "input": 0, "output": 0, "usd": 0.0})
+    m = tracker["by_model"].setdefault(model, {"calls": 0, "input": 0, "output": 0, "usd": 0.0,
+                                               "cache_write": 0, "cache_read": 0})
     m["calls"] += 1
-    m["input"] += input_tok
+    m["input"] += total_in
     m["output"] += output_tok
     m["usd"] += usd
+    m["cache_write"] += cache_write
+    m["cache_read"] += cache_read
 
 
-# Artwork shown in report header — update each quarter
+# Artwork shown alongside the exec summary — update each quarter.
+# User fills in the correct webumenia.sk values below.
 ARTWORK = {
     "page_url": "https://www.webumenia.sk/dielo/SVK:SNG.IM_127",
-    "img_url": "https://www.webumenia.sk/dielo/nahlad/SVK:SNG.IM_127/600",
-    "title": "Ján Mudroch — Krajina (1946)",
+    "img_url":  "https://www.webumenia.sk/dielo/nahlad/SVK:SNG.IM_127/600",
+    "title":    "Július Koller — Pre každú príležitosť... osviežujúci národný podnik. (UFO) (1978)",
 }
 
 
-def _fetch_painting_html() -> str:
-    """Fetch the quarterly artwork and return an HTML snippet for the report header.
+def _fetch_painting_inner_html() -> str:
+    """Fetch the quarterly artwork; return inner <img>+<span> HTML (no outer wrapper).
     Returns empty string on any network failure so the report still builds.
     """
     import requests as _requests
@@ -112,13 +136,14 @@ def _fetch_painting_html() -> str:
         title = ARTWORK["title"]
         page_url = ARTWORK["page_url"]
         return (
-            f'<div class="painting-wrap">'
             f'<a href="{page_url}" target="_blank" title="{title}">'
-            f'<img class="painting" src="data:{ct};base64,{b64}" alt="{title}">'
+            f'<img src="data:{ct};base64,{b64}" alt="{title}" '
+            f'style="width:100%;border-radius:4px;border:1px solid #e0e0e0;display:block;">'
             f'</a>'
-            f'<span class="painting-credit"><a href="{page_url}" target="_blank" '
-            f'style="color:#aaa;text-decoration:none;">{title}</a></span>'
-            f'</div>'
+            f'<span style="font-size:9px;color:#aaa;display:block;margin-top:4px;'
+            f'text-align:right;font-style:italic;line-height:1.3;">'
+            f'<a href="{page_url}" target="_blank" style="color:#aaa;text-decoration:none;">'
+            f'{title}</a></span>'
         )
     except Exception as e:
         print(f"  Warning: could not fetch painting ({e}) — skipping thumbnail")
@@ -425,7 +450,7 @@ def check_all_interest(
             r = future.result()
             if "_usage" in r:
                 u = r.pop("_usage")
-                _track_cost(cost_tracker, "mistral-small-latest", u["input"], u["output"])
+                _track_cost(cost_tracker, "mistral-small-latest", _Usage(u["input"], u["output"]))
             results[r["section_id"]] = r
     # always_include sections get a default result
     for sec in sections:
@@ -932,6 +957,11 @@ def get_section_content_agentic(
     divergence = _sme_divergence_note(df, sec["value_col"], sec.get("panel_col"))
     initial_msg = base_data + (f"\n\nSME divergence check:\n{divergence}" if divergence else "")
 
+    # Cache the system prompt — identical across all section calls, saves ~90% of
+    # system-prompt input tokens on calls 2–11.
+    cached_system = [{"type": "text", "text": system_prompt,
+                      "cache_control": {"type": "ephemeral"}}]
+
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     messages = [{"role": "user", "content": initial_msg}]
     tool_calls_made = 0
@@ -940,13 +970,13 @@ def get_section_content_agentic(
         response = client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=1500,
-            system=system_prompt,
+            system=cached_system,
             tools=[QUERY_MART_TOOL],
             messages=messages,
+            extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
         )
 
-        _track_cost(cost_tracker, "claude-sonnet-4-6",
-                    response.usage.input_tokens, response.usage.output_tokens)
+        _track_cost(cost_tracker, "claude-sonnet-4-6", response.usage)
 
         if response.stop_reason != "tool_use":
             # Final text response — extract and parse
@@ -981,11 +1011,11 @@ def get_section_content_agentic(
     final = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=800,
-        system=system_prompt,
+        system=cached_system,
         messages=messages,
+        extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
     )
-    _track_cost(cost_tracker, "claude-sonnet-4-6",
-                final.usage.input_tokens, final.usage.output_tokens)
+    _track_cost(cost_tracker, "claude-sonnet-4-6", final.usage)
     text_blocks = [b.text for b in final.content if hasattr(b, "text")]
     raw = text_blocks[-1] if text_blocks else ""
     result = _parse_section_response(raw, sec)
@@ -1045,7 +1075,7 @@ def get_exec_summary(rendered_sections: list[dict], cost_tracker: dict) -> list[
     )
     if resp.usage:
         _track_cost(cost_tracker, "mistral-small-latest",
-                    resp.usage.prompt_tokens, resp.usage.completion_tokens)
+                    _Usage(resp.usage.prompt_tokens, resp.usage.completion_tokens))
     raw = resp.choices[0].message.content.strip()
     return [line.strip().lstrip("•- ") for line in raw.splitlines() if line.strip()][:6]
 
@@ -1185,9 +1215,10 @@ HTML_PAGE = textwrap.dedent("""
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<title>ECB SAFE Survey — Wave {wave} · Slovakia</title>
 <style>
   body        {{ font-family: Arial, sans-serif; background: #f4f4f4; color: #231f20;
-                 max-width: 960px; margin: 40px auto; padding: 0 24px; }}
+                 max-width: 1200px; margin: 40px auto; padding: 0 24px; }}
   h1          {{ font-size: 22px; font-weight: bold; margin-bottom: 4px; }}
   .meta       {{ color: #6a6a6a; font-size: 13px; margin-bottom: 20px; }}
   section     {{ background: #fff; border: 1px solid #e0e0e0; border-radius: 6px;
@@ -1202,11 +1233,14 @@ HTML_PAGE = textwrap.dedent("""
   .footnote   {{ font-size: 11px; color: #888; margin-top: 10px; line-height: 1.4; }}
   .footer     {{ color: #adadad; font-size: 11px; margin-top: 32px; text-align: center; }}
 
-  /* Executive summary */
-  #exec-summary               {{ background: #eef4fb; border-left: 4px solid #0777b3; }}
-  #exec-summary h2            {{ font-size: 16px; color: #0777b3; border-bottom: none;
-                                 margin: 0 0 10px 0; padding-bottom: 0; }}
-  #exec-summary li            {{ font-size: 14px; line-height: 1.7; }}
+  /* Exec summary + painting flexbox */
+  .exec-flex     {{ display: flex; gap: 24px; align-items: flex-start; margin-bottom: 20px; }}
+  .exec-painting {{ flex: 1; min-width: 0; }}
+  .exec-summary  {{ flex: 3; min-width: 0; background: #eef4fb;
+                    border-left: 4px solid #0777b3; padding: 20px 24px; border-radius: 6px; }}
+  .exec-summary h2 {{ font-size: 16px; color: #0777b3; border-bottom: none;
+                      margin: 0 0 10px 0; padding-bottom: 0; }}
+  .exec-summary li {{ font-size: 14px; line-height: 1.7; }}
 
   /* TOC */
   #toc        {{ background: #fff; border: 1px solid #e0e0e0; border-radius: 6px;
@@ -1233,19 +1267,13 @@ HTML_PAGE = textwrap.dedent("""
                              border-radius: 3px; font-size: 11px; }}
   .badge-ecb              {{ background: #eef4fb; color: #0777b3; padding: 1px 6px;
                              border-radius: 3px; font-size: 11px; }}
-
-  /* Painting thumbnail */
-  .painting-wrap  {{ float: right; margin: 0 0 16px 24px; max-width: 160px; }}
-  .painting       {{ width: 100%; border-radius: 4px; display: block; border: 1px solid #e0e0e0; }}
-  .painting-credit {{ font-size: 9px; color: #aaa; display: block; margin-top: 3px;
-                      text-align: right; font-style: italic; line-height: 1.3; }}
 </style>
 </head>
 <body>
-<h1>ECB SAFE Survey — Automatic Report</h1>
-{painting_html}<p class="meta">Slovakia · Euro Area · Germany &nbsp;|&nbsp; Generated {date}</p>
+<h1>ECB SAFE Survey — Wave {wave}</h1>
+<p class="meta">Slovakia · Euro Area · Germany &nbsp;|&nbsp; Generated {date}</p>
 {annex}
-{exec_summary_section}
+{exec_flex}
 {toc}
 {sections}
 <p class="footer">Source: ECB SAFE microdata. Net balance = % reporting increase minus % reporting decrease.
@@ -1265,16 +1293,6 @@ SECTION_TMPL = textwrap.dedent("""
 </section>
 """).strip()
 
-EXEC_SUMMARY_TMPL = textwrap.dedent("""
-<section id="exec-summary">
-  <h2>Executive Summary</h2>
-  <ul>
-{bullets}
-  </ul>
-</section>
-""").strip()
-
-
 _AGENTIC_FOOTNOTE = (
     '<p class="footnote">🤖 This section includes data retrieved by an AI agent '
     'querying the SAFE database directly during report generation.</p>\n'
@@ -1286,7 +1304,8 @@ def build_html(
     annex_html: str,
     exec_bullets: list[str],
     toc_html: str,
-    painting_html: str = "",
+    painting_inner_html: str = "",
+    latest_wave: int = 0,
 ) -> str:
     # Group sections and emit h2 group headings between them
     by_group: dict[str, list[dict]] = {}
@@ -1316,19 +1335,32 @@ def build_html(
                 )
             )
 
-    exec_section = (
-        EXEC_SUMMARY_TMPL.format(
-            bullets="\n".join(f"    <li>{b.lstrip('• ').strip()}</li>" for b in exec_bullets)
-        )
-        if exec_bullets else ""
+    # Build exec-flex: painting (1) + exec summary (3)
+    painting_slot = (
+        f'<div class="exec-painting">{painting_inner_html}</div>'
+        if painting_inner_html else ""
     )
+    exec_bullets_html = "\n".join(
+        f"    <li>{b.lstrip('• ').strip()}</li>" for b in exec_bullets
+    )
+    exec_summary_div = (
+        f'<div class="exec-summary">\n'
+        f'  <h2>Executive Summary</h2>\n'
+        f'  <ul>\n{exec_bullets_html}\n  </ul>\n'
+        f'</div>'
+    ) if exec_bullets else ""
+    exec_flex = (
+        f'<div class="exec-flex">{painting_slot}{exec_summary_div}</div>'
+        if (painting_slot or exec_summary_div) else ""
+    )
+
     return HTML_PAGE.format(
         date=date.today().strftime("%d %b %Y"),
+        wave=latest_wave,
         annex=annex_html,
-        exec_summary_section=exec_section,
+        exec_flex=exec_flex,
         toc=toc_html,
         sections="\n\n".join(sections_parts),
-        painting_html=painting_html,
     )
 
 
@@ -1351,6 +1383,8 @@ def main() -> None:
     data = fetch_all(dev=args.dev)
     for sid, df in data.items():
         print(f"  {sid}: {len(df)} rows")
+    latest_wave = max(df["wave_number"].max() for df in data.values())
+    print(f"  Latest wave: {latest_wave}")
 
     cost_tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
 
@@ -1412,20 +1446,23 @@ def main() -> None:
     annex_html = build_annex_html(ANNEX_CSV)
 
     print("Fetching painting thumbnail...")
-    painting_html = _fetch_painting_html()
+    painting_inner_html = _fetch_painting_inner_html()
 
     print("Assembling HTML...")
-    html = build_html(rendered, annex_html, exec_bullets, toc_html, painting_html)
+    html = build_html(rendered, annex_html, exec_bullets, toc_html, painting_inner_html, latest_wave)
 
     out_path = OUTPUT_DIR / "report_latest.html"
     out_path.write_text(html, encoding="utf-8")
     print(f"Saved → {out_path}")
 
-    w = 42
+    w = 54
     print(f"\n{'─' * w}\nRun cost estimate")
     for model, m in sorted(cost_tracker["by_model"].items()):
+        cache_note = ""
+        if m.get("cache_write") or m.get("cache_read"):
+            cache_note = f"  (cache write={m['cache_write']:,} read={m['cache_read']:,})"
         print(f"  {model:<28} {m['calls']:>3} calls  "
-              f"{m['input']:>7,} in  {m['output']:>5,} out  ${m['usd']:.4f}")
+              f"{m['input']:>7,} in  {m['output']:>5,} out  ${m['usd']:.4f}{cache_note}")
     print(f"  {'─' * (w - 2)}")
     print(f"  {'Total':<28} {cost_tracker['calls']:>3} calls  "
           f"{cost_tracker['input_tokens']:>7,} in  {cost_tracker['output_tokens']:>5,} out  "

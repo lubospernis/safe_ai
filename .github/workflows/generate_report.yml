@@ -68,3 +68,8 @@ jobs:
           publish_dir: reports/output
           publish_branch: gh-pages
           keep_files: false
+
+      - name: Send newsletter
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: python reports/send_newsletter.py

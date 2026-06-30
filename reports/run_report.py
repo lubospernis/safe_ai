@@ -570,7 +570,7 @@ def get_section_content(sec: dict, df: pd.DataFrame) -> dict:
         system=system_prompt,
         messages=[{"role": "user", "content": user_msg}],
     )
-    raw = msg.content[0].text.strip()
+    raw = msg.content[0].text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
     try:
         parsed = json.loads(raw)
         finding = str(parsed.get("finding", sec["title"]))

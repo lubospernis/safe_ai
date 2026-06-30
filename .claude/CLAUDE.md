@@ -17,8 +17,11 @@ cd dbt_project && ../env/bin/dbt run --profiles-dir . --target dev
 
 # 2. Run the report against local DuckDB
 cd ..
-ANTHROPIC_API_KEY=<key> env/bin/python3 reports/run_report.py --dev
+source .env && env/bin/python3 reports/run_report.py --dev
 ```
+
+**API keys for local testing**: stored in `.env` (gitignored). `source .env` loads
+`ANTHROPIC_API_KEY` into the shell before running the report script.
 
 **Dev vs prod schema**: dbt's dev target writes to `main_safe_safe` (DuckDB file: `dev.duckdb`);
 prod writes to `main_safe` on MotherDuck. `run_report.py --dev` rewrites the schema name

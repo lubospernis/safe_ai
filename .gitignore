@@ -1,6 +1,9 @@
 # dlt secrets — never commit credentials
 .dlt/secrets.toml
 
+# Local environment variables (API keys, tokens — never commit)
+.env
+
 # dlt pipeline state and local DuckDB files
 *.duckdb
 *.duckdb.wal

@@ -24,6 +24,7 @@ import csv
 import io
 import json
 import os
+import re
 import textwrap
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
@@ -71,6 +72,72 @@ MISSINGNESS_FOOTNOTE = (
     "wave × country × sub-item cell are excluded from the chart; gaps in series indicate "
     "insufficient data for that period.</p>"
 )
+
+# ---------------------------------------------------------------------------
+# Tool-use: query_mart
+# ---------------------------------------------------------------------------
+
+ALLOWED_MART_TABLES = {
+    "mart_safe__financing_conditions", "mart_safe__financing_purpose",
+    "mart_safe__slovakia_kpis", "mart_safe__business_problems",
+    "mart_safe__financing_factors", "mart_safe__loan_applications",
+    "mart_safe__business_situation", "mart_safe__outlook",
+    "mart_safe__availability_expectations", "mart_safe__expectations",
+    "mart_safe__survey_participants", "mart_safe__question_coverage",
+    "int_safe__core_questions_long",
+}
+_WRITE_RE = re.compile(
+    r"\b(INSERT|UPDATE|DELETE|DROP|CREATE|COPY|TRUNCATE|ALTER)\b", re.IGNORECASE
+)
+MAX_TOOL_ROWS = 30
+MAX_TOOL_TURNS = 4
+
+QUERY_MART_TOOL = {
+    "name": "query_mart",
+    "description": (
+        "Execute a read-only DuckDB SELECT against the SAFE mart tables. "
+        "Use only when the provided section data is insufficient to make a specific, "
+        "defensible claim — e.g. to check a historical high/low beyond the 4 waves shown, "
+        "a sub-item not in the standard data, or a cross-country comparison for context. "
+        "Always use fully-qualified table names: main_safe.mart_safe__<name>. "
+        "Only SELECT is permitted. Returns results as a markdown table."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "sql": {
+                "type": "string",
+                "description": (
+                    "A SELECT query. Must reference main_safe.mart_safe__* or "
+                    "main_safe.int_safe__core_questions_long only."
+                ),
+            }
+        },
+        "required": ["sql"],
+    },
+}
+
+
+def _run_query_tool(sql: str, con, schema: str) -> str:
+    """Validate and execute a tool-use SQL query. Returns markdown table or error string."""
+    if _WRITE_RE.search(sql):
+        return "ERROR: only SELECT queries are permitted."
+    referenced = set(re.findall(r"(mart_safe__\w+|int_safe__\w+)", sql))
+    disallowed = referenced - ALLOWED_MART_TABLES
+    if disallowed:
+        return f"ERROR: table(s) not in whitelist: {disallowed}"
+    sql = sql.replace(f"{PROD_SCHEMA}.", f"{schema}.")
+    try:
+        df = con.execute(sql).df()
+    except Exception as e:
+        return f"ERROR executing query: {e}"
+    if df.empty:
+        return "Query returned 0 rows."
+    truncated = len(df) > MAX_TOOL_ROWS
+    result = df.head(MAX_TOOL_ROWS).to_markdown(index=False)
+    if truncated:
+        result += f"\n\n_(truncated to {MAX_TOOL_ROWS} rows)_"
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -515,6 +582,14 @@ SECTION_CONTENT_SYSTEM = textwrap.dedent("""
     Focus:
     {focus}
 
+    Tool use:
+    You have a query_mart tool that runs SQL against the SAFE mart tables.
+    Use it only when the provided data is insufficient to make a specific, defensible claim.
+    Good reasons: verify a historical extreme beyond the waves shown, check a sub-item not
+    in the standard data, confirm a cross-country difference. Bad reasons: recalculate what
+    you already have, reformat existing numbers. Prefer the provided data when it suffices.
+    Cite only numbers from the provided data or from a tool result you actually ran.
+
     Return valid JSON only — no markdown fences, no commentary.
 """).strip()
 
@@ -610,24 +685,9 @@ def _sme_divergence_note(df: pd.DataFrame, value_col: str, panel_col: str | None
     return " ".join(notes)
 
 
-def get_section_content(sec: dict, df: pd.DataFrame) -> dict:
-    """Return {"finding": str, "bullets": [str, ...]} for a section via one Sonnet call."""
-    system_prompt = SECTION_CONTENT_SYSTEM.format(
-        sign_note=sec["sign_note"],
-        focus=sec["focus"],
-    )
-    base_data = _fmt_data_for_prompt(sec, df)
-    divergence = _sme_divergence_note(df, sec["value_col"], sec.get("panel_col"))
-    user_msg = base_data + (f"\n\nSME divergence check:\n{divergence}" if divergence else "")
-
-    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    msg = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=600,
-        system=system_prompt,
-        messages=[{"role": "user", "content": user_msg}],
-    )
-    raw = msg.content[0].text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+def _parse_section_response(raw: str, sec: dict) -> dict:
+    """Parse Sonnet JSON response into {"finding", "bullets"}. Shared by agentic function."""
+    raw = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
     try:
         parsed = json.loads(raw)
         finding = str(parsed.get("finding", sec["title"]))
@@ -640,6 +700,71 @@ def get_section_content(sec: dict, df: pd.DataFrame) -> dict:
         finding = sec["title"]
         bullets = [line.strip().lstrip("•- ") for line in raw.splitlines() if line.strip()][:3]
     return {"finding": finding, "bullets": bullets}
+
+
+def get_section_content_agentic(sec: dict, df: pd.DataFrame, tool_con, schema: str) -> dict:
+    """Return {"finding": str, "bullets": [str, ...]} via an agentic Sonnet loop.
+
+    Claude may call query_mart 0–3 times to fetch additional context before producing
+    its final JSON response. All tool queries are validated (read-only + whitelist)
+    before execution.
+    """
+    system_prompt = SECTION_CONTENT_SYSTEM.format(
+        sign_note=sec["sign_note"],
+        focus=sec["focus"],
+    )
+    base_data = _fmt_data_for_prompt(sec, df)
+    divergence = _sme_divergence_note(df, sec["value_col"], sec.get("panel_col"))
+    initial_msg = base_data + (f"\n\nSME divergence check:\n{divergence}" if divergence else "")
+
+    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    messages = [{"role": "user", "content": initial_msg}]
+
+    for turn in range(MAX_TOOL_TURNS):
+        response = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=1500,
+            system=system_prompt,
+            tools=[QUERY_MART_TOOL],
+            messages=messages,
+        )
+
+        if response.stop_reason != "tool_use":
+            # Final text response — extract and parse
+            text_blocks = [b.text for b in response.content if hasattr(b, "text")]
+            raw = text_blocks[-1] if text_blocks else ""
+            return _parse_section_response(raw, sec)
+
+        # Process tool calls
+        messages.append({"role": "assistant", "content": response.content})
+        tool_results = []
+        for block in response.content:
+            if block.type != "tool_use":
+                continue
+            sql = block.input.get("sql", "")
+            print(f"    [tool_use] query_mart called (turn {turn + 1}): {sql[:120]!r}")
+            result = _run_query_tool(sql, tool_con, schema)
+            tool_results.append({
+                "type": "tool_result",
+                "tool_use_id": block.id,
+                "content": result,
+            })
+        messages.append({"role": "user", "content": tool_results})
+
+    # Exceeded MAX_TOOL_TURNS — request a final answer without tools
+    messages.append({
+        "role": "user",
+        "content": "Please now return your final JSON response with finding and bullets.",
+    })
+    final = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=800,
+        system=system_prompt,
+        messages=messages,
+    )
+    text_blocks = [b.text for b in final.content if hasattr(b, "text")]
+    raw = text_blocks[-1] if text_blocks else ""
+    return _parse_section_response(raw, sec)
 
 
 # ---------------------------------------------------------------------------
@@ -987,6 +1112,9 @@ def main() -> None:
         flag = "✓" if r["interesting"] else "✗"
         print(f"  {flag} {sid}: {r['reason']} [chart={r['chart_type']}, best_panel={r['best_panel']}]")
 
+    schema = DEV_SCHEMA if args.dev else PROD_SCHEMA
+    tool_con = _get_connection(args.dev)
+
     rendered = []
     for sec in SECTIONS:
         sid = sec["id"]
@@ -1002,7 +1130,7 @@ def main() -> None:
             chart_png = build_chart(sec, data[sid], r["chart_type"], r["best_panel"])
 
         print(f"  Generating finding + bullets for {sid}...")
-        content = get_section_content(sec, data[sid])
+        content = get_section_content_agentic(sec, data[sid], tool_con, schema)
         print(f"    finding: {content['finding']}")
         for b in content["bullets"]:
             print(f"    {b}")
@@ -1018,6 +1146,8 @@ def main() -> None:
             "routed": sec.get("routed", False),
             "has_missingness_caveat": sec.get("has_missingness_caveat", False),
         })
+
+    tool_con.close()
 
     print("Generating executive summary...")
     exec_bullets = get_exec_summary(rendered) if rendered else []

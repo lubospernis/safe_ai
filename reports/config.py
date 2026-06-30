@@ -89,6 +89,10 @@ SECTIONS = [
             "need_nb = Q5 net balance: positive = more firms report increased financing need. "
             "availability_nb = Q9 net balance: positive = more firms report improved availability (FAVOURABLE). "
             "financing_gap_wtd = need_nb minus availability_nb: positive = need exceeds availability (ADVERSE). "
+            "CRITICAL for comparisons: a LARGER positive gap = MORE stressed (worse). "
+            "A SMALLER positive gap = LESS stressed (better). "
+            "Example: SK gap +4.8pp vs EA gap +6.6pp means SK is LESS stressed than EA — NOT tighter. "
+            "Always state which country is more/less stressed when comparing gaps. "
             "All values are net balances in percentage points."
         ),
         "value_col": "financing_gap_wtd",

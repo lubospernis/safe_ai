@@ -524,18 +524,33 @@ def _fmt_data_for_prompt(sec: dict, df: pd.DataFrame) -> str:
     if sec["id"] == "financing_gap":
         def fmt_gap(d: pd.DataFrame, label: str) -> str:
             rows = [f"{label}:"]
-            # Cross-country rows (main chart type): SK/EA/DE for bank loans, credit lines, trade credit
             main_rows = d[d.get("chart_type", "main") == "main"] if "chart_type" in d.columns else d
             by_inst = main_rows.groupby("sub_item")
             for sub_item, grp in sorted(by_inst, key=lambda x: x[0]):
                 inst_label = grp["sub_item_label"].iloc[0] if not grp.empty else sub_item
                 rows.append(f"  [{inst_label}]")
+                sk_gap = ea_gap = None
                 for _, r in grp.iterrows():
                     need = f"{r['need_nb']:+.1f}" if pd.notna(r.get("need_nb")) else "n/a"
                     avail = f"{r['availability_nb']:+.1f}" if pd.notna(r.get("availability_nb")) else "n/a"
-                    gap = f"{r['financing_gap_wtd']:+.1f}" if pd.notna(r.get("financing_gap_wtd")) else "n/a"
+                    gap_val = r.get("financing_gap_wtd")
+                    gap = f"{gap_val:+.1f}" if pd.notna(gap_val) else "n/a"
                     n = int(r["n_respondents_need"]) if pd.notna(r.get("n_respondents_need")) else "?"
                     rows.append(f"    {r['country_code']} | need={need}pp (n={n}) | avail={avail}pp | gap={gap}pp")
+                    if r["country_code"] == "SK" and pd.notna(gap_val):
+                        sk_gap = gap_val
+                    if r["country_code"] == "EA" and pd.notna(gap_val):
+                        ea_gap = gap_val
+                # Pre-compute SK vs EA comparison to prevent sign errors
+                if sk_gap is not None and ea_gap is not None:
+                    diff = sk_gap - ea_gap
+                    if diff > 0:
+                        comparison = f"SK gap is {diff:+.1f}pp HIGHER than EA → SK MORE stressed than EA"
+                    elif diff < 0:
+                        comparison = f"SK gap is {diff:+.1f}pp LOWER than EA → SK LESS stressed than EA"
+                    else:
+                        comparison = "SK gap equals EA gap"
+                    rows.append(f"    ↳ Comparison: {comparison}")
             return "\n".join(rows)
         return fmt_gap(latest, f"Wave {latest_wave} (latest)") + "\n\n" + fmt_gap(prev, f"Wave {prev_wave} (previous)")
 

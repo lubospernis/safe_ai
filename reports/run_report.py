@@ -33,6 +33,7 @@ from pathlib import Path
 import yaml
 import anthropic
 import duckdb
+from dotenv import load_dotenv
 from mistralai import Mistral
 import matplotlib
 import matplotlib.pyplot as plt
@@ -41,6 +42,7 @@ import numpy as np
 import pandas as pd
 
 matplotlib.use("Agg")
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 from config import SECTIONS  # noqa: E402  (local import after matplotlib setup)
 
@@ -77,10 +79,50 @@ _PRICE = {
 
 def _track_cost(tracker: dict, model: str, input_tok: int, output_tok: int) -> None:
     p = _PRICE.get(model, {"input": 0.0, "output": 0.0})
+    usd = (input_tok * p["input"] + output_tok * p["output"]) / 1_000_000
     tracker["input_tokens"] += input_tok
     tracker["output_tokens"] += output_tok
-    tracker["usd"] += (input_tok * p["input"] + output_tok * p["output"]) / 1_000_000
+    tracker["usd"] += usd
     tracker["calls"] += 1
+    m = tracker["by_model"].setdefault(model, {"calls": 0, "input": 0, "output": 0, "usd": 0.0})
+    m["calls"] += 1
+    m["input"] += input_tok
+    m["output"] += output_tok
+    m["usd"] += usd
+
+
+# Artwork shown in report header — update each quarter
+ARTWORK = {
+    "page_url": "https://www.webumenia.sk/dielo/SVK:SNG.IM_127",
+    "img_url": "https://www.webumenia.sk/dielo/nahlad/SVK:SNG.IM_127/600",
+    "title": "Ján Mudroch — Krajina (1946)",
+}
+
+
+def _fetch_painting_html() -> str:
+    """Fetch the quarterly artwork and return an HTML snippet for the report header.
+    Returns empty string on any network failure so the report still builds.
+    """
+    import requests as _requests
+    try:
+        resp = _requests.get(ARTWORK["img_url"], timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+        resp.raise_for_status()
+        b64 = base64.b64encode(resp.content).decode()
+        ct = resp.headers.get("Content-Type", "image/jpeg").split(";")[0].strip()
+        title = ARTWORK["title"]
+        page_url = ARTWORK["page_url"]
+        return (
+            f'<div class="painting-wrap">'
+            f'<a href="{page_url}" target="_blank" title="{title}">'
+            f'<img class="painting" src="data:{ct};base64,{b64}" alt="{title}">'
+            f'</a>'
+            f'<span class="painting-credit"><a href="{page_url}" target="_blank" '
+            f'style="color:#aaa;text-decoration:none;">{title}</a></span>'
+            f'</div>'
+        )
+    except Exception as e:
+        print(f"  Warning: could not fetch painting ({e}) — skipping thumbnail")
+        return ""
 
 
 ROUTED_FOOTNOTE = (
@@ -892,6 +934,7 @@ def get_section_content_agentic(
 
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     messages = [{"role": "user", "content": initial_msg}]
+    tool_calls_made = 0
 
     for turn in range(MAX_TOOL_TURNS):
         response = client.messages.create(
@@ -909,7 +952,9 @@ def get_section_content_agentic(
             # Final text response — extract and parse
             text_blocks = [b.text for b in response.content if hasattr(b, "text")]
             raw = text_blocks[-1] if text_blocks else ""
-            return _parse_section_response(raw, sec)
+            result = _parse_section_response(raw, sec)
+            result["tool_calls"] = tool_calls_made
+            return result
 
         # Process tool calls
         messages.append({"role": "assistant", "content": response.content})
@@ -920,6 +965,7 @@ def get_section_content_agentic(
             sql = block.input.get("sql", "")
             print(f"    [tool_use] query_mart called (turn {turn + 1}): {sql[:120]!r}")
             result = _run_query_tool(sql, tool_con, schema)
+            tool_calls_made += 1
             tool_results.append({
                 "type": "tool_result",
                 "tool_use_id": block.id,
@@ -942,7 +988,9 @@ def get_section_content_agentic(
                 final.usage.input_tokens, final.usage.output_tokens)
     text_blocks = [b.text for b in final.content if hasattr(b, "text")]
     raw = text_blocks[-1] if text_blocks else ""
-    return _parse_section_response(raw, sec)
+    result = _parse_section_response(raw, sec)
+    result["tool_calls"] = tool_calls_made
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -1185,11 +1233,17 @@ HTML_PAGE = textwrap.dedent("""
                              border-radius: 3px; font-size: 11px; }}
   .badge-ecb              {{ background: #eef4fb; color: #0777b3; padding: 1px 6px;
                              border-radius: 3px; font-size: 11px; }}
+
+  /* Painting thumbnail */
+  .painting-wrap  {{ float: right; margin: 0 0 16px 24px; max-width: 160px; }}
+  .painting       {{ width: 100%; border-radius: 4px; display: block; border: 1px solid #e0e0e0; }}
+  .painting-credit {{ font-size: 9px; color: #aaa; display: block; margin-top: 3px;
+                      text-align: right; font-style: italic; line-height: 1.3; }}
 </style>
 </head>
 <body>
 <h1>ECB SAFE Survey — Automatic Report</h1>
-<p class="meta">Slovakia · Euro Area · Germany &nbsp;|&nbsp; Generated {date}</p>
+{painting_html}<p class="meta">Slovakia · Euro Area · Germany &nbsp;|&nbsp; Generated {date}</p>
 {annex}
 {exec_summary_section}
 {toc}
@@ -1207,7 +1261,7 @@ SECTION_TMPL = textwrap.dedent("""
   <ul>
 {bullets}
   </ul>
-{footnote}  <img src="data:image/png;base64,{chart_b64}" alt="{title} chart">
+{footnote}{agentic_footnote}  <img src="data:image/png;base64,{chart_b64}" alt="{title} chart">
 </section>
 """).strip()
 
@@ -1221,11 +1275,18 @@ EXEC_SUMMARY_TMPL = textwrap.dedent("""
 """).strip()
 
 
+_AGENTIC_FOOTNOTE = (
+    '<p class="footnote">🤖 This section includes data retrieved by an AI agent '
+    'querying the SAFE database directly during report generation.</p>\n'
+)
+
+
 def build_html(
     rendered_sections: list[dict],
     annex_html: str,
     exec_bullets: list[str],
     toc_html: str,
+    painting_html: str = "",
 ) -> str:
     # Group sections and emit h2 group headings between them
     by_group: dict[str, list[dict]] = {}
@@ -1250,6 +1311,7 @@ def build_html(
                         (ROUTED_FOOTNOTE + "\n" if s.get("routed") else "") +
                         (MISSINGNESS_FOOTNOTE + "\n" if s.get("has_missingness_caveat") else "")
                     ),
+                    agentic_footnote=_AGENTIC_FOOTNOTE if s.get("tool_calls", 0) > 0 else "",
                     chart_b64=base64.b64encode(s["chart_png"]).decode(),
                 )
             )
@@ -1266,6 +1328,7 @@ def build_html(
         exec_summary_section=exec_section,
         toc=toc_html,
         sections="\n\n".join(sections_parts),
+        painting_html=painting_html,
     )
 
 
@@ -1289,7 +1352,7 @@ def main() -> None:
     for sid, df in data.items():
         print(f"  {sid}: {len(df)} rows")
 
-    cost_tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0}
+    cost_tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
 
     print("Running interest checks (parallel)...")
     interest = check_all_interest(SECTIONS, data, cost_tracker)
@@ -1332,6 +1395,7 @@ def main() -> None:
             "sign_note": sec["sign_note"],
             "routed": sec.get("routed", False),
             "has_missingness_caveat": sec.get("has_missingness_caveat", False),
+            "tool_calls": content.get("tool_calls", 0),
         })
 
     tool_con.close()
@@ -1347,22 +1411,26 @@ def main() -> None:
     print("Building question annex...")
     annex_html = build_annex_html(ANNEX_CSV)
 
+    print("Fetching painting thumbnail...")
+    painting_html = _fetch_painting_html()
+
     print("Assembling HTML...")
-    html = build_html(rendered, annex_html, exec_bullets, toc_html)
+    html = build_html(rendered, annex_html, exec_bullets, toc_html, painting_html)
 
     out_path = OUTPUT_DIR / "report_latest.html"
     out_path.write_text(html, encoding="utf-8")
     print(f"Saved → {out_path}")
 
-    print(
-        f"\n{'─' * 42}\n"
-        f"Run cost estimate\n"
-        f"  API calls  : {cost_tracker['calls']}\n"
-        f"  Input tok  : {cost_tracker['input_tokens']:,}\n"
-        f"  Output tok : {cost_tracker['output_tokens']:,}\n"
-        f"  Est. cost  : ${cost_tracker['usd']:.4f}\n"
-        f"{'─' * 42}"
-    )
+    w = 42
+    print(f"\n{'─' * w}\nRun cost estimate")
+    for model, m in sorted(cost_tracker["by_model"].items()):
+        print(f"  {model:<28} {m['calls']:>3} calls  "
+              f"{m['input']:>7,} in  {m['output']:>5,} out  ${m['usd']:.4f}")
+    print(f"  {'─' * (w - 2)}")
+    print(f"  {'Total':<28} {cost_tracker['calls']:>3} calls  "
+          f"{cost_tracker['input_tokens']:>7,} in  {cost_tracker['output_tokens']:>5,} out  "
+          f"${cost_tracker['usd']:.4f}")
+    print(f"{'─' * w}")
     print("Done.")
 
 

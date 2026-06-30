@@ -13,6 +13,9 @@ Claude: tick items off as they get built; don't add speculative sub-tasks.
 
 ## Next
 
+- [ ] Include hyperlinks to the exec summary (or even hovers of numbers)
+- [ ] Ask for feedback to the exec summary
+
 - [ ] Country selector — let the user pick a focal country in the report config (currently hard-coded to SK)
 - [ ] Wave comparison toggle — show current wave vs previous wave side-by-side in charts
 - [ ] Scheduled auto-generation — run `run_report.py` automatically when a new SAFE wave is released and email/notify the user

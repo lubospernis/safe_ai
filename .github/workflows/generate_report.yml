@@ -54,6 +54,11 @@ jobs:
           MISTRAL_API_KEY:   ${{ secrets.MISTRAL_API_KEY }}
         run: python reports/run_report.py
 
+      - name: Quality check (sign-off supervisor)
+        env:
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+        run: python reports/quality_check.py
+
       - name: Run gap analysis
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

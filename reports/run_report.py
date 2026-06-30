@@ -815,12 +815,6 @@ SECTION_CONTENT_SYSTEM = textwrap.dedent("""
       - Include sample size for SK and EA where available: "a net 26% of firms (n=80)..."
       - One sentence per bullet, max ~25 words.
 
-    Sign convention for this section:
-    {sign_note}
-
-    Focus:
-    {focus}
-
     Available mart tables and columns:
     {schema_catalogue}
 
@@ -981,20 +975,26 @@ def get_section_content_agentic(
     its final JSON response. All tool queries are validated (read-only + whitelist)
     before execution.
     """
+    # System prompt is identical across all sections (schema_catalogue and query_templates
+    # are the only variable parts, and they don't change between sections). The
+    # cache_control block tells Anthropic to cache this prefix — subsequent section calls
+    # pay only 10% of normal input price for these tokens.
     system_prompt = SECTION_CONTENT_SYSTEM.format(
-        sign_note=sec["sign_note"],
-        focus=sec["focus"],
         schema_catalogue=mart_catalogue,
         query_templates=MART_QUERY_TEMPLATES,
     )
-    base_data = _fmt_data_for_prompt(sec, df)
-    divergence = _sme_divergence_note(df, sec["value_col"], sec.get("panel_col"))
-    initial_msg = base_data + (f"\n\nSME divergence check:\n{divergence}" if divergence else "")
-
-    # Cache the system prompt — identical across all section calls, saves ~90% of
-    # system-prompt input tokens on calls 2–11.
     cached_system = [{"type": "text", "text": system_prompt,
                       "cache_control": {"type": "ephemeral"}}]
+
+    # Section-specific context goes in the user message (not the system prompt) so the
+    # cached system block stays byte-for-byte identical across all section calls.
+    base_data = _fmt_data_for_prompt(sec, df)
+    divergence = _sme_divergence_note(df, sec["value_col"], sec.get("panel_col"))
+    section_header = (
+        f"Sign convention: {sec['sign_note']}\n"
+        f"Focus: {sec['focus']}\n\n"
+    )
+    initial_msg = section_header + base_data + (f"\n\nSME divergence check:\n{divergence}" if divergence else "")
 
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     messages = [{"role": "user", "content": initial_msg}]

@@ -16,6 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pages: write
+      id-token: write
 
     # For workflow_run triggers, skip if upstream failed.
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
@@ -51,10 +53,13 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python reports/run_report.py
 
-      - name: Commit report HTML
-        uses: stefanzweifel/git-auto-commit-action@v5
+      - name: Rename report for Pages
+        run: mv reports/output/report_latest.html reports/output/index.html
+
+      - name: Publish to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          commit_message: "chore: update report [skip ci]"
-          file_pattern: reports/output/report_latest.html
-          commit_user_name: github-actions[bot]
-          commit_user_email: github-actions[bot]@users.noreply.github.com
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: reports/output
+          publish_branch: gh-pages
+          keep_files: false

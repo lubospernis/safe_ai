@@ -3,72 +3,57 @@
 _Generated 30 Jun 2026 — ECB source: [https://www.ecb.europa.eu/stats/ecb_surveys/safe/html/ecb.safe202604.en.html](https://www.ecb.europa.eu/stats/ecb_surveys/safe/html/ecb.safe202604.en.html)_
 
 ## Summary
-The automated report focuses heavily on pricing, financing gaps, and backward/forward-looking sentiment but omits several key analytical layers present in the ECB’s SAFE publication. These include granular breakdowns of financing purposes (e.g., inventories vs. fixed investment), non-bank financing instruments (trade credit, credit lines), composite financing gaps, and macroeconomic context (e.g., inflation expectations, geopolitical shocks). The ECB report also integrates firm-size and sectoral comparisons, as well as qualitative insights (e.g., reasons for not applying for loans), which are absent or underdeveloped in the automated version.
+The ECB SAFE report provides a comprehensive, euro-area-wide analysis with granular breakdowns by firm size, sector, and country, including forward-looking expectations, composite indicators (e.g., financing gaps, principal components), and contextual macroeconomic insights (e.g., war in the Middle East impacts). The automated report focuses narrowly on Slovak firm-specific trends, omitting cross-country comparisons, composite metrics, and deeper thematic analyses (e.g., inflation risk balance, vulnerability, or purpose-of-financing shifts). Key ECB sections on non-bank financing (e.g., equity, debt securities), obstacles to financing, and firm vulnerabilities are entirely absent or superficial in the automated report.
 
 ---
 
 ## Gaps Found
 
-1. **Purpose of Financing (Section 2.3)**
-   - **Questions involved**: Q6A
-   - **Missing insight**: The automated report lacks detail on how firms allocate financing (e.g., 39% for inventories/working capital vs. 37% for fixed investment). This would reveal shifts in strategic priorities (e.g., short-term resilience vs. long-term growth) and sectoral pressures (e.g., supply chain disruptions driving inventory financing).
+### **1. Composite Financing Gap (All Instruments)**
+- **ECB Section**: *2.2 Unchanged needs and a marginal decrease in availability led to an increase in the financing gap* (Chart 4)
+- **Questions Involved**: Q5 (needs), Q9 (availability) for *all* instruments (bank loans, credit lines, trade credit, debt securities, equity).
+- **Missing Insight**: The automated report only covers bank loans, credit lines, and trade credit in isolation. The ECB’s *composite financing gap* (Q5 + Q9 aggregated across all instruments) reveals systemic stress (e.g., net +3% EA-wide in Q1 2026) and size-class differences (SMEs +4% vs. large firms +3%). **Value**: Identifies whether financing constraints are broad-based or instrument-specific.
 
-2. **Non-Bank Financing Instruments (Section 2.2)**
-   - **Questions involved**: Q5, Q9 (for trade credit and credit lines)
-   - **Missing insight**: No analysis of trade credit or credit line gaps (e.g., net +11% need for trade credit vs. +4% availability). This omits alternative financing channels critical for SMEs, which may offset or exacerbate bank loan constraints.
+### **2. Obstacles to Obtaining Bank Loans**
+- **ECB Section**: *The percentage of firms reporting obstacles to obtaining a bank loan continued to stand at low levels* (Chart 10, Table 1 cols. 11–12)
+- **Questions Involved**: Q10 (terms/conditions), Q11 (obstacles: e.g., high costs, collateral, rejection).
+- **Missing Insight**: The ECB reports that only 6% of firms faced obstacles (down from 7%), with breakdowns by country (e.g., GR 15%, FI 7%). The automated report mentions rejection rates but omits *types of obstacles* (e.g., collateral requirements, high interest rates) or their evolution. **Value**: Distinguishes between price vs. non-price barriers to credit.
 
-3. **Composite Financing Gap (Section 2.2)**
-   - **Questions involved**: Q5, Q9 (aggregated across all instruments)
-   - **Missing insight**: The automated report only covers bank loans, ignoring the composite gap (net +3% across all instruments). This masks cross-instrument substitution effects (e.g., firms shifting from bank loans to trade credit).
+### **3. Financially Vulnerable Firms**
+- **ECB Section**: *Over the past three months, the share of financially vulnerable firms was low* (Chart 12, Table 1 col. 13–14)
+- **Questions Involved**: Q23 (difficulty servicing debt/managing business).
+- **Missing Insight**: The ECB tracks the percentage of firms in significant distress (4% EA-wide in Q1 2026, stable vs. Q4 2025). The automated report lacks this metric entirely. **Value**: Early warning signal for credit risk and insolvency trends.
 
-4. **Factors Affecting Financing Availability (Section 1)**
-   - **Questions involved**: Q11 (e.g., Q11f on banks’ willingness to lend)
-   - **Missing insight**: The ECB highlights that 26% of firms cite the economic outlook as a constraint (Q11), while the automated report only notes banks’ willingness (Q11f) without broader contextual drivers (e.g., geopolitical risks, demand uncertainty).
+### **4. Expected Availability of External Financing (Forward-Looking)**
+- **ECB Section**: *Firms expect the availability of external financing to decrease marginally* (Chart 6)
+- **Questions Involved**: Q26 (expectations for availability of bank loans, credit lines, trade credit, etc.).
+- **Missing Insight**: The ECB aggregates expectations across *all* instruments (net -4% EA-wide). The automated report only covers bank loans and trade credit for Slovakia, missing the broader outlook. **Value**: Anticipates future financing constraints beyond bank loans.
 
-5. **Inflation Expectations and Risks (Section 3.4)**
-   - **Questions involved**: Q31, Q34
-   - **Missing insight**: The ECB breaks down median inflation expectations (1-year: 3.0%, 5-year: 3.0%) and risk balances (65% see upside risks). The automated report only mentions upside risks in aggregate, missing horizon-specific trends and dispersion (e.g., SMEs vs. large firms).
+### **5. Use of Financing by Purpose (Detailed Breakdown)**
+- **ECB Section**: *Firms used financing primarily for inventories and working capital* (Chart 5)
+- **Questions Involved**: Q6A (purpose: inventories, fixed investment, R&D, etc.).
+- **Missing Insight**: The ECB provides *sectoral* and *size-class* breakdowns (e.g., large firms shifted toward inventories/working capital, SMEs stable). The automated report notes Slovak firms’ high reliance on working capital but omits comparisons to EA averages or sectoral trends. **Value**: Reveals structural shifts in capital allocation (e.g., short-term resilience vs. long-term investment).
 
-6. **Geopolitical Impact Analysis (Section 1 and 3.4)**
-   - **Questions involved**: Implicit in Q26 (expectations) and Q34 (price expectations)
-   - **Missing insight**: The ECB explicitly links the Middle East war to higher short-term inflation expectations (one-year horizon) and worsened loan availability outlook. The automated report lacks this causal analysis, despite having the underlying data.
+### **6. Inflation Expectations and Risk Balance**
+- **ECB Section**: *Euro area firms’ median inflation expectations increased markedly* (Charts 18–20)
+- **Questions Involved**: Q31 (1-year inflation), Q33 (3-year), Q34 (5-year), Q35 (risk balance: upside/downside).
+- **Missing Insight**: The ECB reports *median* expectations (1-year: 3.0% EA, up from 2.6%) and *risk balance* (65% see upside risks to 5-year inflation). The automated report only provides *mean* expectations for Slovakia. **Value**: Captures dispersion and asymmetry in inflation outlooks, critical for monetary policy.
 
-7. **Firm-Size and Sectoral Comparisons**
-   - **Questions involved**: All (e.g., Q10 by size, Q6A by sector)
-   - **Missing insight**: The ECB systematically compares SMEs vs. large firms (e.g., SMEs report higher input cost expectations). The automated report’s SK vs. EA comparisons are not granular by size/sector.
+### **7. Impact of Geopolitical Shocks (Middle East War)**
+- **ECB Section**: *The war in the Middle East has worsened firms’ expectations* (text analysis of daily responses)
+- **Questions Involved**: Q26 (availability expectations), Q31–34 (inflation), Q2 (economic outlook).
+- **Missing Insight**: The ECB isolates the effect of the war by comparing responses *before/after 28 February*, showing a sharp decline in 6-month expectations. The automated report lacks this event-study approach. **Value**: Quantifies exogenous shock impacts on financing and inflation.
 
-8. **Reasons for Not Applying for Loans (Section 2.1)**
-   - **Questions involved**: Q7A/B
-   - **Missing insight**: The ECB notes that sufficient internal funds are the top reason for not applying (Q7A). The automated report omits this demand-side context, which explains low application rates despite tight conditions.
+### **8. Non-Bank Financing Instruments (Equity, Debt Securities)**
+- **ECB Section**: Implicit in *composite financing gap* (Chart 4) and *Table 1*.
+- **Questions Involved**: Q5/Q9 for debt securities (Q7A/B) and equity (Q7A/B).
+- **Missing Insight**: The ECB includes these in the composite gap; the automated report ignores them entirely. **Value**: Reveals reliance on capital markets vs. bank lending, especially for large firms.
 
-9. **Investment and Employment Expectations (Section 3)**
-   - **Questions involved**: Q23, Q26
-   - **Missing insight**: The ECB details expected investment increases (net +13% for Q2) and employment growth (1%). The automated report only touches on turnover expectations (Q26), missing capital expenditure and labor market signals.
+### **9. Factors Constraining Availability of External Financing**
+- **ECB Section**: *Firms continued to perceive the general economic outlook as the main factor* (Chart 7)
+- **Questions Involved**: Q2 (economic outlook), Q9 (availability constraints: e.g., bank risk appetite, firm-specific factors).
+- **Missing Insight**: The ECB ranks constraints (e.g., economic outlook: net -26% impact on availability). The automated report mentions macro outlook but doesn’t link it to financing availability. **Value**: Identifies demand vs. supply-side drivers of credit tightness.
 
-10. **Financially Vulnerable Firms (Section 3)**
-    - **Questions involved**: Q12 (implied in "vulnerable firms" metric)
-    - **Missing insight**: The ECB reports only 4% of firms are financially vulnerable. The automated report lacks this solvency stress indicator, which contextualizes financing gaps.
-
----
-
-## Questions Not Reflected
-- Q6A (purpose of financing)
-- Q7A/B (reasons for not applying for loans)
-- Q9 (availability for trade credit/credit lines)
-- Q11 (factors affecting financing availability, beyond Q11f)
-- Q12 (financially vulnerable firms)
-- Q23 (expected changes in investment)
-- Q31 (inflation expectations by horizon)
-- Q33 (employment expectations)
-
----
-
-## Suggested Additions
-1. **Purpose of financing (Q6A)**: Add breakdown by inventories/working capital vs. fixed investment to reveal strategic shifts (e.g., short-term liquidity prioritization).
-2. **Non-bank financing gaps (Q5/Q9 for trade credit/credit lines)**: Include to show substitution effects and alternative funding pressures.
-3. **Composite financing gap (Q5/Q9 aggregated)**: Capture overall financing strain across all instruments, not just bank loans.
-4. **Geopolitical impact analysis (Q26/Q34)**: Explicitly link Middle East war to changes in expectations (e.g., loan availability, inflation).
-5. **Firm-size/sectoral breakdowns (all questions)**: Disaggregate SME vs. large firms and sector-specific trends (e.g., construction’s higher input cost expectations).
-6. **Reasons for not applying for loans (Q7A/B)**: Explain demand-side dynamics behind low application rates.
-7. **Inflation expectations by horizon (Q31)**: Add 1-year, 3-year, and 5-year medians to show term structure and dispersion.
-8. **Financially vulnerable firms (Q12)**: Include as a solvency stress metric to contextualize financing gaps.
+### **10. Application Rates and Discouragement (Detailed)**
+- **ECB Section**: *The share of firms applying for bank loans slightly decreased* (Chart 9)
+- **Questions Involved**: Q0B (application status),

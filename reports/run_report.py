@@ -574,12 +574,14 @@ def get_section_content(sec: dict, df: pd.DataFrame) -> dict:
     try:
         parsed = json.loads(raw)
         finding = str(parsed.get("finding", sec["title"]))
-        bullets = [b for b in parsed.get("bullets", []) if str(b).strip().startswith("•")][:3]
-        if not bullets:
-            bullets = [b.strip() for b in str(parsed.get("bullets", "")).splitlines() if b.strip().startswith("•")][:3]
+        raw_bullets = parsed.get("bullets", [])
+        if isinstance(raw_bullets, list):
+            bullets = [str(b).strip().lstrip("•- ") for b in raw_bullets if str(b).strip()][:3]
+        else:
+            bullets = [b.strip().lstrip("•- ") for b in str(raw_bullets).splitlines() if b.strip()][:3]
     except (json.JSONDecodeError, AttributeError):
         finding = sec["title"]
-        bullets = [line.strip() for line in raw.splitlines() if line.strip().startswith("•")][:3]
+        bullets = [line.strip().lstrip("•- ") for line in raw.splitlines() if line.strip()][:3]
     return {"finding": finding, "bullets": bullets}
 
 
@@ -619,7 +621,7 @@ def get_exec_summary(rendered_sections: list[dict]) -> list[str]:
         messages=[{"role": "user", "content": "\n".join(lines)}],
     )
     raw = msg.content[0].text.strip()
-    return [line.strip() for line in raw.splitlines() if line.strip().startswith("•")][:6]
+    return [line.strip().lstrip("•- ") for line in raw.splitlines() if line.strip()][:6]
 
 
 # ---------------------------------------------------------------------------

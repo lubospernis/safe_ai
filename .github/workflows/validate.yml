@@ -1,0 +1,41 @@
+name: SAFE — Validate against ECB SDW
+
+on:
+  workflow_run:
+    workflows: ["ECB SAFE — dbt Transformations"]
+    types:
+      - completed
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: Compare mart values to ECB published series
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install ecbdata duckdb pandas pyyaml
+
+      - name: Pre-cache MotherDuck extension
+        run: |
+          DUCKDB_VERSION=$(python -c "import duckdb; print(duckdb.__version__)")
+          EXT_DIR="$HOME/.duckdb/extensions/v${DUCKDB_VERSION}/linux_amd64"
+          mkdir -p "$EXT_DIR"
+          curl -fsSL \
+            "https://extensions.duckdb.org/v${DUCKDB_VERSION}/linux_amd64/motherduck.duckdb_extension.gz" \
+            | gunzip > "$EXT_DIR/motherduck.duckdb_extension"
+
+      - name: Run validation
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+        run: python validation/validate.py --waves 8

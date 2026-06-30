@@ -1,0 +1,14 @@
+checks:
+  - id: q5a_bank_loans_sk_sme_net
+    description: "Q5 bank loan financing need — Slovakia SMEs net balance"
+    mart:
+      table: main_safe.mart_safe__financing_conditions
+      filters:
+        question_id: q5
+        sub_item: a
+        country_code: SK
+        firm_size: sme
+      value_col: net_balance_wtd
+    ecb:
+      series_key: "SAFE.Q.SK.SME.A.0.0.0.Q5_G1.FBLN.NN.FL.WP"
+    tolerance_pp: 1.5

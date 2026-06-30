@@ -1458,7 +1458,7 @@ def build_html(
         f"    <li>{b.lstrip('• ').strip()}</li>" for b in exec_bullets
     )
     exec_summary_div = (
-        f'<div class="exec-summary">\n'
+        f'<div class="exec-summary" id="exec-summary">\n'
         f'  <h2>{exec_h2}</h2>\n'
         f'  <ul>\n{exec_bullets_html}\n  </ul>\n'
         f'</div>'

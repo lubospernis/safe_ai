@@ -89,9 +89,10 @@ class _Usage:
 def _track_cost(tracker: dict, model: str, usage) -> None:
     """Accept an Anthropic usage object (supports cache_creation/cache_read fields)."""
     p = _PRICE.get(model, {"input": 0.0, "output": 0.0})
+    # input_tokens is already ONLY non-cached tokens — cache fields are additive, not overlapping
+    normal_in   = getattr(usage, "input_tokens", 0) or 0
     cache_write = getattr(usage, "cache_creation_input_tokens", 0) or 0
     cache_read  = getattr(usage, "cache_read_input_tokens", 0) or 0
-    normal_in   = (getattr(usage, "input_tokens", 0) or 0) - cache_write - cache_read
     output_tok  = getattr(usage, "output_tokens", 0) or 0
     usd = (
         normal_in   * p["input"]          +
@@ -213,7 +214,7 @@ _WRITE_RE = re.compile(
     r"\b(INSERT|UPDATE|DELETE|DROP|CREATE|COPY|TRUNCATE|ALTER)\b", re.IGNORECASE
 )
 MAX_TOOL_ROWS = 30
-MAX_TOOL_TURNS = 4
+MAX_TOOL_TURNS = 2
 
 QUERY_MART_TOOL = {
     "name": "query_mart",
@@ -1003,7 +1004,7 @@ def get_section_content_agentic(
     for turn in range(MAX_TOOL_TURNS):
         response = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=1500,
+            max_tokens=600,
             system=cached_system,
             tools=[QUERY_MART_TOOL],
             messages=messages,
@@ -1044,7 +1045,7 @@ def get_section_content_agentic(
     })
     final = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=800,
+        max_tokens=600,
         system=cached_system,
         messages=messages,
         extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},

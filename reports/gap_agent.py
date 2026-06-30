@@ -3,10 +3,10 @@ ECB SAFE Gap Agent — compares the latest ECB SAFE publication against our auto
 report and writes a structured gap report to reports/output/gap_report.md.
 
 Usage:
-  python reports/gap_agent.py                           # reads URL from reports/ecb_url.txt
-  python reports/gap_agent.py --ecb-url <URL>           # explicit URL override
+  python reports/gap_agent.py                 # auto-discovers latest ECB URL
+  python reports/gap_agent.py --ecb-url <URL> # explicit URL override
 
-Update reports/ecb_url.txt each quarter with the new ECB publication URL.
+The latest ECB report URL is discovered automatically from the ECB SAFE index page.
 Output is pushed to gh-pages alongside the main report.
 """
 
@@ -24,9 +24,28 @@ from bs4 import BeautifulSoup
 OUTPUT_DIR = Path(__file__).parent / "output"
 REPORT_HTML = OUTPUT_DIR / "report_latest.html"
 GAP_REPORT = OUTPUT_DIR / "gap_report.md"
-ECB_URL_FILE = Path(__file__).parent / "ecb_url.txt"
+
+ECB_INDEX = "https://www.ecb.europa.eu/stats/ecb_surveys/safe/html/index.en.html"
+ECB_BASE  = "https://www.ecb.europa.eu"
 
 MAX_CHARS = 24_000  # ~6k tokens each; stay well within Sonnet context
+
+
+def discover_ecb_url() -> str:
+    """Scrape the ECB SAFE index page and return the URL of the latest report."""
+    resp = requests.get(ECB_INDEX, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
+    resp.raise_for_status()
+    soup = BeautifulSoup(resp.text, "lxml")
+    seen = set()
+    for a in soup.find_all("a", href=True):
+        href = a["href"]
+        # Match clean report URLs: ecb.safeYYYYMM.en.html with no fragment or cache-buster
+        if re.search(r"/ecb\.safe\d{6}\.en\.html$", href):
+            if href not in seen:
+                seen.add(href)
+                url = href if href.startswith("http") else ECB_BASE + href
+                return url
+    raise RuntimeError(f"Could not find latest SAFE report URL on {ECB_INDEX}")
 
 
 def fetch_ecb_text(url: str) -> str:
@@ -105,13 +124,15 @@ def run_gap_analysis(ecb_text: str, our_text: str) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="ECB SAFE gap analysis agent")
-    parser.add_argument("--ecb-url", help="ECB SAFE report URL (overrides ecb_url.txt)")
+    parser.add_argument("--ecb-url", help="ECB SAFE report URL (skips auto-discovery)")
     args = parser.parse_args()
 
-    ecb_url = args.ecb_url or ECB_URL_FILE.read_text().strip()
-    if not ecb_url:
-        print("ERROR: no ECB URL provided. Pass --ecb-url or populate reports/ecb_url.txt")
-        sys.exit(1)
+    if args.ecb_url:
+        ecb_url = args.ecb_url
+    else:
+        print(f"Discovering latest ECB SAFE report URL from {ECB_INDEX} ...")
+        ecb_url = discover_ecb_url()
+        print(f"  Found: {ecb_url}")
 
     if not REPORT_HTML.exists():
         print(f"ERROR: {REPORT_HTML} not found — run run_report.py first")

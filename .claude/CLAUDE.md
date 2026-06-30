@@ -1,3 +1,33 @@
+## Roadmap
+
+Feature ideas and implementation status are tracked in `.claude/ROADMAP.md`.
+When you complete a task that corresponds to a roadmap item, tick it off (change `[ ]` to `[x]`
+and move it to the Done section). Do not add speculative sub-tasks — only mark things done
+when the code is actually shipped.
+
+---
+
+## Testing Without MotherDuck
+
+Use the **dev target** (local DuckDB) for all testing — no `MOTHERDUCK_TOKEN` needed.
+
+```bash
+# 1. Rebuild dev marts after any dbt model change
+cd dbt_project && ../env/bin/dbt run --profiles-dir . --target dev
+
+# 2. Run the report against local DuckDB
+cd ..
+ANTHROPIC_API_KEY=<key> env/bin/python3 reports/run_report.py --dev
+```
+
+**Dev vs prod schema**: dbt's dev target writes to `main_safe_safe` (DuckDB file: `dev.duckdb`);
+prod writes to `main_safe` on MotherDuck. `run_report.py --dev` rewrites the schema name
+automatically — SQL files always reference `main_safe.*`.
+
+**Python env**: use `env/bin/python3` (the project venv). matplotlib is installed there.
+
+---
+
 ## SAFE Survey Reference Files
 
 CRITICAL: Before writing ANY descriptions, labels, or mappings for survey variables

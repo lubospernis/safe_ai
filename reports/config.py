@@ -82,21 +82,25 @@ SECTIONS = [
         "sql_file": "financing_gap.sql",
         "title": "Financing Need vs Availability Gap (Q5/Q9)",
         "sign_note": (
-            "financing_gap_wtd = Q5 net balance (need) minus Q9 net balance (availability). "
-            "Positive = need exceeds availability (adverse). "
-            "net_balance_wtd on Q5 rows: positive = more firms report increased need. "
-            "net_balance_wtd on Q9 rows: positive = more firms report improved availability (favourable). "
-            "Values are net balances in percentage points."
+            "need_nb = Q5 net balance: positive = more firms report increased financing need. "
+            "availability_nb = Q9 net balance: positive = more firms report improved availability (FAVOURABLE). "
+            "financing_gap_wtd = need_nb minus availability_nb: positive = need exceeds availability (ADVERSE). "
+            "All values are net balances in percentage points."
         ),
         "value_col": "financing_gap_wtd",
         "panel_col": "sub_item",
         "panel_label_col": "sub_item_label",
         "series_col": "country_code",
         "pinned_panels": ["a"],
-        "max_panels": 2,
+        "max_panels": 1,
         "always_include": False,
         "routed": True,
-        "focus": "Lead with Slovakia bank loan financing gap vs EA. Positive gap = need outstrips supply.",
+        "focus": (
+            "Lead with Slovakia bank loan financing gap vs EA. "
+            "CRITICALLY: diagnose WHETHER the gap changed because of need, availability, or both — "
+            "e.g. 'Unchanged needs and a marginal decrease in availability led to a wider gap in SK.' "
+            "Name the direction of each component explicitly."
+        ),
     },
     {
         "id": "financing_purpose",

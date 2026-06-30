@@ -2,18 +2,23 @@
 SAFE Survey Report Generator — config-driven multi-section orchestrator.
 
 Loops over SECTIONS in config.py:
-  1. Fetch data for all sections via MotherDuck
+  1. Fetch data for all sections via MotherDuck (prod) or local dev.duckdb (dev)
   2. Parallel Haiku interest checks — returns interesting flag, chart_type, best_panel
   3. For interesting sections: build chart + generate Sonnet bullets
   4. Generate executive summary (Sonnet prose) from all rendered sections
   5. Build collapsible question annex from annex.csv
   6. Assemble single multi-section HTML report
 
+Usage:
+  python run_report.py           # prod (MotherDuck, requires MOTHERDUCK_TOKEN)
+  python run_report.py --dev     # local dev.duckdb, no token needed
+
 Required environment variables:
-  MOTHERDUCK_TOKEN   — MotherDuck service token
+  MOTHERDUCK_TOKEN   — MotherDuck service token (prod only)
   ANTHROPIC_API_KEY  — Anthropic API key
 """
 
+import argparse
 import base64
 import csv
 import io
@@ -49,8 +54,11 @@ COUNTRIES = {"SK": "Slovakia", "EA": "Euro Area", "DE": "Germany"}
 COUNTRY_COLORS = {"SK": "#bd4e35", "EA": "#0777b3", "DE": "#e18727"}
 COUNTRY_ORDER = ["SK", "EA", "DE"]
 
-MOTHERDUCK_TOKEN = os.environ["MOTHERDUCK_TOKEN"]
-ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
+# Dev DB: local DuckDB built by `dbt run --target dev`, no token needed.
+# dbt dev target uses schema main_safe_safe (dbt appends the profile name).
+DEV_DB_PATH = Path(__file__).parent.parent / "dev.duckdb"
+DEV_SCHEMA = "main_safe_safe"
+PROD_SCHEMA = "main_safe"
 
 ROUTED_FOOTNOTE = (
     "<p class=\"footnote\">* Only firms that have used or applied for this type of financing "
@@ -63,11 +71,21 @@ ROUTED_FOOTNOTE = (
 # 1. Fetch all sections
 # ---------------------------------------------------------------------------
 
-def fetch_all() -> dict[str, pd.DataFrame]:
-    con = duckdb.connect(f"md:my_db?motherduck_token={MOTHERDUCK_TOKEN}")
+def _get_connection(dev: bool) -> duckdb.DuckDBPyConnection:
+    if dev:
+        return duckdb.connect(str(DEV_DB_PATH))
+    motherduck_token = os.environ["MOTHERDUCK_TOKEN"]
+    return duckdb.connect(f"md:my_db?motherduck_token={motherduck_token}")
+
+
+def fetch_all(dev: bool = False) -> dict[str, pd.DataFrame]:
+    schema = DEV_SCHEMA if dev else PROD_SCHEMA
+    con = _get_connection(dev)
     results = {}
     for sec in SECTIONS:
         sql = (SQL_DIR / sec["sql_file"]).read_text()
+        # Rewrite schema reference so dev and prod SQLs stay identical
+        sql = sql.replace(f"{PROD_SCHEMA}.", f"{schema}.")
         results[sec["id"]] = con.execute(sql).df()
     con.close()
     return results
@@ -145,7 +163,7 @@ def _check_one(sec: dict, df: pd.DataFrame, client: anthropic.Anthropic) -> dict
 
 
 def check_all_interest(sections: list[dict], data: dict[str, pd.DataFrame]) -> dict[str, dict]:
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     results = {}
     with ThreadPoolExecutor(max_workers=5) as pool:
         futures = {
@@ -308,6 +326,122 @@ def build_chart(sec: dict, df: pd.DataFrame, chart_type: str, best_panel) -> byt
 
 
 # ---------------------------------------------------------------------------
+# 3b. Custom chart: financing gap (grouped bars + gap line)
+# ---------------------------------------------------------------------------
+
+def build_financing_gap_chart(sec: dict, df: pd.DataFrame) -> bytes:
+    """
+    For the financing_gap section: grouped bars showing need_nb and availability_nb
+    per country per wave, with financing_gap_wtd overlaid as a line.
+    One subplot per sub_item (pinned panel only, since chart is already complex).
+    """
+    panels = sec["pinned_panels"][:1]  # one panel keeps it readable
+    panel_col = sec["panel_col"]
+    panel_label_col = sec.get("panel_label_col", panel_col)
+
+    fig, ax = plt.subplots(1, 1, figsize=(9, 4.5))
+    fig.subplots_adjust(top=0.82, bottom=0.22, left=0.09, right=0.97)
+
+    panel_val = panels[0]
+    sub_df = df[df[panel_col].astype(str) == str(panel_val)].copy()
+    label_val = sub_df[panel_label_col].iloc[0] if not sub_df.empty else str(panel_val)
+
+    waves = sorted(sub_df["wave_number"].unique())
+    wave_labels = (
+        sub_df[["wave_number", "survey_period_label"]]
+        .drop_duplicates()
+        .sort_values("wave_number")
+        .set_index("wave_number")["survey_period_label"]
+    )
+
+    n_waves = len(waves)
+    n_countries = len(COUNTRY_ORDER)
+    group_width = 0.7
+    bar_width = group_width / (n_countries * 2)  # 2 bars per country (need + avail)
+    group_gap = 1.0
+
+    bar_handles = []
+    bar_labels_legend = []
+    line_handles = []
+    line_labels_legend = []
+
+    # Colour scheme: need = solid country colour, availability = lighter hatched version
+    NEED_HATCH = ""
+    AVAIL_HATCH = "//"
+
+    for c_idx, country in enumerate(COUNTRY_ORDER):
+        cdf = sub_df[sub_df["country_code"] == country].sort_values("wave_number")
+        if cdf.empty:
+            continue
+
+        base_color = COUNTRY_COLORS[country]
+        # Lighter version for availability bars
+        import matplotlib.colors as mcolors
+        rgb = mcolors.to_rgb(base_color)
+        light_color = tuple(min(1.0, v + 0.35) for v in rgb)
+
+        for w_idx, wave in enumerate(waves):
+            row = cdf[cdf["wave_number"] == wave]
+            if row.empty:
+                continue
+            need_val = row["need_nb"].iloc[0]
+            avail_val = row["availability_nb"].iloc[0]
+
+            x_center = w_idx * group_gap
+            # Offset within wave group: (country pair index) × (2 bar widths + small gap)
+            pair_offset = (c_idx - n_countries / 2 + 0.5) * (2 * bar_width + 0.02)
+            x_need = x_center + pair_offset
+            x_avail = x_center + pair_offset + bar_width
+
+            b1 = ax.bar(x_need, need_val, bar_width, color=base_color,
+                        hatch=NEED_HATCH, edgecolor="white", linewidth=0.5, zorder=2)
+            b2 = ax.bar(x_avail, avail_val, bar_width, color=light_color,
+                        hatch=AVAIL_HATCH, edgecolor=base_color, linewidth=0.5, zorder=2)
+
+            if w_idx == 0:
+                bar_handles.extend([b1, b2])
+                bar_labels_legend.extend([
+                    f"{COUNTRIES[country]} — need",
+                    f"{COUNTRIES[country]} — availability",
+                ])
+
+        # Gap line: plotted at wave group x centres
+        x_points = [w_idx * group_gap for w_idx, wave in enumerate(waves)
+                    if not cdf[cdf["wave_number"] == wave].empty]
+        gap_vals = [cdf[cdf["wave_number"] == wave]["financing_gap_wtd"].iloc[0]
+                    for w_idx, wave in enumerate(waves)
+                    if not cdf[cdf["wave_number"] == wave].empty]
+        line, = ax.plot(x_points, gap_vals, color=base_color, linewidth=2.2,
+                        marker="D", markersize=5, linestyle="--", zorder=3)
+        line_handles.append(line)
+        line_labels_legend.append(f"{COUNTRIES[country]} — gap (need−avail)")
+
+    ax.axhline(0, color="#adadad", linewidth=0.8, linestyle="--", zorder=1)
+    ax.set_xticks([w_idx * group_gap for w_idx in range(n_waves)])
+    ax.set_xticklabels([wave_labels[w] for w in waves], rotation=35, ha="right", fontsize=8)
+    ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%+.0f"))
+    ax.tick_params(axis="y", labelsize=8)
+    ax.set_ylabel("Net balance (pp)", fontsize=7, color="#6a6a6a")
+    ax.set_title(f"{label_val} — financing need (bars) vs availability (hatched bars); gap (dashed line)", fontsize=9)
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.set_facecolor("#f8f8f8")
+    fig.patch.set_facecolor("#f8f8f8")
+
+    # Two-row legend: bars on top row, gap lines below
+    all_handles = bar_handles + line_handles
+    all_labels = bar_labels_legend + line_labels_legend
+    fig.legend(all_handles, all_labels,
+               loc="lower center", bbox_to_anchor=(0.5, 0.0),
+               ncol=3, fontsize=7.5, frameon=False)
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    return buf.read()
+
+
+# ---------------------------------------------------------------------------
 # 4. Generate bullets (Sonnet, per section)
 # ---------------------------------------------------------------------------
 
@@ -330,6 +464,19 @@ BULLET_TEMPLATE = textwrap.dedent("""
 """).strip()
 
 
+def _fmt_financing_gap(d: pd.DataFrame, wave_label: str) -> str:
+    """Format financing gap data rows for the bullet prompt (need + avail + gap per country)."""
+    rows = [f"{wave_label}:"]
+    for _, r in d.iterrows():
+        country = r["country_code"]
+        need = f"{r['need_nb']:+.1f}" if pd.notna(r.get("need_nb")) else "n/a"
+        avail = f"{r['availability_nb']:+.1f}" if pd.notna(r.get("availability_nb")) else "n/a"
+        gap = f"{r['financing_gap_wtd']:+.1f}" if pd.notna(r.get("financing_gap_wtd")) else "n/a"
+        n_need = int(r["n_respondents_need"]) if pd.notna(r.get("n_respondents_need")) else "?"
+        rows.append(f"  {country} | need={need}pp (n={n_need}) | availability={avail}pp | gap={gap}pp")
+    return "\n".join(rows)
+
+
 def get_bullets(sec: dict, df: pd.DataFrame) -> list[str]:
     latest_wave = df["wave_number"].max()
     waves_sorted = sorted(df["wave_number"].unique())
@@ -339,28 +486,36 @@ def get_bullets(sec: dict, df: pd.DataFrame) -> list[str]:
     prev = df[df["wave_number"] == prev_wave]
     value_col = sec["value_col"]
 
-    def fmt(d: pd.DataFrame) -> str:
-        rows = []
-        for _, r in d.iterrows():
-            n_part = f" | n={r['n_respondents']}" if r.get("country_code") in ("SK", "EA") and "n_respondents" in r else ""
-            val_str = f"{r[value_col]:+.2f}" if pd.notna(r[value_col]) else "n/a"
-            panel_col = sec["panel_col"]
-            panel_label_col = sec.get("panel_label_col", panel_col)
-            panel_part = f" | {r[panel_label_col]}" if panel_label_col and panel_label_col in r.index else ""
-            rows.append(f"  {r['country_code']}{panel_part} | {value_col}={val_str}{n_part}")
-        return "\n".join(rows)
+    # Financing gap section gets a richer prompt with need/avail decomposition
+    if sec["id"] == "financing_gap":
+        user_msg = (
+            _fmt_financing_gap(latest, f"Wave {latest_wave} (latest)")
+            + "\n\n"
+            + _fmt_financing_gap(prev, f"Wave {prev_wave} (previous)")
+        )
+    else:
+        def fmt(d: pd.DataFrame) -> str:
+            rows = []
+            for _, r in d.iterrows():
+                n_part = f" | n={r['n_respondents']}" if r.get("country_code") in ("SK", "EA") and "n_respondents" in r else ""
+                val_str = f"{r[value_col]:+.2f}" if pd.notna(r[value_col]) else "n/a"
+                panel_col = sec["panel_col"]
+                panel_label_col = sec.get("panel_label_col", panel_col)
+                panel_part = f" | {r[panel_label_col]}" if panel_label_col and panel_label_col in r.index else ""
+                rows.append(f"  {r['country_code']}{panel_part} | {value_col}={val_str}{n_part}")
+            return "\n".join(rows)
 
-    user_msg = (
-        f"Wave {latest_wave} (latest):\n{fmt(latest)}\n\n"
-        f"Wave {prev_wave} (previous):\n{fmt(prev)}"
-    )
+        user_msg = (
+            f"Wave {latest_wave} (latest):\n{fmt(latest)}\n\n"
+            f"Wave {prev_wave} (previous):\n{fmt(prev)}"
+        )
 
     system_prompt = BULLET_TEMPLATE.format(
         sign_note=sec["sign_note"],
         focus=sec["focus"],
     )
 
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     msg = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=220,
@@ -401,7 +556,7 @@ def get_exec_summary(rendered_sections: list[dict]) -> str:
             lines.append(f"  {b}")
         lines.append("")
 
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     msg = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=300,
@@ -603,8 +758,18 @@ def build_html(
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dev", action="store_true",
+                        help="Use local dev.duckdb instead of MotherDuck (no MOTHERDUCK_TOKEN needed)")
+    args = parser.parse_args()
+
+    if args.dev:
+        print(f"[DEV] Using local DuckDB: {DEV_DB_PATH}")
+    else:
+        print("[PROD] Using MotherDuck")
+
     print("Fetching data for all sections...")
-    data = fetch_all()
+    data = fetch_all(dev=args.dev)
     for sid, df in data.items():
         print(f"  {sid}: {len(df)} rows")
 
@@ -623,7 +788,10 @@ def main() -> None:
             continue
 
         print(f"  Building chart for {sid}...")
-        chart_png = build_chart(sec, data[sid], r["chart_type"], r["best_panel"])
+        if sid == "financing_gap":
+            chart_png = build_financing_gap_chart(sec, data[sid])
+        else:
+            chart_png = build_chart(sec, data[sid], r["chart_type"], r["best_panel"])
 
         print(f"  Generating bullets for {sid}...")
         bullets = get_bullets(sec, data[sid])

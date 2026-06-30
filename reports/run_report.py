@@ -605,23 +605,30 @@ def get_section_content(sec: dict, df: pd.DataFrame) -> dict:
 # ---------------------------------------------------------------------------
 
 EXEC_SUMMARY_SYSTEM = textwrap.dedent("""
-    You are a senior ECB economist writing an executive summary for a technical director
-    reviewing the latest ECB SAFE survey results for Slovakia.
+    You are an economist writing an executive summary of the latest ECB SAFE survey results
+    for Slovakia. You will be given the key findings from each section of the report.
 
-    Write 4–6 concise bullet points. Each bullet = one finding, max 20 words.
-    Order: financing conditions first, then access to finance, then business situation.
+    Your task: read ALL the section findings and distill them into 5–7 bullet points that
+    give a balanced picture of BOTH financing conditions AND the economic situation of firms.
+    Do not focus only on financing — business situation, pressingness scores, and economic
+    outlook findings are equally important and should appear in the summary.
+
+    Pick the most notable finding from each section. If a finding is unremarkable, skip it.
+    If something stands out strongly across sections (e.g. a disconnect between tight credit
+    lines and easy bank loans, or rising costs alongside falling turnover), synthesise it
+    into a single cross-cutting bullet.
 
     Style rules:
     - Write narrative statements about direction and change, NOT about numbers.
       Good: "Firms reported a net tightening in interest rates on bank loans."
       Good: "Unchanged needs and a marginal decrease in availability led to a wider financing gap."
-      Good: "Firms used financing primarily for inventories and working capital."
+      Good: "Turnover and profits declined sharply while labour costs continued to rise."
+      Good: "Access to finance was perceived as the least pressing business obstacle."
       Bad: "A net 8.3% of firms reported easing in interest rates."
       Bad: "The net balance improved by 5pp to -7.6pp."
-    - Only include a number if it is exceptionally striking and the narrative alone would be misleading.
+    - Only include a number if it is exceptionally striking and the narrative would be misleading without it.
     - Use plain active voice: "Firms reported...", "Slovak firms perceived...", "Applications declined..."
-    - No hedging, no qualifiers like "somewhat" or "slightly" unless the movement genuinely was marginal.
-    - Bullets only — no prose, no headers, no leading "•" character.
+    - Bullets only — no prose, no headers, no leading bullet character.
 """).strip()
 
 

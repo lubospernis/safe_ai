@@ -46,14 +46,13 @@
     - financing_gap: discouragement_rate + rejection_rate (ECB headline indicator)
       expressed as % of all valid respondents
 
-  Scope: SMEs only (employee_band_code 1–3: micro, small, medium).
-  Large firms (band 4, 250+ employees) are excluded for comparability with
-  the ECB's published SAFE data warehouse, which reports SME aggregates.
-
-  Aggregation: wave × country × instrument.
+  firm_size: 'all' = all respondents; 'sme' = employee_band_code 1–3.
+  Three-month reference period only (wave 30 / 2024Q1 onward).
+  Aggregation: wave × country × instrument × firm_size.
 */
 
-with q7a as (
+-- All firms
+with q7a_all as (
 
     select
         permid,
@@ -66,7 +65,46 @@ with q7a as (
         sub_item,
         response_3m                                                 as q7a_response,
         weight_common,
-        is_nonresponse                                              as q7a_nonresponse
+        is_nonresponse                                              as q7a_nonresponse,
+        'all'                                                       as firm_size
+    from {{ ref('int_safe__core_questions_long') }}
+    where question_id = 'q7a'
+      and wave_number >= 30
+      and response_3m is not null
+
+),
+
+q7b_all as (
+
+    select
+        permid,
+        wave_number,
+        sub_item,
+        response_3m                                                 as q7b_response,
+        response_3m in (-1, -2, -99, 7, 9, 99)                     as q7b_nonresponse
+    from {{ ref('int_safe__core_questions_long') }}
+    where question_id = 'q7b'
+      and wave_number >= 30
+      and response_3m is not null
+
+),
+
+-- SMEs only
+q7a_sme as (
+
+    select
+        permid,
+        wave_number,
+        survey_year,
+        survey_period,
+        survey_period_label,
+        country_code,
+        country_name_en,
+        sub_item,
+        response_3m                                                 as q7a_response,
+        weight_common,
+        is_nonresponse                                              as q7a_nonresponse,
+        'sme'                                                       as firm_size
     from {{ ref('int_safe__core_questions_long') }}
     where question_id = 'q7a'
       and employee_band_code between 1 and 3
@@ -75,7 +113,7 @@ with q7a as (
 
 ),
 
-q7b as (
+q7b_sme as (
 
     select
         permid,
@@ -88,6 +126,7 @@ q7b as (
       and employee_band_code between 1 and 3
       and wave_number >= 30
       and response_3m is not null
+
 ),
 
 combined as (
@@ -100,6 +139,7 @@ combined as (
         a.country_code,
         a.country_name_en,
         a.sub_item,
+        a.firm_size,
 
         case a.sub_item
             when 'a' then 'Bank loan (excl. overdraft and credit lines)'
@@ -114,8 +154,36 @@ combined as (
         b.q7b_nonresponse,
         a.weight_common
 
-    from q7a a
-    left join q7b b using (permid, wave_number, sub_item)
+    from q7a_all a
+    left join q7b_all b using (permid, wave_number, sub_item)
+
+    union all
+
+    select
+        a.wave_number,
+        a.survey_year,
+        a.survey_period,
+        a.survey_period_label,
+        a.country_code,
+        a.country_name_en,
+        a.sub_item,
+        a.firm_size,
+
+        case a.sub_item
+            when 'a' then 'Bank loan (excl. overdraft and credit lines)'
+            when 'b' then 'Trade credit'
+            when 'c' then 'Other external financing'
+            when 'd' then 'Credit line, bank overdraft or credit cards overdraft'
+        end                                                         as instrument_label,
+
+        a.q7a_response,
+        a.q7a_nonresponse,
+        b.q7b_response,
+        b.q7b_nonresponse,
+        a.weight_common
+
+    from q7a_sme a
+    left join q7b_sme b using (permid, wave_number, sub_item)
 
 ),
 
@@ -130,6 +198,7 @@ aggregated as (
         survey_period_label,
         sub_item,
         instrument_label,
+        firm_size,
 
         -- Counts
         count(*)                                                        as n_total,
@@ -203,4 +272,4 @@ aggregated as (
 )
 
 select * from aggregated
-order by wave_number, country_code, sub_item
+order by wave_number, country_code, sub_item, firm_size

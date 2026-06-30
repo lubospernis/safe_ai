@@ -16,12 +16,13 @@ Each entry defines one report section:
   focus          — country/topic focus injected into bullet prompt
   routed         — if True, a methodology footnote is added explaining that only
                    firms for which the instrument is relevant are asked (Q5/Q9/Q10)
+  has_missingness_caveat — if True, a footnote is added about sparse data exclusion
 """
 
 SECTIONS = [
     {
-        "id": "q10_terms",
-        "sql_file": "q10.sql",
+        "id": "bank_loan_terms",
+        "sql_file": "bank_loan_terms.sql",
         "group": "Financing Conditions",
         "title": "Changes in Terms and Conditions of Bank Financing (Q10)",
         "sign_note": (
@@ -38,47 +39,6 @@ SECTIONS = [
         "always_include": True,
         "routed": True,
         "focus": "Lead with Slovakia (SK). Compare to EA and DE primarily.",
-    },
-    {
-        "id": "q0b_pressingness",
-        "sql_file": "q0b_pressingness.sql",
-        "group": "Economic Situation of Firms",
-        "title": "Most Pressing Business Problems (Q0B)",
-        "sign_note": (
-            "values are average pressingness scores on a 1–10 scale (NOT net balances). "
-            "Higher score = problem is more pressing for firms. "
-            "This is not a net balance — do not say 'net X% of firms'."
-        ),
-        "value_col": "avg_pressingness_wtd",
-        "panel_col": "problem_id",
-        "panel_label_col": "problem_label",
-        "series_col": "country_code",
-        "pinned_panels": ["3"],
-        "max_panels": 2,
-        "always_include": False,
-        "focus": (
-            "Focus on Slovakia. Highlight where SK 'access to finance' score (problem_id=3) "
-            "diverges from EA. Compare to the most pressing problem overall."
-        ),
-    },
-    {
-        "id": "business_situation",
-        "sql_file": "business_situation.sql",
-        "group": "Economic Situation of Firms",
-        "title": "Business Situation Indicators (Q2)",
-        "sign_note": (
-            "positive net balance = indicator rising (more firms report increase than decrease). "
-            "For labour costs (sub_item b), positive = costs rising = ADVERSE for firms. "
-            "For turnover/profit, positive = improving = FAVOURABLE."
-        ),
-        "value_col": "net_balance_wtd",
-        "panel_col": "sub_item",
-        "panel_label_col": "sub_item_label",
-        "series_col": "country_code",
-        "pinned_panels": ["a"],
-        "max_panels": 2,
-        "always_include": False,
-        "focus": "Lead with Slovakia turnover trend. Compare profit and cost indicators to EA.",
     },
     {
         "id": "financing_gap",
@@ -117,6 +77,60 @@ SECTIONS = [
         ),
     },
     {
+        "id": "loan_applications",
+        "sql_file": "loan_applications.sql",
+        "group": "Financing Conditions",
+        "title": "Bank Loan Applications and Access Conditions (Q7A/Q7B)",
+        "sign_note": (
+            "financing_gap_wtd = % of firms discouraged from applying + % of applicants rejected "
+            "(both as share of all valid Q7A respondents). Higher value = worse access to bank credit. "
+            "This is NOT a net balance — it is an access indicator where higher = worse. "
+            "application_rate_wtd = % that actually applied. "
+            "discouragement_rate_wtd = % that did not apply due to fear of rejection. "
+            "rejection_rate_wtd = % of applicants that were rejected."
+        ),
+        "value_col": "financing_gap_wtd",
+        "panel_col": None,
+        "panel_label_col": None,
+        "series_col": "country_code",
+        "pinned_panels": [],
+        "max_panels": 1,
+        "always_include": False,
+        "routed": True,
+        "focus": (
+            "Lead with Slovakia vs EA comparison on financing_gap_wtd. "
+            "Diagnose whether the gap is driven more by discouragement or rejection. "
+            "If SK discouragement_rate is unusually high relative to EA, flag it — this signals "
+            "self-censorship in credit demand. If rejection_rate is high, that signals supply-side tightening."
+        ),
+    },
+    {
+        "id": "availability_expectations",
+        "sql_file": "availability_expectations.sql",
+        "group": "Financing Conditions",
+        "title": "Expected Availability of External Financing (Q23)",
+        "sign_note": (
+            "positive net balance = more firms expect availability to IMPROVE (FAVOURABLE). "
+            "negative net balance = more firms expect availability to DETERIORATE (ADVERSE). "
+            "This is a forward-looking complement to Q9 (actual availability changes)."
+        ),
+        "value_col": "net_balance_wtd",
+        "panel_col": "sub_item",
+        "panel_label_col": "sub_item_label",
+        "series_col": "country_code",
+        "pinned_panels": ["b"],
+        "max_panels": 2,
+        "always_include": False,
+        "routed": True,
+        "has_missingness_caveat": True,
+        "focus": (
+            "Focus on bank loans (b) for Slovakia vs EA. "
+            "If the SK forward expectation diverges from the EA trend, explain what that signals — "
+            "e.g. 'Slovak firms expect availability to deteriorate while EA firms expect improvement, "
+            "suggesting persistent local supply tightness not yet visible in EA-wide data.'"
+        ),
+    },
+    {
         "id": "financing_purpose",
         "sql_file": "financing_purpose.sql",
         "group": "Financing Conditions",
@@ -135,8 +149,8 @@ SECTIONS = [
         "focus": "Focus on Slovakia vs EA. Highlight where SK financing purpose mix differs from the euro area.",
     },
     {
-        "id": "q11_factors",
-        "sql_file": "q11_factors.sql",
+        "id": "financing_factors",
+        "sql_file": "financing_factors.sql",
         "group": "Financing Conditions",
         "title": "Factors Affecting Access to External Financing (Q11)",
         "sign_note": (
@@ -155,6 +169,123 @@ SECTIONS = [
         "focus": (
             "Lead with Q11f (willingness of banks) for Slovakia vs EA — this is the key credit supply indicator. "
             "If Q11a (economic outlook) is also deteriorating, note that as a macro-level drag on supply."
+        ),
+    },
+    {
+        "id": "business_situation",
+        "sql_file": "business_situation.sql",
+        "group": "Economic Situation of Firms",
+        "title": "Business Situation Indicators (Q2)",
+        "sign_note": (
+            "positive net balance = indicator rising (more firms report increase than decrease). "
+            "For labour costs (sub_item b), positive = costs rising = ADVERSE for firms. "
+            "For turnover/profit, positive = improving = FAVOURABLE."
+        ),
+        "value_col": "net_balance_wtd",
+        "panel_col": "sub_item",
+        "panel_label_col": "sub_item_label",
+        "series_col": "country_code",
+        "pinned_panels": ["a"],
+        "max_panels": 2,
+        "always_include": False,
+        "focus": "Lead with Slovakia turnover trend. Compare profit and cost indicators to EA.",
+    },
+    {
+        "id": "outlook",
+        "sql_file": "outlook.sql",
+        "group": "Economic Situation of Firms",
+        "title": "Expected Changes in Turnover and Investment (Q26)",
+        "sign_note": (
+            "positive net balance = more firms expect the indicator to INCREASE (FAVOURABLE). "
+            "negative net balance = more firms expect the indicator to DECREASE (ADVERSE). "
+            "Sub-items: a=Turnover, b=Fixed investment (property, plant, equipment)."
+        ),
+        "value_col": "net_balance_wtd",
+        "panel_col": "sub_item",
+        "panel_label_col": "sub_item_label",
+        "series_col": "country_code",
+        "pinned_panels": ["a"],
+        "max_panels": 2,
+        "always_include": False,
+        "focus": (
+            "Lead with turnover outlook (sub_item='a') for Slovakia vs EA. "
+            "If SK expectation diverges significantly from EA — e.g. EA firms optimistic but SK pessimistic — "
+            "flag that as a signal of diverging economic trajectories."
+        ),
+    },
+    {
+        "id": "expectations_quantitative",
+        "sql_file": "expectations_quantitative.sql",
+        "group": "Economic Situation of Firms",
+        "title": "Price, Wage and Employment Expectations (Q31/Q34)",
+        "sign_note": (
+            "mean_wtd is a weighted mean expected % change over the next 12 months. "
+            "This is NOT a net balance — it is a level in percent (e.g. 3.5 means firms expect +3.5% change). "
+            "Positive = firms expect an increase. Negative = firms expect a decrease. "
+            "panel_id combines question_id and sub_item: q31_a=expected inflation rate in 12 months, "
+            "q34_a=average selling price, q34_b=production input prices (non-labour), "
+            "q34_c=average wages, q34_d=number of employees."
+        ),
+        "value_col": "mean_wtd",
+        "panel_col": "panel_id",
+        "panel_label_col": "sub_item_label",
+        "series_col": "country_code",
+        "pinned_panels": ["q34_a"],
+        "max_panels": 2,
+        "always_include": False,
+        "has_missingness_caveat": True,
+        "focus": (
+            "Lead with selling price expectations (q34_a) for Slovakia vs EA. "
+            "If SK wage expectations (q34_c) are also high — relative to EA — flag the margin compression risk: "
+            "'Slovak firms anticipate X% wage growth alongside Y% input price rises, compressing margins.' "
+            "Cross-reference with current labour cost net balance from the business situation section if elevated."
+        ),
+    },
+    {
+        "id": "expectations_risk",
+        "sql_file": "expectations_risk.sql",
+        "group": "Economic Situation of Firms",
+        "title": "Inflation Risk Outlook (Q33)",
+        "sign_note": (
+            "net_balance_wtd = % of firms seeing upside inflation risk minus % seeing downside risk. "
+            "Positive = more firms see inflation risks to the upside (inflation higher than expected). "
+            "Negative = more firms see inflation risks to the downside. "
+            "Also available: pct_downside_wtd, pct_balanced_wtd, pct_upside_wtd."
+        ),
+        "value_col": "net_balance_wtd",
+        "panel_col": None,
+        "panel_label_col": None,
+        "series_col": "country_code",
+        "pinned_panels": [],
+        "max_panels": 1,
+        "always_include": False,
+        "has_missingness_caveat": True,
+        "focus": (
+            "Compare SK vs EA on the inflation risk balance. "
+            "If SK firms disproportionately see upside risk vs EA — note that as a signal of local price persistence. "
+            "Cross-reference with Q34 selling price expectations if both are elevated."
+        ),
+    },
+    {
+        "id": "business_problems",
+        "sql_file": "business_problems.sql",
+        "group": "Economic Situation of Firms",
+        "title": "Most Pressing Business Problems (Q0B)",
+        "sign_note": (
+            "values are average pressingness scores on a 1–10 scale (NOT net balances). "
+            "Higher score = problem is more pressing for firms. "
+            "This is not a net balance — do not say 'net X% of firms'."
+        ),
+        "value_col": "avg_pressingness_wtd",
+        "panel_col": "problem_id",
+        "panel_label_col": "problem_label",
+        "series_col": "country_code",
+        "pinned_panels": ["3"],
+        "max_panels": 2,
+        "always_include": False,
+        "focus": (
+            "Focus on Slovakia. Highlight where SK 'access to finance' score (problem_id=3) "
+            "diverges from EA. Compare to the most pressing problem overall."
         ),
     },
 ]

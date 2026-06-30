@@ -66,10 +66,12 @@ on prior knowledge — the actual codes differ from common assumptions.
 | Financing needs/availability/terms (ECB methodology) | `mart_safe__financing_conditions` |
 | Financing purpose breakdown by country (Q6A) | `mart_safe__financing_purpose` |
 | Headline Slovakia KPIs (pre-selected, AI-ready) | `mart_safe__slovakia_kpis` |
-| Pressing business problems (Q0B pressingness scores) | `mart_safe__q0b_pressingness` |
+| Pressing business problems (Q0B pressingness scores) | `mart_safe__business_problems` |
+| Factors affecting access to financing (Q11) | `mart_safe__financing_factors` |
 | Loan application rates, discouragement, rejection | `mart_safe__loan_applications` |
 | Business situation (turnover, profit, labour costs, etc.) | `mart_safe__business_situation` |
 | Expected changes in turnover and investment (Q26) | `mart_safe__outlook` |
+| Expected availability of external financing (Q23) | `mart_safe__availability_expectations` |
 | Inflation expectations and risk direction (Q31/Q33/Q34) | `mart_safe__expectations` |
 | Firm counts and SME/large composition per wave × country | `mart_safe__survey_participants` |
 | Response rates per question × sub-item × country | `mart_safe__question_coverage` |
@@ -144,10 +146,10 @@ SELECT * FROM main_safe.mart_safe__slovakia_kpis ORDER BY wave_number DESC LIMIT
 
 ---
 
-### mart_safe__q0b_pressingness
+### mart_safe__business_problems
 
 Weighted average pressingness scores (scale 1–10) for 7 business problems by country × wave.
-SMEs only. Three-month reference period only. Wave 30 (2024Q1) onward.
+`firm_size`: `'all'` = all respondents, `'sme'` = bands 1–3. Wave 30 (2024Q1) onward.
 
 **Key rules**:
 - `avg_pressingness_wtd` is a **score 1–10**, NOT a net balance or percentage
@@ -156,16 +158,28 @@ SMEs only. Three-month reference period only. Wave 30 (2024Q1) onward.
 
 ```sql
 SELECT problem_label, avg_pressingness_wtd
-FROM main_safe.mart_safe__q0b_pressingness
-WHERE country_code = 'SK' AND wave_number = 38
+FROM main_safe.mart_safe__business_problems
+WHERE country_code = 'SK' AND wave_number = 38 AND firm_size = 'all'
 ORDER BY avg_pressingness_wtd DESC
 ```
 
 ---
 
+### mart_safe__financing_factors
+
+Net balances for Q11 (factors affecting access to external financing) by country × wave.
+`firm_size`: `'all'` = all respondents, `'sme'` = bands 1–3. Wave 30 (2024Q1) onward.
+
+**Key rules**:
+- Positive = factor improved (FAVOURABLE); negative = deteriorated (ADVERSE)
+- sub_item f = willingness of banks (key credit supply signal)
+
+---
+
 ### mart_safe__loan_applications
 
-Application rates, discouragement, rejection rates from Q7A/Q7B. SMEs only.
+Application rates, discouragement, rejection rates from Q7A/Q7B.
+`firm_size`: `'all'` = all respondents, `'sme'` = bands 1–3. Wave 30 (2024Q1) onward.
 
 Key columns: `application_rate_wtd`, `discouragement_rate_wtd`, `rejection_rate_wtd`,
 `financing_gap_wtd` (= discouragement + rejection share of all respondents — ECB headline access indicator).
@@ -176,7 +190,8 @@ Key columns: `application_rate_wtd`, `discouragement_rate_wtd`, `rejection_rate_
 
 ### mart_safe__business_situation
 
-Net balances for Q2 (business situation indicators). SMEs only.
+Net balances for Q2 (business situation indicators).
+`firm_size`: `'all'` = all respondents, `'sme'` = bands 1–3. Wave 30 (2024Q1) onward.
 sub_items: a=Turnover, b=Labour costs, e=Profit, g=Investment, i=Employees.
 **Positive labour_cost net balance = costs rising (adverse).**
 
@@ -185,14 +200,26 @@ sub_items: a=Turnover, b=Labour costs, e=Profit, g=Investment, i=Employees.
 ### mart_safe__outlook
 
 Expected turnover (sub_item='a') and investment (sub_item='b') changes over next 2 quarters (Q26).
-Net balance = % expecting increase − % expecting decrease. SMEs only.
+`firm_size`: `'all'` = all respondents, `'sme'` = bands 1–3. Wave 30 (2024Q1) onward.
+Net balance = % expecting increase − % expecting decrease.
+
+---
+
+### mart_safe__availability_expectations
+
+Expected availability of external financing (Q23) over the next quarter.
+`firm_size`: `'all'` = all respondents, `'sme'` = bands 1–3. Wave 30 (2024Q1) onward.
+Sub-items: b=Bank loans, d=Trade credit, g=Credit lines and bank overdraft.
+`net_balance_wtd` = % expecting improvement − % expecting deterioration.
+Positive = more firms expect improvement (FAVOURABLE). Non-response codes 7/9 excluded.
 
 ---
 
 ### mart_safe__expectations
 
 Q31 (inflation rate expectations), Q33 (inflation risk direction), Q34 (expected % changes
-in prices, wages, employment). Includes weighted mean and unweighted percentiles. SMEs only.
+in prices, wages, employment). Includes weighted mean and unweighted percentiles.
+`firm_size`: `'all'` = all respondents, `'sme'` = bands 1–3. Wave 30 (2024Q1) onward.
 
 ---
 
@@ -247,6 +274,13 @@ Use `weight_common` for all aggregations. `weight_enterprise` is not populated i
 ### SME definition
 `is_sme = true` ↔ `employee_band_code BETWEEN 1 AND 3` (micro 1–9, small 10–49, medium 50–249).
 Large firms = band 4 (250+ employees).
+
+### Firm-size scope
+All marts produce rows for both `firm_size = 'all'` (all valid respondents) and `firm_size = 'sme'`
+(employee_band_code 1–3). Report SQL queries filter to `firm_size = 'all'` by default.
+When SK SME values diverge from SK all-firms by ≥30pp, `run_report.py` appends a divergence note
+to the LLM bullet prompt so the AI can surface it. Exception: `mart_safe__slovakia_kpis`
+is pre-joined SK SME data only (no `firm_size` column).
 
 ### Net balance sign conventions
 - Q5 need: positive = more firms report increased need (demand for credit rising)

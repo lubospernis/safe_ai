@@ -22,14 +22,12 @@
 
   Net balance = % will increase − % will decrease (standard ECB definition).
 
-  Scope: SMEs only (employee_band_code 1–3: micro, small, medium).
-  Large firms (band 4, 250+ employees) are excluded for comparability with
-  the ECB's published SAFE data warehouse, which reports SME aggregates.
-
-  Aggregation: wave × country × sub_item.
+  firm_size: 'all' = all respondents; 'sme' = employee_band_code 1–3.
+  Three-month reference period only (wave 30 / 2024Q1 onward).
+  Aggregation: wave × country × sub_item × firm_size.
 */
 
-with source as (
+with source_all as (
 
     select
         wave_number,
@@ -39,14 +37,44 @@ with source as (
         country_code,
         country_name_en,
         sub_item,
-        response_3m                                                         as response_raw,
+        response_raw,
         weight_common,
-        is_nonresponse
+        is_nonresponse,
+        'all'                                                               as firm_size
+    from {{ ref('int_safe__core_questions_long') }}
+    where question_id = 'q26'
+      and wave_number >= 30
+      and response_raw is not null
+
+),
+
+source_sme as (
+
+    select
+        wave_number,
+        survey_year,
+        survey_period,
+        survey_period_label,
+        country_code,
+        country_name_en,
+        sub_item,
+        response_raw,
+        weight_common,
+        is_nonresponse,
+        'sme'                                                               as firm_size
     from {{ ref('int_safe__core_questions_long') }}
     where question_id = 'q26'
       and employee_band_code between 1 and 3
       and wave_number >= 30
-      and response_3m is not null
+      and response_raw is not null
+
+),
+
+source as (
+
+    select * from source_all
+    union all
+    select * from source_sme
 
 ),
 
@@ -74,6 +102,7 @@ aggregated as (
         survey_period_label,
         sub_item,
         sub_item_label,
+        firm_size,
 
         count(*)                                                    as n_total,
         count(*) filter (where not is_nonresponse)                  as n_respondents,
@@ -123,4 +152,4 @@ aggregated as (
 )
 
 select * from aggregated
-order by wave_number, country_code, sub_item
+order by wave_number, country_code, sub_item, firm_size

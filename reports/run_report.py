@@ -66,6 +66,12 @@ ROUTED_FOOTNOTE = (
     "and does not indicate a data quality issue — see ECB SAFE methodology for details.</p>"
 )
 
+MISSINGNESS_FOOTNOTE = (
+    "<p class=\"footnote\">† Observations with fewer than 10 valid responses in a given "
+    "wave × country × sub-item cell are excluded from the chart; gaps in series indicate "
+    "insufficient data for that period.</p>"
+)
+
 
 # ---------------------------------------------------------------------------
 # 1. Fetch all sections
@@ -570,13 +576,49 @@ def _fmt_data_for_prompt(sec: dict, df: pd.DataFrame) -> str:
     return fmt(latest, f"Wave {latest_wave} (latest)") + "\n\n" + fmt(prev, f"Wave {prev_wave} (previous)")
 
 
+def _sme_divergence_note(df: pd.DataFrame, value_col: str, panel_col: str | None, threshold: float = 30.0) -> str:
+    """
+    Return a divergence note string if SK SMEs differ from SK all-firms by >= threshold units
+    in the latest wave. Injected into the LLM bullet prompt so it can surface the divergence.
+    """
+    if "firm_size" not in df.columns:
+        return ""
+    latest = df["wave_number"].max()
+    all_sk = df[(df["firm_size"] == "all") & (df["wave_number"] == latest) & (df["country_code"] == "SK")]
+    sme_sk = df[(df["firm_size"] == "sme") & (df["wave_number"] == latest) & (df["country_code"] == "SK")]
+    if all_sk.empty or sme_sk.empty:
+        return ""
+
+    notes = []
+    panels = all_sk[panel_col].dropna().unique() if panel_col and panel_col in all_sk.columns else [None]
+    for panel in panels:
+        if panel is not None:
+            a_vals = all_sk[all_sk[panel_col] == panel][value_col]
+            s_vals = sme_sk[sme_sk[panel_col] == panel][value_col]
+        else:
+            a_vals = all_sk[value_col]
+            s_vals = sme_sk[value_col]
+        a = a_vals.mean() if not a_vals.empty else float("nan")
+        s = s_vals.mean() if not s_vals.empty else float("nan")
+        if pd.notna(a) and pd.notna(s) and abs(a - s) >= threshold:
+            panel_tag = f" [{panel}]" if panel is not None else ""
+            sign = "higher" if s > a else "lower"
+            notes.append(
+                f"(SME divergence{panel_tag}: SK all-firms={a:+.1f}, SK SMEs={s:+.1f} — "
+                f"SMEs are {abs(a - s):.0f} units {sign}; consider calling this out)"
+            )
+    return " ".join(notes)
+
+
 def get_section_content(sec: dict, df: pd.DataFrame) -> dict:
     """Return {"finding": str, "bullets": [str, ...]} for a section via one Sonnet call."""
     system_prompt = SECTION_CONTENT_SYSTEM.format(
         sign_note=sec["sign_note"],
         focus=sec["focus"],
     )
-    user_msg = _fmt_data_for_prompt(sec, df)
+    base_data = _fmt_data_for_prompt(sec, df)
+    divergence = _sme_divergence_note(df, sec["value_col"], sec.get("panel_col"))
+    user_msg = base_data + (f"\n\nSME divergence check:\n{divergence}" if divergence else "")
 
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     msg = client.messages.create(
@@ -896,7 +938,10 @@ def build_html(
                     finding=s["finding"],
                     title=s["title"],
                     bullets="\n".join(f"    <li>{b.lstrip('• ').strip()}</li>" for b in s["bullets"]),
-                    footnote=ROUTED_FOOTNOTE + "\n" if s.get("routed") else "",
+                    footnote=(
+                        (ROUTED_FOOTNOTE + "\n" if s.get("routed") else "") +
+                        (MISSINGNESS_FOOTNOTE + "\n" if s.get("has_missingness_caveat") else "")
+                    ),
                     chart_b64=base64.b64encode(s["chart_png"]).decode(),
                 )
             )
@@ -971,6 +1016,7 @@ def main() -> None:
             "chart_png": chart_png,
             "sign_note": sec["sign_note"],
             "routed": sec.get("routed", False),
+            "has_missingness_caveat": sec.get("has_missingness_caveat", False),
         })
 
     print("Generating executive summary...")

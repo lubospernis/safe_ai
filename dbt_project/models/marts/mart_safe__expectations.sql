@@ -40,18 +40,16 @@
   Note: _rec column contains confirmed values for responses originally >50%
   (survey read-back validation). Use response_rec when available (non-null).
 
-  Scope: SMEs only (employee_band_code 1–3: micro, small, medium).
-  Large firms (band 4, 250+ employees) are excluded for comparability with
-  the ECB's published SAFE data warehouse, which reports SME aggregates.
-
-  Aggregation: wave × country × question_id × sub_item.
+  firm_size: 'all' = all respondents; 'sme' = employee_band_code 1–3.
+  Q31/Q33/Q34 are forward-looking questions with no 3m/6m split — uses response_raw.
+  Wave 30 (2024Q1) onward. Aggregation: wave × country × question_id × sub_item × firm_size.
 
   Two metric patterns are used:
   1. Q31, Q34 (continuous): weighted mean, p25, median (p50), p75 of valid responses.
   2. Q33 (ordinal): weighted % downside / balanced / upside and net balance (upside − downside).
 */
 
-with source as (
+with source_all as (
 
     select
         wave_number,
@@ -62,19 +60,53 @@ with source as (
         country_name_en,
         question_id,
         sub_item,
-        -- For Q34, prefer confirmed value (response_3m_rec) over raw 3m where available
         case
-            when question_id = 'q34' and response_3m_rec is not null
-                then response_3m_rec
-            else response_3m
+            when question_id = 'q34' and response_rec is not null
+                then response_rec
+            else response_raw
         end                                                         as response_value,
         weight_common,
-        is_nonresponse
+        is_nonresponse,
+        'all'                                                       as firm_size
+    from {{ ref('int_safe__core_questions_long') }}
+    where question_id in ('q31', 'q33', 'q34')
+      and wave_number >= 30
+      and response_raw is not null
+
+),
+
+source_sme as (
+
+    select
+        wave_number,
+        survey_year,
+        survey_period,
+        survey_period_label,
+        country_code,
+        country_name_en,
+        question_id,
+        sub_item,
+        case
+            when question_id = 'q34' and response_rec is not null
+                then response_rec
+            else response_raw
+        end                                                         as response_value,
+        weight_common,
+        is_nonresponse,
+        'sme'                                                       as firm_size
     from {{ ref('int_safe__core_questions_long') }}
     where question_id in ('q31', 'q33', 'q34')
       and employee_band_code between 1 and 3
       and wave_number >= 30
-      and response_3m is not null
+      and response_raw is not null
+
+),
+
+source as (
+
+    select * from source_all
+    union all
+    select * from source_sme
 
 ),
 
@@ -117,6 +149,7 @@ continuous_stats as (
         question_label,
         sub_item,
         sub_item_label,
+        firm_size,
 
         count(*) filter (where not is_nonresponse)                  as n_respondents,
         count(*) filter (where is_nonresponse)                      as n_nonresponse,
@@ -199,6 +232,7 @@ ordinal_stats as (
         question_label,
         sub_item,
         sub_item_label,
+        firm_size,
 
         count(*) filter (where not is_nonresponse)                  as n_respondents,
         count(*) filter (where is_nonresponse)                      as n_nonresponse,
@@ -250,4 +284,4 @@ ordinal_stats as (
 select * from continuous_stats
 union all
 select * from ordinal_stats
-order by wave_number, country_code, question_id, sub_item
+order by wave_number, country_code, question_id, sub_item, firm_size

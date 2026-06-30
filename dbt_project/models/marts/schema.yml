@@ -26,7 +26,7 @@ models:
         Net balance = % increased − % decreased.  Positive = improving.
         WARNING: labour_cost_nb positive means costs RISING (bad for firms).
 
-      Pressing problems (source: mart_safe__q0b_pressingness, 6m preferred):
+      Pressing problems (source: mart_safe__business_problems, 6m preferred):
         Weighted average pressingness score, scale 1–10.
         Higher value = more pressing.  Seven fixed categories.
 
@@ -282,23 +282,20 @@ models:
           source_question: Q26b
           positive_means: "net expectation of investment growth"
 
-  - name: mart_safe__q0b_pressingness
+  - name: mart_safe__business_problems
     description: >
-      Weighted aggregated pressingness scores for Q0B by country × wave × problem × reference_period.
+      Weighted aggregated pressingness scores for Q0B by country × wave × problem.
+      (Renamed from mart_safe__q0b_pressingness for domain-naming consistency.)
       Source: ECB SAFE survey Q0B ("How pressing are the following problems for your firm?"
       on a scale 1–10, where 1 = not pressing at all, 10 = extremely pressing).
       Non-responses (-1, -2, 99) excluded from aggregations.
-      Scope: SMEs only (employee_band_code 1–3: micro, small, medium — excludes large firms).
-      DEDUPLICATION NOTE: from wave 30 (2024H1) onward, some waves have BOTH a '6m' and a '3m'
-      row per problem.  When analysing a single wave's ranking, use reference_period = '6m'
-      and fall back to '3m' only where '6m' is absent.  Use mart_safe__slovakia_kpis for
-      pre-deduplicated values.
+      firm_size: 'all' = all respondents; 'sme' = employee_band_code 1–3.
       CAUTION for AI agents: avg_pressingness_wtd is a score on the 1–10 scale — it is NOT
       a net balance or a percentage.  Do not compute differences between waves as if it were
       a net balance.
 
     config:
-      tags: ["safe", "ecb", "survey", "mart", "q0b"]
+      tags: ["safe", "ecb", "survey", "mart", "q0b", "business_problems"]
 
     columns:
       - name: country_code
@@ -376,8 +373,8 @@ models:
       Question: "Have the following company indicators decreased, remained unchanged or increased
       during the past period?" Response: 1=Increased, 2=Unchanged, 3=Decreased.
       Net balance = % increased − % decreased (standard ECB published metric).
-      Scope: SMEs only (employee_band_code 1–3: micro, small, medium — excludes large firms).
-      Aggregation: wave × country × sub-item.
+      firm_size: 'all' = all respondents; 'sme' = employee_band_code 1–3.
+      Aggregation: wave × country × sub_item × firm_size.
       Non-responses (-1, -2, -99, 7, 99) excluded from metrics but counted in n_nonresponse.
 
     config:
@@ -554,8 +551,8 @@ models:
       5=received most, 6=received limited part, 8=pending).
       Instruments: bank loans, trade credit, other external financing, credit lines.
       Financing gap = discouragement_rate + (rejection_rate × application_rate / 100).
-      Scope: SMEs only (employee_band_code 1–3: micro, small, medium — excludes large firms).
-      Aggregation: wave × country × instrument.
+      firm_size: 'all' = all respondents; 'sme' = employee_band_code 1–3.
+      Aggregation: wave × country × instrument × firm_size.
 
     config:
       tags: ["safe", "ecb", "survey", "mart", "loan_applications"]
@@ -610,8 +607,8 @@ models:
       decrease or remain unchanged over the next two quarters."
       Response: 1=will increase, 2=will remain unchanged, 3=will decrease, 9=DK.
       Net balance = % will increase − % will decrease.
-      Scope: SMEs only (employee_band_code 1–3: micro, small, medium — excludes large firms).
-      Aggregation: wave × country × sub-item (a=turnover, b=fixed investment).
+      firm_size: 'all' = all respondents; 'sme' = employee_band_code 1–3.
+      Aggregation: wave × country × sub_item × firm_size (a=turnover, b=fixed investment).
       Sub-item labels verified from annex.xlsx Q26.
 
     config:
@@ -663,8 +660,8 @@ models:
       unweighted percentiles (p25, median, p75).
       Q33 is an ordinal question; statistics include weighted % downside/balanced/upside
       and a net balance (upside − downside).
-      Scope: SMEs only (employee_band_code 1–3: micro, small, medium — excludes large firms).
-      Aggregation: wave × country × question_id × sub_item.
+      firm_size: 'all' = all respondents; 'sme' = employee_band_code 1–3.
+      Aggregation: wave × country × question_id × sub_item × firm_size.
 
     config:
       tags: ["safe", "ecb", "survey", "mart", "expectations"]
@@ -805,10 +802,11 @@ models:
           'sme'   = micro, small, medium firms (employee_band_code 1–3, up to 249 employees).
           'large' = large firms (employee_band_code 4, 250+ employees).
 
-  - name: mart_safe__q11_factors
+  - name: mart_safe__financing_factors
     description: >
       Net balances for Q11 — self-assessed factors affecting the availability of external
-      financing. Question: "For each of the following factors, would you say that they have
+      financing. (Renamed from mart_safe__q11_factors for domain-naming consistency.)
+      Question: "For each of the following factors, would you say that they have
       improved, remained unchanged or deteriorated over the past period?"
       Response codes: 1=Improved, 2=Remained unchanged, 3=Deteriorated, 7=N/A, 9=DK.
       Codes 7 and 9 excluded from denominator.
@@ -824,11 +822,11 @@ models:
         c = Enterprise-specific outlook (sales/profitability)
         d = Enterprise's own capital
 
-      Scope: all firms ('all') and SMEs only ('sme'). Waves 30+ (2024Q1 onward).
-      Aggregation: wave × country × sub_item × firm_size.
+      firm_size: 'all' = all respondents; 'sme' = employee_band_code 1–3.
+      Waves 30+ (2024Q1 onward). Aggregation: wave × country × sub_item × firm_size.
 
     config:
-      tags: ["safe", "ecb", "survey", "mart", "q11", "credit_supply"]
+      tags: ["safe", "ecb", "survey", "mart", "q11", "financing_factors", "credit_supply"]
 
     columns:
       - name: country_code
@@ -885,6 +883,53 @@ models:
               expression: ">= -100 and net_balance_wtd <= 100"
               config:
                 where: "net_balance_wtd is not null"
+
+  - name: mart_safe__availability_expectations
+    description: >
+      Expected availability of external financing over the next quarter (Q23).
+      Question: "For each of the following types of financing, do you think their
+      availability will improve, deteriorate or remain unchanged over the next quarter?"
+      Response: 1=Will improve, 2=Unchanged, 3=Will deteriorate; 7=N/A and 9=DK excluded.
+      Net balance = % will improve − % will deteriorate.
+      Positive = more firms expect improvement (FAVOURABLE).
+      Negative = more firms expect deterioration (ADVERSE).
+      Sub-items (matching Q5/Q9 instruments): b=Bank loans, d=Trade credit,
+        g=Credit lines and bank overdraft.
+      firm_size: 'all' = all respondents; 'sme' = employee_band_code 1–3.
+      Three-month reference period only (wave 30 / 2024Q1 onward).
+      Aggregation: wave × country × sub_item × firm_size.
+
+    config:
+      tags: ["safe", "ecb", "survey", "mart", "q23", "availability_expectations"]
+
+    columns:
+      - name: country_code
+        description: ISO 3166-1 alpha-2 country code.
+      - name: country_name_en
+        description: Full English country name.
+      - name: wave_number
+        description: Survey wave (30 = 2024Q1 onward).
+      - name: survey_period_label
+        description: "Human-readable period label (e.g. '2026Q1')."
+      - name: sub_item
+        description: "Instrument: b=Bank loans, d=Trade credit, g=Credit lines/overdraft."
+      - name: sub_item_label
+        description: Human-readable instrument label.
+      - name: firm_size
+        description: "'all' = all firms; 'sme' = micro/small/medium (bands 1–3)."
+      - name: n_respondents
+        description: Count of valid responses (codes 7 and 9 excluded).
+      - name: pct_improve_wtd
+        description: Weighted % expecting availability to improve (code 1).
+      - name: pct_unchanged_wtd
+        description: Weighted % expecting no change (code 2).
+      - name: pct_deteriorate_wtd
+        description: Weighted % expecting availability to deteriorate (code 3).
+      - name: net_balance_wtd
+        description: >
+          Net balance = pct_improve − pct_deteriorate. Range −100 to +100.
+          Positive = net expectation of improvement (FAVOURABLE).
+          Negative = net expectation of deterioration (ADVERSE).
 
   - name: mart_safe__survey_participants
     description: >

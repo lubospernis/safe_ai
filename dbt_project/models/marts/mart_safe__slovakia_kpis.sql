@@ -44,7 +44,7 @@
     employees_nb        : Q2 sub_item='i' — Number of employees net balance.
     investment_nb       : Q2 sub_item='g' — Investment in property/plant net balance.
 
-  PRESSING PROBLEMS     (from mart_safe__q0b_pressingness, 6m preferred)
+  PRESSING PROBLEMS     (from mart_safe__business_problems, 6m preferred)
     All seven categories on the 1–10 scale.
     Positive direction: higher score = more pressing.
 
@@ -95,6 +95,7 @@ biz as (
         max(case when sub_item = 'g' then net_balance_wtd end) as investment_nb
     from {{ ref('mart_safe__business_situation') }}
     where country_code = 'SK'
+      and firm_size = 'sme'
     group by wave_number
 ),
 
@@ -108,8 +109,9 @@ press as (
         max(case when problem_id = 5 then avg_pressingness_wtd end) as press_skilled_staff,
         max(case when problem_id = 6 then avg_pressingness_wtd end) as press_regulation,
         max(case when problem_id = 7 then avg_pressingness_wtd end) as press_other
-    from {{ ref('mart_safe__q0b_pressingness') }}
+    from {{ ref('mart_safe__business_problems') }}
     where country_code = 'SK'
+      and firm_size = 'sme'
     group by wave_number
 ),
 
@@ -123,6 +125,7 @@ loans as (
         max(case when sub_item = 'a' then financing_gap_wtd     end) as bank_loan_access_gap
     from {{ ref('mart_safe__loan_applications') }}
     where country_code = 'SK'
+      and firm_size = 'sme'
     group by wave_number
 ),
 
@@ -133,6 +136,7 @@ out_ as (
         max(case when sub_item = 'b' then net_balance_wtd end) as investment_outlook_nb
     from {{ ref('mart_safe__outlook') }}
     where country_code = 'SK'
+      and firm_size = 'sme'
     group by wave_number
 )
 

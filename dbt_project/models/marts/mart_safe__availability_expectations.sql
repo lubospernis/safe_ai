@@ -5,31 +5,28 @@
 }}
 
 /*
-  Aggregated net balances for the business situation question (annex Q2 / question_id = 'q2').
+  Expected availability of external financing over the next quarter (Q23).
 
-  Question: "Have the following company indicators decreased, remained unchanged or increased
-  during the past six months (or quarter)?"
+  Question (verified from annex.xlsx Q23): "Looking ahead, for each of the following
+  types of financing available to your enterprise, please indicate whether you think
+  their availability will improve, deteriorate or remain unchanged over the next
+  [two quarters / quarter]."
 
-  Response scale (verified from annex.xlsx Q2):
-    1 = Increased
-    2 = Remained unchanged
-    3 = Decreased
-    7 = Not applicable (routing / non-response)
-    9 = DK/NA (non-response)
+  Response scale (verified from annex.xlsx Q23):
+    1 = Will improve
+    2 = Will remain unchanged
+    3 = Will deteriorate
+    7 = Not applicable (excluded from denominator)
+    9 = DK (excluded from denominator)
 
-  Sub-items (verified from annex.xlsx Q2):
-    a = Turnover
-    b = Labour costs (including social contributions)
-    c = Other costs (materials, energy, other)
-    d = Interest expenses (net)
-    e = Profit
-    f = Profit margin — removed from questionnaire, older rounds only
-    g = Investments in property, plant or equipment
-    h = Inventories and other working capital
-    i = Number of employees
-    j = Debt compared to assets
+  Sub-items included (verified from annex.xlsx Q23, matching Q5/Q9 instruments):
+    b = Bank loans (excluding overdraft and credit lines)
+    d = Trade credit
+    g = Credit line, bank overdraft or credit cards overdraft
 
-  Net balance = % increased − % decreased (standard ECB definition).
+  Net balance = % will improve − % will deteriorate.
+  Positive = more firms expect availability to improve (FAVOURABLE).
+  Negative = more firms expect availability to deteriorate (ADVERSE).
 
   firm_size: 'all' = all respondents; 'sme' = employee_band_code 1–3.
   Three-month reference period only (wave 30 / 2024Q1 onward).
@@ -47,11 +44,12 @@ with source_all as (
         country_name_en,
         sub_item,
         response_3m                                                 as response_raw,
+        response_3m in (-1, -2, -99, 7, 9, 99)                     as is_nonresponse,
         weight_common,
-        is_nonresponse,
         'all'                                                       as firm_size
     from {{ ref('int_safe__core_questions_long') }}
-    where question_id = 'q2'
+    where question_id = 'q23'
+      and sub_item in ('b', 'd', 'g')
       and wave_number >= 30
       and response_3m is not null
 
@@ -68,11 +66,12 @@ source_sme as (
         country_name_en,
         sub_item,
         response_3m                                                 as response_raw,
+        response_3m in (-1, -2, -99, 7, 9, 99)                     as is_nonresponse,
         weight_common,
-        is_nonresponse,
         'sme'                                                       as firm_size
     from {{ ref('int_safe__core_questions_long') }}
-    where question_id = 'q2'
+    where question_id = 'q23'
+      and sub_item in ('b', 'd', 'g')
       and employee_band_code between 1 and 3
       and wave_number >= 30
       and response_3m is not null
@@ -92,16 +91,9 @@ labels as (
     select
         *,
         case sub_item
-            when 'a' then 'Turnover'
-            when 'b' then 'Labour costs (including social contributions)'
-            when 'c' then 'Other costs (materials, energy, other)'
-            when 'd' then 'Interest expenses (net)'
-            when 'e' then 'Profit'
-            when 'f' then 'Profit margin (legacy, older rounds only)'
-            when 'g' then 'Investments in property, plant or equipment'
-            when 'h' then 'Inventories and other working capital'
-            when 'i' then 'Number of employees'
-            when 'j' then 'Debt compared to assets'
+            when 'b' then 'Bank loans'
+            when 'd' then 'Trade credit'
+            when 'g' then 'Credit lines and bank overdraft'
         end                                                         as sub_item_label
 
     from source
@@ -126,12 +118,11 @@ aggregated as (
         count(*) filter (where is_nonresponse)                      as n_nonresponse,
         sum(weight_common) filter (where not is_nonresponse)        as total_weight,
 
-        -- Weighted percentages
         round(
             100.0 * sum(weight_common) filter (where response_raw = 1 and not is_nonresponse)
             / nullif(sum(weight_common) filter (where not is_nonresponse), 0),
             2
-        )                                                           as pct_increased_wtd,
+        )                                                           as pct_improve_wtd,
 
         round(
             100.0 * sum(weight_common) filter (where response_raw = 2 and not is_nonresponse)
@@ -143,9 +134,9 @@ aggregated as (
             100.0 * sum(weight_common) filter (where response_raw = 3 and not is_nonresponse)
             / nullif(sum(weight_common) filter (where not is_nonresponse), 0),
             2
-        )                                                           as pct_decreased_wtd,
+        )                                                           as pct_deteriorate_wtd,
 
-        -- Net balance (% increased − % decreased)
+        -- Net balance (% improve − % deteriorate)
         round(
             100.0 * (
                 sum(weight_common) filter (where response_raw = 1 and not is_nonresponse)
@@ -154,7 +145,6 @@ aggregated as (
             2
         )                                                           as net_balance_wtd,
 
-        -- Unweighted net balance for reference
         round(
             100.0 * (
                 count(*) filter (where response_raw = 1 and not is_nonresponse)

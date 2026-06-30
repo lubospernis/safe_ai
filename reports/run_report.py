@@ -64,6 +64,25 @@ DEV_DB_PATH = Path(__file__).parent.parent / "dev.duckdb"
 DEV_SCHEMA = "main_safe_safe"
 PROD_SCHEMA = "main_safe"
 
+# ---------------------------------------------------------------------------
+# Cost tracking
+# ---------------------------------------------------------------------------
+
+_PRICE = {
+    "claude-sonnet-4-6":     {"input": 3.00,  "output": 15.00},
+    "mistral-small-latest":  {"input": 0.10,  "output": 0.30},
+    "mistral-medium-latest": {"input": 0.40,  "output": 2.00},
+}
+
+
+def _track_cost(tracker: dict, model: str, input_tok: int, output_tok: int) -> None:
+    p = _PRICE.get(model, {"input": 0.0, "output": 0.0})
+    tracker["input_tokens"] += input_tok
+    tracker["output_tokens"] += output_tok
+    tracker["usd"] += (input_tok * p["input"] + output_tok * p["output"]) / 1_000_000
+    tracker["calls"] += 1
+
+
 ROUTED_FOOTNOTE = (
     "<p class=\"footnote\">* Only firms that have used or applied for this type of financing "
     "in the past are asked this question. A lower n relative to the total sample is by design "
@@ -343,10 +362,16 @@ def _check_one(sec: dict, df: pd.DataFrame) -> dict:
     except json.JSONDecodeError:
         result = {"interesting": True, "chart_type": "line", "best_panel": None, "reason": "parse error"}
     result["section_id"] = sec["id"]
+    if resp.usage:
+        result["_usage"] = {"input": resp.usage.prompt_tokens, "output": resp.usage.completion_tokens}
     return result
 
 
-def check_all_interest(sections: list[dict], data: dict[str, pd.DataFrame]) -> dict[str, dict]:
+def check_all_interest(
+    sections: list[dict],
+    data: dict[str, pd.DataFrame],
+    cost_tracker: dict,
+) -> dict[str, dict]:
     results = {}
     with ThreadPoolExecutor(max_workers=5) as pool:
         futures = {
@@ -356,6 +381,9 @@ def check_all_interest(sections: list[dict], data: dict[str, pd.DataFrame]) -> d
         }
         for future in as_completed(futures):
             r = future.result()
+            if "_usage" in r:
+                u = r.pop("_usage")
+                _track_cost(cost_tracker, "mistral-small-latest", u["input"], u["output"])
             results[r["section_id"]] = r
     # always_include sections get a default result
     for sec in sections:
@@ -808,23 +836,44 @@ def _sme_divergence_note(df: pd.DataFrame, value_col: str, panel_col: str | None
 
 
 def _parse_section_response(raw: str, sec: dict) -> dict:
-    """Parse Sonnet JSON response into {"finding", "bullets"}. Shared by agentic function."""
-    raw = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+    """Parse Sonnet JSON response into {"finding", "bullets"}.
+
+    Robust to prose before/after the JSON block (Claude often reasons aloud when
+    tools are active before emitting the final JSON).
+    """
+    # Primary: find a JSON object containing both keys anywhere in the response
+    match = re.search(r'\{.*?"finding".*?"bullets".*?\}', raw, re.DOTALL)
+    if not match:
+        # Secondary: strip fences and find any JSON object
+        stripped = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        match = re.search(r'\{.*\}', stripped, re.DOTALL)
+        raw = stripped
     try:
-        parsed = json.loads(raw)
+        parsed = json.loads(match.group() if match else raw)
         finding = str(parsed.get("finding", sec["title"]))
         raw_bullets = parsed.get("bullets", [])
         if isinstance(raw_bullets, list):
             bullets = [str(b).strip().lstrip("•- ") for b in raw_bullets if str(b).strip()][:3]
         else:
             bullets = [b.strip().lstrip("•- ") for b in str(raw_bullets).splitlines() if b.strip()][:3]
-    except (json.JSONDecodeError, AttributeError):
+    except (json.JSONDecodeError, AttributeError, TypeError):
         finding = sec["title"]
-        bullets = [line.strip().lstrip("•- ") for line in raw.splitlines() if line.strip()][:3]
+        # Filter out structural/markdown lines so prose reasoning doesn't become bullets
+        bullets = [
+            line.strip().lstrip("•- ") for line in raw.splitlines()
+            if line.strip() and not line.strip().startswith(("```", "{", "}", "*", "#"))
+        ][:3]
     return {"finding": finding, "bullets": bullets}
 
 
-def get_section_content_agentic(sec: dict, df: pd.DataFrame, tool_con, schema: str, mart_catalogue: str) -> dict:
+def get_section_content_agentic(
+    sec: dict,
+    df: pd.DataFrame,
+    tool_con,
+    schema: str,
+    mart_catalogue: str,
+    cost_tracker: dict,
+) -> dict:
     """Return {"finding": str, "bullets": [str, ...]} via an agentic Sonnet loop.
 
     Claude may call query_mart 0–3 times to fetch additional context before producing
@@ -852,6 +901,9 @@ def get_section_content_agentic(sec: dict, df: pd.DataFrame, tool_con, schema: s
             tools=[QUERY_MART_TOOL],
             messages=messages,
         )
+
+        _track_cost(cost_tracker, "claude-sonnet-4-6",
+                    response.usage.input_tokens, response.usage.output_tokens)
 
         if response.stop_reason != "tool_use":
             # Final text response — extract and parse
@@ -886,6 +938,8 @@ def get_section_content_agentic(sec: dict, df: pd.DataFrame, tool_con, schema: s
         system=system_prompt,
         messages=messages,
     )
+    _track_cost(cost_tracker, "claude-sonnet-4-6",
+                final.usage.input_tokens, final.usage.output_tokens)
     text_blocks = [b.text for b in final.content if hasattr(b, "text")]
     raw = text_blocks[-1] if text_blocks else ""
     return _parse_section_response(raw, sec)
@@ -923,7 +977,7 @@ EXEC_SUMMARY_SYSTEM = textwrap.dedent("""
 """).strip()
 
 
-def get_exec_summary(rendered_sections: list[dict]) -> list[str]:
+def get_exec_summary(rendered_sections: list[dict], cost_tracker: dict) -> list[str]:
     lines = ["Below are the key findings per topic from the latest wave:\n"]
     for s in rendered_sections:
         lines.append(f"## {s['title']}")
@@ -941,6 +995,9 @@ def get_exec_summary(rendered_sections: list[dict]) -> list[str]:
             {"role": "user", "content": "\n".join(lines)},
         ],
     )
+    if resp.usage:
+        _track_cost(cost_tracker, "mistral-small-latest",
+                    resp.usage.prompt_tokens, resp.usage.completion_tokens)
     raw = resp.choices[0].message.content.strip()
     return [line.strip().lstrip("•- ") for line in raw.splitlines() if line.strip()][:6]
 
@@ -1232,8 +1289,10 @@ def main() -> None:
     for sid, df in data.items():
         print(f"  {sid}: {len(df)} rows")
 
+    cost_tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0}
+
     print("Running interest checks (parallel)...")
-    interest = check_all_interest(SECTIONS, data)
+    interest = check_all_interest(SECTIONS, data, cost_tracker)
     for sid, r in interest.items():
         flag = "✓" if r["interesting"] else "✗"
         print(f"  {flag} {sid}: {r['reason']} [chart={r['chart_type']}, best_panel={r['best_panel']}]")
@@ -1258,7 +1317,7 @@ def main() -> None:
             chart_png = build_chart(sec, data[sid], r["chart_type"], r["best_panel"])
 
         print(f"  Generating finding + bullets for {sid}...")
-        content = get_section_content_agentic(sec, data[sid], tool_con, schema, mart_catalogue)
+        content = get_section_content_agentic(sec, data[sid], tool_con, schema, mart_catalogue, cost_tracker)
         print(f"    finding: {content['finding']}")
         for b in content["bullets"]:
             print(f"    {b}")
@@ -1278,7 +1337,7 @@ def main() -> None:
     tool_con.close()
 
     print("Generating executive summary...")
-    exec_bullets = get_exec_summary(rendered) if rendered else []
+    exec_bullets = get_exec_summary(rendered, cost_tracker) if rendered else []
     for b in exec_bullets:
         print(f"  {b}")
 
@@ -1294,6 +1353,16 @@ def main() -> None:
     out_path = OUTPUT_DIR / "report_latest.html"
     out_path.write_text(html, encoding="utf-8")
     print(f"Saved → {out_path}")
+
+    print(
+        f"\n{'─' * 42}\n"
+        f"Run cost estimate\n"
+        f"  API calls  : {cost_tracker['calls']}\n"
+        f"  Input tok  : {cost_tracker['input_tokens']:,}\n"
+        f"  Output tok : {cost_tracker['output_tokens']:,}\n"
+        f"  Est. cost  : ${cost_tracker['usd']:.4f}\n"
+        f"{'─' * 42}"
+    )
     print("Done.")
 
 

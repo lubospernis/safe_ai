@@ -163,6 +163,40 @@ MISSINGNESS_FOOTNOTE = (
 )
 
 # ---------------------------------------------------------------------------
+# Slovak UI strings
+# ---------------------------------------------------------------------------
+
+_SK_UI = {
+    "lang":            "sk",
+    "title":           "ECB SAFE Survey — Vlna {wave} · Slovensko",
+    "h1":              "ECB SAFE Survey — Vlna {wave}",
+    "meta":            "Slovensko · Eurozóna · Nemecko &nbsp;|&nbsp; Vygenerované {date}",
+    "exec_h2":         "Zhrnutie",
+    "toc_title":       "Obsah",
+    "group_financing": "Podmienky financovania",
+    "group_economic":  "Ekonomická situácia firiem",
+    "footer": (
+        "Zdroj: ECB SAFE mikrodáta. Čistá bilancia = % podnikov hlásiacich nárast "
+        "mínus % podnikov hlásiacich pokles. Kladná hodnota = sprísnenie / rast "
+        "(nepriaznivé pre firmy, ak nie je uvedené inak). Záporná hodnota = uvoľnenie / pokles."
+    ),
+    "footnote_routed": (
+        "<p class=\"footnote\">* Túto otázku dostávajú iba firmy, ktoré v minulosti využili "
+        "alebo žiadali o daný typ financovania. Nižší počet respondentov oproti celkovej vzorke "
+        "je zámerný a neindikuje problém s kvalitou dát — pozri metodológiu ECB SAFE.</p>"
+    ),
+    "footnote_missing": (
+        "<p class=\"footnote\">† Bunky s menej ako 10 platnými odpoveďami v danej kombinácii "
+        "vlny × krajiny × položky sú vynechané z grafu; medzery v sérii indikujú nedostatok dát "
+        "pre dané obdobie.</p>"
+    ),
+    "footnote_agentic": (
+        "<p class=\"footnote\">🤖 Táto sekcia obsahuje dáta získané AI agentom priamym "
+        "dopytovaním databázy SAFE počas generovania správy.</p>\n"
+    ),
+}
+
+# ---------------------------------------------------------------------------
 # Tool-use: query_mart
 # ---------------------------------------------------------------------------
 
@@ -1169,6 +1203,61 @@ def build_annex_html(annex_csv_path: Path) -> str:
 
 
 # ---------------------------------------------------------------------------
+# 6. Slovak translation pass (translate-after-render, no re-querying)
+# ---------------------------------------------------------------------------
+
+def translate_to_slovak(
+    rendered: list[dict],
+    exec_bullets: list[str],
+    cost_tracker: dict,
+) -> tuple[list[dict], list[str]]:
+    payload = {
+        "exec_bullets": exec_bullets,
+        "sections": [
+            {"id": s["section_id"], "finding": s["finding"], "bullets": s["bullets"]}
+            for s in rendered
+        ],
+    }
+    prompt = (
+        "Translate the following ECB SAFE survey report content to Slovak. "
+        "Keep all numbers, percentages, and proper nouns (Slovakia, Euro Area, Germany, ECB, "
+        "SAFE) unchanged. Use formal economic Slovak (not colloquial). "
+        "Return valid JSON only — no markdown fences — with exactly the same structure as the input.\n\n"
+        + json.dumps(payload, ensure_ascii=False)
+    )
+    client = _mistral_client()
+    resp = client.chat.complete(
+        model="mistral-small-latest",
+        max_tokens=4000,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    if resp.usage:
+        _track_cost(cost_tracker, "mistral-small-latest",
+                    _Usage(resp.usage.prompt_tokens, resp.usage.completion_tokens))
+
+    raw = resp.choices[0].message.content.strip()
+    # Strip accidental markdown fences
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+    try:
+        translated = json.loads(raw)
+    except Exception:
+        print("  [SK] Translation JSON parse failed — falling back to English content")
+        return rendered, exec_bullets
+
+    sk_rendered = []
+    by_id = {s["id"]: s for s in translated.get("sections", [])}
+    for s in rendered:
+        t = by_id.get(s["section_id"], {})
+        sk_rendered.append({
+            **s,
+            "finding": t.get("finding", s["finding"]),
+            "bullets": t.get("bullets", s["bullets"]),
+        })
+    return sk_rendered, translated.get("exec_bullets", exec_bullets)
+
+
+# ---------------------------------------------------------------------------
 # 7. TOC
 # ---------------------------------------------------------------------------
 
@@ -1176,7 +1265,14 @@ def build_annex_html(annex_csv_path: Path) -> str:
 GROUP_ORDER = ["Financing Conditions", "Economic Situation of Firms"]
 
 
-def build_toc(rendered_sections: list[dict]) -> str:
+def build_toc(rendered_sections: list[dict], ui: dict | None = None) -> str:
+    _ui = ui or {}
+    group_labels = {
+        "Financing Conditions":        _ui.get("group_financing", "Financing Conditions"),
+        "Economic Situation of Firms": _ui.get("group_economic",  "Economic Situation of Firms"),
+    }
+    toc_title = _ui.get("toc_title", "Contents")
+
     by_group: dict[str, list[dict]] = {}
     for s in rendered_sections:
         g = s.get("group", "Other")
@@ -1187,18 +1283,19 @@ def build_toc(rendered_sections: list[dict]) -> str:
         secs = by_group.get(group, [])
         if not secs:
             continue
+        label = group_labels.get(group, group)
         inner = "\n".join(
             f'        <li><a href="#{s["section_id"]}">{s["finding"]}</a></li>'
             for s in secs
         )
-        items.append(f"    <li><strong>{group}</strong>\n      <ul>\n{inner}\n      </ul>\n    </li>")
+        items.append(f"    <li><strong>{label}</strong>\n      <ul>\n{inner}\n      </ul>\n    </li>")
 
     if not items:
         return ""
     rows = "\n".join(items)
     return textwrap.dedent(f"""
 <nav id="toc">
-  <p class="toc-title">Contents</p>
+  <p class="toc-title">{toc_title}</p>
   <ul>
 {rows}
   </ul>
@@ -1212,10 +1309,10 @@ def build_toc(rendered_sections: list[dict]) -> str:
 
 HTML_PAGE = textwrap.dedent("""
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{lang}">
 <head>
 <meta charset="UTF-8">
-<title>ECB SAFE Survey — Wave {wave} · Slovakia</title>
+<title>{title_str}</title>
 <style>
   body        {{ font-family: Arial, sans-serif; background: #f4f4f4; color: #231f20;
                  max-width: 1200px; margin: 40px auto; padding: 0 24px; }}
@@ -1232,6 +1329,10 @@ HTML_PAGE = textwrap.dedent("""
   img         {{ width: 100%; margin-top: 8px; }}
   .footnote   {{ font-size: 11px; color: #888; margin-top: 10px; line-height: 1.4; }}
   .footer     {{ color: #adadad; font-size: 11px; margin-top: 32px; text-align: center; }}
+  .lang-switch {{ float: right; font-size: 12px; color: #0777b3; text-decoration: none;
+                  border: 1px solid #0777b3; border-radius: 4px; padding: 2px 8px;
+                  margin-top: 4px; }}
+  .lang-switch:hover {{ background: #eef4fb; }}
 
   /* Exec summary + painting flexbox */
   .exec-flex     {{ display: flex; gap: 24px; align-items: flex-start; margin-bottom: 20px; }}
@@ -1270,14 +1371,13 @@ HTML_PAGE = textwrap.dedent("""
 </style>
 </head>
 <body>
-<h1>ECB SAFE Survey — Wave {wave}</h1>
-<p class="meta">Slovakia · Euro Area · Germany &nbsp;|&nbsp; Generated {date}</p>
+{lang_switch}<h1>{h1_str}</h1>
+<p class="meta">{meta_str}</p>
 {annex}
 {exec_flex}
 {toc}
 {sections}
-<p class="footer">Source: ECB SAFE microdata. Net balance = % reporting increase minus % reporting decrease.
-Positive = tightening/rising (adverse for firms unless noted). Negative = easing/falling.</p>
+<p class="footer">{footer_str}</p>
 </body>
 </html>
 """).strip()
@@ -1306,7 +1406,20 @@ def build_html(
     toc_html: str,
     painting_inner_html: str = "",
     latest_wave: int = 0,
+    ui: dict | None = None,
 ) -> str:
+    _ui = ui or {}
+    today = date.today().strftime("%d %b %Y")
+    wave_str = str(latest_wave)
+
+    group_labels = {
+        "Financing Conditions":        _ui.get("group_financing", "Financing Conditions"),
+        "Economic Situation of Firms": _ui.get("group_economic",  "Economic Situation of Firms"),
+    }
+    fn_routed   = _ui.get("footnote_routed",   ROUTED_FOOTNOTE)
+    fn_missing  = _ui.get("footnote_missing",  MISSINGNESS_FOOTNOTE)
+    fn_agentic  = _ui.get("footnote_agentic",  _AGENTIC_FOOTNOTE)
+
     # Group sections and emit h2 group headings between them
     by_group: dict[str, list[dict]] = {}
     for s in rendered_sections:
@@ -1318,7 +1431,7 @@ def build_html(
         secs = by_group.get(group, [])
         if not secs:
             continue
-        sections_parts.append(f"<h2>{group}</h2>")
+        sections_parts.append(f"<h2>{group_labels.get(group, group)}</h2>")
         for s in secs:
             sections_parts.append(
                 SECTION_TMPL.format(
@@ -1327,15 +1440,16 @@ def build_html(
                     title=s["title"],
                     bullets="\n".join(f"    <li>{b.lstrip('• ').strip()}</li>" for b in s["bullets"]),
                     footnote=(
-                        (ROUTED_FOOTNOTE + "\n" if s.get("routed") else "") +
-                        (MISSINGNESS_FOOTNOTE + "\n" if s.get("has_missingness_caveat") else "")
+                        (fn_routed + "\n" if s.get("routed") else "") +
+                        (fn_missing + "\n" if s.get("has_missingness_caveat") else "")
                     ),
-                    agentic_footnote=_AGENTIC_FOOTNOTE if s.get("tool_calls", 0) > 0 else "",
+                    agentic_footnote=fn_agentic if s.get("tool_calls", 0) > 0 else "",
                     chart_b64=base64.b64encode(s["chart_png"]).decode(),
                 )
             )
 
     # Build exec-flex: painting (1) + exec summary (3)
+    exec_h2 = _ui.get("exec_h2", "Executive Summary")
     painting_slot = (
         f'<div class="exec-painting">{painting_inner_html}</div>'
         if painting_inner_html else ""
@@ -1345,7 +1459,7 @@ def build_html(
     )
     exec_summary_div = (
         f'<div class="exec-summary">\n'
-        f'  <h2>Executive Summary</h2>\n'
+        f'  <h2>{exec_h2}</h2>\n'
         f'  <ul>\n{exec_bullets_html}\n  </ul>\n'
         f'</div>'
     ) if exec_bullets else ""
@@ -1354,9 +1468,23 @@ def build_html(
         if (painting_slot or exec_summary_div) else ""
     )
 
+    is_slovak = _ui.get("lang", "en") == "sk"
+    if is_slovak:
+        lang_switch = '<a class="lang-switch" href="index.html">🇬🇧 EN</a>\n'
+    else:
+        lang_switch = '<a class="lang-switch" href="sk.html">🇸🇰 SK</a>\n'
+
     return HTML_PAGE.format(
-        date=date.today().strftime("%d %b %Y"),
-        wave=latest_wave,
+        lang=_ui.get("lang", "en"),
+        lang_switch=lang_switch,
+        title_str=_ui.get("title", "ECB SAFE Survey — Wave {wave} · Slovakia").format(wave=wave_str),
+        h1_str=_ui.get("h1", "ECB SAFE Survey — Wave {wave}").format(wave=wave_str),
+        meta_str=_ui.get("meta", "Slovakia · Euro Area · Germany &nbsp;|&nbsp; Generated {date}").format(date=today),
+        footer_str=_ui.get(
+            "footer",
+            "Source: ECB SAFE microdata. Net balance = % reporting increase minus % reporting decrease. "
+            "Positive = tightening/rising (adverse for firms unless noted). Negative = easing/falling."
+        ),
         annex=annex_html,
         exec_flex=exec_flex,
         toc=toc_html,
@@ -1448,12 +1576,21 @@ def main() -> None:
     print("Fetching painting thumbnail...")
     painting_inner_html = _fetch_painting_inner_html()
 
-    print("Assembling HTML...")
+    print("Assembling HTML (EN)...")
     html = build_html(rendered, annex_html, exec_bullets, toc_html, painting_inner_html, latest_wave)
 
     out_path = OUTPUT_DIR / "report_latest.html"
     out_path.write_text(html, encoding="utf-8")
     print(f"Saved → {out_path}")
+
+    print("Translating to Slovak...")
+    sk_rendered, sk_exec_bullets = translate_to_slovak(rendered, exec_bullets, cost_tracker)
+    sk_toc_html = build_toc(sk_rendered, ui=_SK_UI)
+    sk_html = build_html(sk_rendered, annex_html, sk_exec_bullets, sk_toc_html,
+                         painting_inner_html, latest_wave, ui=_SK_UI)
+    sk_path = OUTPUT_DIR / "report_latest_sk.html"
+    sk_path.write_text(sk_html, encoding="utf-8")
+    print(f"Saved → {sk_path}")
 
     w = 54
     print(f"\n{'─' * w}\nRun cost estimate")

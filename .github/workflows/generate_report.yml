@@ -70,8 +70,10 @@ jobs:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
         run: python reports/send_newsletter.py
 
-      - name: Rename report for Pages
-        run: mv reports/output/report_latest.html reports/output/index.html
+      - name: Rename reports for Pages
+        run: |
+          mv reports/output/report_latest.html reports/output/index.html
+          mv reports/output/report_latest_sk.html reports/output/sk.html
 
       - name: Publish to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4

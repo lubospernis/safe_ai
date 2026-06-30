@@ -15,6 +15,10 @@ Claude: tick items off as they get built; don't add speculative sub-tasks.
 
 - [ ] Include hyperlinks to the exec summary (or even hovers of numbers)
 - [ ] Ask for feedback to the exec summary
+- [ ] SK translation not great
+- [ ] SK newsletter
+- [ ] Adhoc questions queries fully automatic?
+- [ ] Auto subscription through vercel + supabase?
 
 - [ ] Country selector — let the user pick a focal country in the report config (currently hard-coded to SK)
 - [ ] Wave comparison toggle — show current wave vs previous wave side-by-side in charts

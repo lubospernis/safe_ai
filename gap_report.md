@@ -4,52 +4,66 @@ _Generated 30 Jun 2026 — ECB source: [https://www.ecb.europa.eu/stats/ecb_surv
 
 ## Summary
 
-The automated report covers Slovakia-specific financing conditions, business performance indicators, and selected loan/credit line metrics with reasonable depth. However, it omits or substantially underrepresents a large set of topics the ECB SAFE publication covers: forward-looking expectations (Q23), loan application behaviour and outcomes (Q7A/B, Q10), the specific factors affecting financing availability (Q7B), inflation and price expectations (Q26, Q31, Q33, Q34), investment expectations, vulnerable firm identification, the war-in-Middle-East sentiment split, and the composite financing gap across all instruments. The automated report is essentially a snapshot of current conditions with no forward-looking dimension and no coverage of firm-level inflation or cost expectation data.
+The automated report covers Slovakia-specific financing conditions reasonably well for core SAFE modules (Q5, Q9, Q10, Q6A, Q7A, Q8), and provides solid coverage of the business situation (Q11). However, it omits or severely underrepresents a substantial portion of the ECB report's analytical content: expected financing availability (Q9 forward-looking), the full obstacle/rejection framework (Q10, Chart 10), the composite financing gap across all instruments (Q4/Q5), inflation and price expectations (Q26, Q31, Q33, Q34), the geopolitical shock analysis (war in the Middle East), financially vulnerable firms (Q12), investment expectations (Q13), the broader macroeconomic concern battery (Q14), and the loan application/discouragement framework (Q23). The automated report is Slovakia-centric and wave-comparative but lacks the forward-looking and expectations dimensions that are analytically central to the ECB publication.
 
 ---
 
 ## Gaps Found
 
-**ECB Section 2.1 – Terms and conditions of bank financing**
-- *Questions involved: Q10 (collateral requirements, charges/fees, other loan conditions)*
-- The automated report covers interest rates and non-interest costs but omits collateral requirements tightening specifically. The ECB reports a net 14% tightening in collateral requirements. This matters because collateral constraints affect SME access independently of price terms and would show whether tightening is purely cost-driven or also security-driven.
+### 1. Expected Availability of External Financing (ECB Section 2.4)
+**Question: Q9 (forward-looking component)**
+The ECB report discusses firms' expectations for the availability of external financing over the *next three months*, noting a net 4% anticipate deterioration — a less optimistic outlook than the prior round. The automated report contains no forward-looking availability indicator for Slovakia or the euro area. This would show whether firms anticipate credit conditions to ease or tighten, providing a leading indicator rather than just a contemporaneous reading.
 
-**ECB Section 2.2 – Financing gap across all instruments**
-- *Questions involved: Q5, Q9 (composite financing gap including debt securities and equity)*
-- The automated report covers bank loans, trade credit, and credit lines but does not construct or report the composite financing gap (Chart 4 in ECB report) that aggregates across debt securities, equity, credit lines, trade credit, and bank loans. This composite measure is the most complete single indicator of whether firms are financially constrained across all channels, not just bank lending.
+---
 
-**ECB Section 2.4 – Expected availability of external financing**
-- *Question involved: Q23 (expected change in availability of financing over next three months)*
-- Entirely absent from the automated report. The ECB shows a net 4% of firms anticipating deteriorating access. This forward-looking indicator is critical: it signals whether firms expect conditions to ease or tighten, which is a leading indicator of investment and financing behaviour. For Slovakia specifically, this would reveal whether the current stress in credit lines is expected to persist.
+### 2. Factors Affecting Availability of External Financing — Economic Outlook as Dominant Constraint (ECB Chart 7)
+**Question: Q7A/Q7B**
+The ECB highlights that a net 26% of firms cited the *worsening general economic outlook* as the primary factor constraining external financing availability, up from 20% in Q4 2025. While the automated report notes that Slovak firms are more pessimistic than EA peers (Q11-type data), it does not decompose *why* financing availability is perceived to have changed — i.e., the specific causal factors (own capital, credit history, economic outlook, firm-specific outlook). Q7A/B disaggregation is entirely absent, which would allow identification of whether Slovak firms' financing constraint is primarily macro-driven, firm-specific, or lender-behaviour-driven.
 
-**ECB Section 2.5 – Factors affecting availability of external financing**
-- *Question involved: Q7B (factors: general economic outlook, firm-specific outlook, creditworthiness, collateral, willingness of investors/lenders)*
-- The automated report mentions the general economic outlook as a drag but does not decompose the other factors (firm-specific outlook, creditworthiness, collateral availability, willingness of investors). The ECB reports a net 26% citing worsening general economic outlook as the primary constraint. A full decomposition for Slovakia would show whether the problem is macro-driven or firm-specific, which has different policy implications.
+---
 
-**ECB Section 2.6 – Banks' willingness to lend**
-- *Question involved: Q8 (banks' willingness to lend)*
-- The automated report mentions this (net +6.4% for Slovakia) but does not contextualise it against the factors driving that willingness or compare it against the backdrop of tightening terms — the ECB treats this as a distinct supply-side signal separate from loan conditions. The gap between improving willingness and tightening terms is analytically important and unexplained in the automated report.
+### 3. Banks' Willingness to Lend (ECB Chart 8)
+**Question: Q7A (banks' willingness)**
+The automated report mentions bank willingness (net +6.4% for Slovakia), but does not contextualise it against the structural supply-side factor breakdown or discuss whether this contradicts other tightening signals (e.g., rising interest rates simultaneously with improved willingness). The ECB treats this as a distinct supply-side indicator. The automated report treats it as an isolated data point without analytical integration.
 
-**ECB Section 2.7 – Loan application rates and outcomes**
-- *Questions involved: Q7A (application rate), Q7B (outcome: received in full, received in part, rejected, did not apply due to fear of rejection)*
-- The automated report does not cover application rates at all. The ECB reports a 21% application rate (down from 23%) and that the most common reason for not applying was sufficient internal funds. For Slovakia, application rates and discouragement effects (fear of rejection) are entirely missing. Discouraged borrowers are a key measure of latent unmet demand that does not show up in gap indicators.
+---
 
-**ECB Section 2.8 / Chart 10 – Financing obstacles**
-- *Question involved: Q10 (share of firms facing obstacles obtaining a bank loan)*
-- The ECB reports 6% of firms facing obstacles, down from 7%. The automated report discusses the financing gap but does not report the direct obstacle rate — the share of firms that applied and faced rejection or partial fulfilment. This is a harder measure of credit rationing than the gap indicator and is absent from the automated report.
+### 4. Loan Application Rates and Discouragement (ECB Chart 9)
+**Question: Q23 (application behaviour) and Q0B (firm characteristics)**
+The ECB notes the share of firms applying for bank loans fell to 21% (from 23%), and attributes non-application primarily to *sufficient internal funds*. The automated report contains no equivalent application rate or discouragement analysis for Slovakia. This matters because a drop in applications can reflect either improved internal liquidity (benign) or pessimism/discouragement (adverse), and these require decomposition to distinguish.
 
-**ECB Section 3.1 – Turnover and profit expectations**
-- *Questions involved: Q2 (past turnover/profit), Q2-forward (expected turnover/profit next quarter)*
-- The automated report covers past turnover and profit changes for Slovakia but omits forward-looking expectations for the next quarter. The ECB highlights that firms — especially large firms — remained optimistic about future turnover despite current declines. For Slovakia, where current declines are far steeper than the EA, the absence of forward expectations means there is no assessment of whether Slovak firms see the deterioration as temporary or persistent.
+---
 
-**ECB Section 3.2 – Investment in fixed assets (past and expected)**
-- *Questions involved: Q33 (past investment), Q34 (expected investment next quarter)*
-- The automated report notes the decline in fixed investment as a financing purpose (Q6A) but does not report actual investment outcomes (Q33) or forward investment expectations (Q34). The ECB shows a net 3% EA increase in fixed asset investment and a net 13% expecting increases next quarter. The Slovakia-specific investment outlook is entirely missing.
+### 5. Financing Obstacles and Rejection Rates (ECB Chart 10 / Table 1 columns 11–12)
+**Question: Q10 (outcome of loan applications)**
+The ECB reports that 6% of firms faced obstacles obtaining bank loans (down from 7%). The automated report does not report Slovak rejection rates, partial approvals, or the share of firms discouraged from applying. This is a critical access-to-finance metric — the difference between *perceived* conditions (covered) and *actual* rejection/obstacle experience (absent).
 
-**ECB Section 3.3 – Vulnerable firms**
-- *Question involved: Q12 (firms experiencing significant difficulties servicing debts and managing business)*
-- Entirely absent from the automated report. The ECB reports 4% of EA firms as financially vulnerable. This is a direct stress indicator — firms simultaneously experiencing debt servicing difficulties and business management problems. Given Slovakia's sharply negative profit and turnover figures, the Slovak vulnerable-firm share would be a critical data point.
+---
 
-**ECB Section 3.4 – Inflation expectations (1-year, 3-year, 5-year)**
-- *Questions involved: Q26 (selling price expectations), Q31 (non-labour input cost expectations), Q33 (wage expectations), and the quantitative inflation expectations questions*
-- Entirely absent from the automated report. The ECB devotes a full subsection to inflation expectations, reporting median 1-year ahead at 3.0% (up from 2.
+### 6. Composite Financing Gap Across All Instruments (ECB Chart 4)
+**Questions: Q5 and Q9 (composite across bank loans, credit lines, trade credit, equity, debt securities)**
+The ECB constructs a composite financing gap indicator across five instruments, which rose to net 3% in Q1 2026. The automated report covers bank loans, trade credit, and credit lines separately but never aggregates them into a composite gap metric. This aggregation reveals whether the overall financing constraint is broadening across the funding structure, which is more informative than instrument-level figures alone.
+
+---
+
+### 7. Selling Price Expectations (ECB Charts 15–17)
+**Question: Q31 (expected selling price changes over next 12 months)**
+The ECB reports EA firms expect selling prices to rise 3.5% on average (up from 2.9%), with SMEs reporting higher expectations than large firms. The automated report contains no selling price expectations data for Slovakia. This is directly relevant to the cost-margin squeeze narrative the automated report identifies — without price expectations, the squeeze story is incomplete.
+
+---
+
+### 8. Non-Labour Input Cost Expectations (ECB Charts 15–17)
+**Question: Q33 (expected non-labour input cost changes)**
+The ECB reports non-labour input cost expectations surged to 5.8% (from 3.6%), partially attributed to the geopolitical shock. This is entirely absent from the automated report. Given that the automated report identifies Slovak firms as prioritising inventory/working capital financing — likely cost-driven — the absence of input cost expectations is a direct analytical gap in explaining that behaviour.
+
+---
+
+### 9. Wage and Employment Expectations (ECB Charts 15–17)
+**Question: Q34 (wage expectations) and Q26 (employment expectations)**
+The ECB reports wage expectations moderated to 2.8% (from 3.1%), with employment growth remaining at 1%. The automated report flags that Slovak labour costs surged to net 85% — a retrospective measure — but includes no forward-looking wage or employment expectations for Slovakia. This gap prevents any assessment of whether the cost squeeze is expected to persist or moderate.
+
+---
+
+### 10. Inflation Expectations (ECB Charts 18–20)
+**Questions: Q26 (one-year, three-year, five-year inflation expectations) and risk balance**
+The ECB covers median inflation expectations at 1Y (3.0%, up from 2.6%), 3Y (3.0%, stable), and 5Y (3.0%, stable

@@ -101,10 +101,15 @@ SECTIONS = [
         "routed": True,
         "focus": (
             "Cover bank loans (a), credit lines (f), and trade credit (b) for Slovakia vs EA. "
-            "CRITICALLY: diagnose WHETHER the gap changed because of need, availability, or both — "
-            "e.g. 'Unchanged needs and a marginal decrease in availability led to a wider gap in SK.' "
-            "Name the direction of each component for each instrument. "
-            "Note if credit lines or trade credit show a notably different pattern to bank loans."
+            "Use one bullet per instrument. For each: state the gap level and direction, then "
+            "diagnose WHICH component drove it — need or availability or both — with exact pp values. "
+            "e.g. 'The bank loan gap narrowed to -7.6pp as need fell (-6.2pp) while availability "
+            "turned positive (+1.4pp).' "
+            "CRITICALLY: compare bank loans vs credit lines explicitly — if the credit line gap "
+            "diverges from the bank loan gap (e.g. tight credit lines but easy bank loans), name it "
+            "directly: 'While bank loan conditions eased, the credit line gap remained wide at Xpp, "
+            "driven by rising need rather than tighter supply.' "
+            "This cross-instrument comparison is the most analytically important part of the section."
         ),
     },
     {

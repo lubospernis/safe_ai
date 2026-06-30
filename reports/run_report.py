@@ -566,7 +566,7 @@ def get_section_content(sec: dict, df: pd.DataFrame) -> dict:
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     msg = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=350,
+        max_tokens=600,
         system=system_prompt,
         messages=[{"role": "user", "content": user_msg}],
     )
@@ -616,7 +616,7 @@ def get_exec_summary(rendered_sections: list[dict]) -> list[str]:
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     msg = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=350,
+        max_tokens=600,
         system=EXEC_SUMMARY_SYSTEM,
         messages=[{"role": "user", "content": "\n".join(lines)}],
     )

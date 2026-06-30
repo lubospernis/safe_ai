@@ -30,6 +30,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 from pathlib import Path
 
+import yaml
 import anthropic
 import duckdb
 from mistralai import Mistral
@@ -50,6 +51,7 @@ from config import SECTIONS  # noqa: E402  (local import after matplotlib setup)
 SQL_DIR = Path(__file__).parent / "sql"
 OUTPUT_DIR = Path(__file__).parent / "output"
 ANNEX_CSV = Path(__file__).parent.parent / "collateral" / "annex.csv"
+MARTS_SCHEMA_YML = Path(__file__).parent.parent / "dbt_project" / "models" / "marts" / "schema.yml"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 COUNTRIES = {"SK": "Slovakia", "EA": "Euro Area", "DE": "Germany"}
@@ -97,11 +99,14 @@ QUERY_MART_TOOL = {
     "name": "query_mart",
     "description": (
         "Execute a read-only DuckDB SELECT against the SAFE mart tables. "
-        "Use only when the provided section data is insufficient to make a specific, "
-        "defensible claim — e.g. to check a historical high/low beyond the 4 waves shown, "
-        "a sub-item not in the standard data, or a cross-country comparison for context. "
-        "Always use fully-qualified table names: main_safe.mart_safe__<name>. "
-        "Only SELECT is permitted. Returns results as a markdown table."
+        "Only call this when: (1) you need data before wave 30 (use int_safe__core_questions_long), "
+        "(2) you need a sub_item or column not present in the provided section data, or "
+        "(3) you need to verify a historical extreme (e.g. highest since wave X). "
+        "Do NOT use this to discover table or column names — see the schema catalogue in the system prompt. "
+        "Always use fully-qualified names: main_safe.mart_safe__<name>. "
+        "For mart_safe__financing_purpose and mart_safe__business_problems, always add "
+        "AND reference_period = '3m'. Only SELECT is permitted. "
+        "Prefer filling in a query template from the system prompt over writing SQL from scratch."
     ),
     "input_schema": {
         "type": "object",
@@ -139,6 +144,104 @@ def _run_query_tool(sql: str, con, schema: str) -> str:
     if truncated:
         result += f"\n\n_(truncated to {MAX_TOOL_ROWS} rows)_"
     return result
+
+
+MART_QUERY_TEMPLATES = textwrap.dedent("""
+    Query templates — fill in the UPPER_CASE placeholders, do not change the rest:
+
+    -- Historical trend for a net-balance mart (financing_conditions, business_situation,
+    -- outlook, availability_expectations, financing_factors):
+    SELECT wave_number, country_code, net_balance_wtd, n_respondents
+    FROM main_safe.mart_safe__MART_NAME
+    WHERE country_code IN ('SK', 'EA', 'DE')
+      AND firm_size = 'all'
+      AND sub_item = 'SUB_ITEM_CODE'
+    ORDER BY wave_number, country_code;
+
+    -- Loan application / rejection rates:
+    SELECT wave_number, country_code, application_rate_wtd, rejection_rate_wtd,
+           discouragement_rate_wtd, financing_gap_wtd
+    FROM main_safe.mart_safe__loan_applications
+    WHERE country_code IN ('SK', 'EA', 'DE')
+      AND firm_size = 'all'
+      AND sub_item = 'a'
+    ORDER BY wave_number, country_code;
+
+    -- Business problems pressingness (note: reference_period filter required):
+    SELECT wave_number, country_code, problem_label, avg_pressingness_wtd
+    FROM main_safe.mart_safe__business_problems
+    WHERE country_code IN ('SK', 'EA', 'DE')
+      AND firm_size = 'all'
+      AND reference_period = '3m'
+    ORDER BY wave_number, avg_pressingness_wtd DESC;
+
+    -- Financing purpose (note: reference_period filter required):
+    SELECT wave_number, country_code, purpose_label, pct_cited_wtd
+    FROM main_safe.mart_safe__financing_purpose
+    WHERE country_code IN ('SK', 'EA', 'DE')
+      AND firm_size = 'all'
+      AND reference_period = '3m'
+    ORDER BY wave_number, country_code, purpose_id;
+
+    -- Expectations (Q31 mean / Q33 net balance / Q34 pct):
+    SELECT wave_number, country_code, question_id, sub_item_label,
+           mean_wtd, net_balance_wtd, pct_upside_wtd, pct_downside_wtd
+    FROM main_safe.mart_safe__expectations
+    WHERE country_code IN ('SK', 'EA', 'DE')
+      AND firm_size = 'all'
+      AND question_id = 'QUESTION_ID'
+    ORDER BY wave_number, country_code;
+
+    -- Historical microdata (pre-wave-30 only):
+    SELECT wave_number, country_code,
+           AVG(CASE WHEN response_3m IN (1,2,3) THEN 1.0 ELSE 0.0 END) AS pct_relevant
+    FROM main_safe.int_safe__core_questions_long
+    WHERE country_code IN ('SK', 'EA')
+      AND question_id = 'QUESTION_ID'
+      AND sub_item = 'SUB_ITEM_CODE'
+      AND wave_number < 30
+      AND is_nonresponse = false
+    GROUP BY wave_number, country_code
+    ORDER BY wave_number;
+""").strip()
+
+
+def build_mart_catalogue(con, schema: str) -> str:
+    """Build compact mart catalogue from schema.yml, verified against live DB."""
+    with open(MARTS_SCHEMA_YML) as f:
+        dbt_schema = yaml.safe_load(f)
+
+    lines = [
+        "Available mart tables (all contain only 3m reference period data, waves 30+).",
+        "Default filters: WHERE firm_size = 'all' AND country_code IN ('SK','EA','DE').",
+        "EXCEPTION: mart_safe__financing_purpose and mart_safe__business_problems keep",
+        "  both periods — always add: AND reference_period = '3m' for those two tables.",
+        "",
+    ]
+
+    for model in dbt_schema.get("models", []):
+        name = model["name"]
+        if not name.startswith("mart_safe__"):
+            continue
+        full_name = f"{schema}.{name}"
+        try:
+            con.execute(f"SELECT 1 FROM {full_name} LIMIT 1")
+        except Exception:
+            continue
+        cols = [c["name"] for c in model.get("columns", [])]
+        lines.append(full_name)
+        for i in range(0, len(cols), 6):
+            lines.append("  " + ", ".join(cols[i:i + 6]))
+        lines.append("")
+
+    lines += [
+        "main_safe.int_safe__core_questions_long",
+        "  permid, wave_number, country_code, question_id, sub_item, response_raw,",
+        "  response_rec, response_3m, weight_common, is_nonresponse, employee_band_code, is_sme",
+        "  (26M rows — use ONLY for pre-wave-30 history or raw microdata drill-downs)",
+    ]
+
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -589,13 +692,25 @@ SECTION_CONTENT_SYSTEM = textwrap.dedent("""
     Focus:
     {focus}
 
-    Tool use:
-    You have a query_mart tool that runs SQL against the SAFE mart tables.
-    Use it only when the provided data is insufficient to make a specific, defensible claim.
-    Good reasons: verify a historical extreme beyond the waves shown, check a sub-item not
-    in the standard data, confirm a cross-country difference. Bad reasons: recalculate what
-    you already have, reformat existing numbers. Prefer the provided data when it suffices.
-    Cite only numbers from the provided data or from a tool result you actually ran.
+    Available mart tables and columns:
+    {schema_catalogue}
+
+    Query templates (fill in UPPER_CASE placeholders only):
+    {query_templates}
+
+    When to call query_mart — only these 3 cases justify a tool call:
+    1. You need data from before wave 30 (use int_safe__core_questions_long)
+    2. You need a sub_item or column NOT present in the section data provided above
+    3. You need to verify a historical extreme (e.g. "is this the highest since wave X?")
+
+    Do NOT call query_mart to:
+    - Discover table or column names (the catalogue above is complete and current)
+    - Recalculate or reformat data already in the provided section data
+    - Fetch the same wave/country/sub_item combinations already shown to you
+    - Explore what tables exist (they are all listed above)
+
+    If none of the 3 cases apply, write your JSON response immediately.
+    Cite only numbers from the provided data or a tool result you actually ran.
 
     Return valid JSON only — no markdown fences, no commentary.
 """).strip()
@@ -709,7 +824,7 @@ def _parse_section_response(raw: str, sec: dict) -> dict:
     return {"finding": finding, "bullets": bullets}
 
 
-def get_section_content_agentic(sec: dict, df: pd.DataFrame, tool_con, schema: str) -> dict:
+def get_section_content_agentic(sec: dict, df: pd.DataFrame, tool_con, schema: str, mart_catalogue: str) -> dict:
     """Return {"finding": str, "bullets": [str, ...]} via an agentic Sonnet loop.
 
     Claude may call query_mart 0–3 times to fetch additional context before producing
@@ -719,6 +834,8 @@ def get_section_content_agentic(sec: dict, df: pd.DataFrame, tool_con, schema: s
     system_prompt = SECTION_CONTENT_SYSTEM.format(
         sign_note=sec["sign_note"],
         focus=sec["focus"],
+        schema_catalogue=mart_catalogue,
+        query_templates=MART_QUERY_TEMPLATES,
     )
     base_data = _fmt_data_for_prompt(sec, df)
     divergence = _sme_divergence_note(df, sec["value_col"], sec.get("panel_col"))
@@ -1123,6 +1240,8 @@ def main() -> None:
 
     schema = DEV_SCHEMA if args.dev else PROD_SCHEMA
     tool_con = _get_connection(args.dev)
+    print("Building mart schema catalogue...")
+    mart_catalogue = build_mart_catalogue(tool_con, schema)
 
     rendered = []
     for sec in SECTIONS:
@@ -1139,7 +1258,7 @@ def main() -> None:
             chart_png = build_chart(sec, data[sid], r["chart_type"], r["best_panel"])
 
         print(f"  Generating finding + bullets for {sid}...")
-        content = get_section_content_agentic(sec, data[sid], tool_con, schema)
+        content = get_section_content_agentic(sec, data[sid], tool_con, schema, mart_catalogue)
         print(f"    finding: {content['finding']}")
         for b in content["bullets"]:
             print(f"    {b}")

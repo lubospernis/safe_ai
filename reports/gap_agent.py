@@ -19,6 +19,7 @@ from pathlib import Path
 
 import anthropic
 import requests
+from mistralai import Mistral
 from bs4 import BeautifulSoup
 
 OUTPUT_DIR = Path(__file__).parent / "output"
@@ -108,18 +109,20 @@ Be direct and analytical. Do not compliment either report.
 
 
 def run_gap_analysis(ecb_text: str, our_text: str) -> str:
-    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    client = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
     user_msg = (
         f"## ECB SAFE PUBLICATION\n\n{ecb_text}\n\n"
         f"---\n\n## OUR AUTOMATED REPORT\n\n{our_text}"
     )
-    msg = client.messages.create(
-        model="claude-sonnet-4-6",
+    resp = client.chat.complete(
+        model="mistral-medium-latest",
         max_tokens=1500,
-        system=GAP_SYSTEM,
-        messages=[{"role": "user", "content": user_msg}],
+        messages=[
+            {"role": "system", "content": GAP_SYSTEM},
+            {"role": "user", "content": user_msg},
+        ],
     )
-    return msg.content[0].text.strip()
+    return resp.choices[0].message.content.strip()
 
 
 def main() -> None:
@@ -146,7 +149,7 @@ def main() -> None:
     our_text = extract_our_report_text(REPORT_HTML)
     print(f"  {len(our_text):,} chars extracted")
 
-    print("Running gap analysis (Sonnet)...")
+    print("Running gap analysis (Mistral Medium)...")
     analysis = run_gap_analysis(ecb_text, our_text)
 
     output = (

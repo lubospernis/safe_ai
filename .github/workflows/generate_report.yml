@@ -51,11 +51,13 @@ jobs:
         env:
           MOTHERDUCK_TOKEN:  ${{ secrets.MOTHERDUCK_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MISTRAL_API_KEY:   ${{ secrets.MISTRAL_API_KEY }}
         run: python reports/run_report.py
 
       - name: Run gap analysis
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MISTRAL_API_KEY:   ${{ secrets.MISTRAL_API_KEY }}
         run: python reports/gap_agent.py
 
       - name: Send newsletter

@@ -32,6 +32,7 @@ from pathlib import Path
 
 import anthropic
 import duckdb
+from mistralai import Mistral
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
@@ -193,7 +194,11 @@ INTEREST_SYSTEM = textwrap.dedent("""
 """).strip()
 
 
-def _check_one(sec: dict, df: pd.DataFrame, client: anthropic.Anthropic) -> dict:
+def _mistral_client() -> Mistral:
+    return Mistral(api_key=os.environ["MISTRAL_API_KEY"])
+
+
+def _check_one(sec: dict, df: pd.DataFrame) -> dict:
     lines = [f"Section: {sec['title']}"]
     panel_col = sec["panel_col"]
     value_col = sec["value_col"]
@@ -220,13 +225,16 @@ def _check_one(sec: dict, df: pd.DataFrame, client: anthropic.Anthropic) -> dict
 
     lines.append(f"pinned_panels: {sec['pinned_panels']}")
 
-    msg = client.messages.create(
-        model="claude-haiku-4-5-20251001",
+    client = _mistral_client()
+    resp = client.chat.complete(
+        model="mistral-small-latest",
         max_tokens=120,
-        system=INTEREST_SYSTEM,
-        messages=[{"role": "user", "content": "\n".join(lines)}],
+        messages=[
+            {"role": "system", "content": INTEREST_SYSTEM},
+            {"role": "user", "content": "\n".join(lines)},
+        ],
     )
-    raw = msg.content[0].text.strip()
+    raw = resp.choices[0].message.content.strip()
     try:
         result = json.loads(raw)
     except json.JSONDecodeError:
@@ -236,11 +244,10 @@ def _check_one(sec: dict, df: pd.DataFrame, client: anthropic.Anthropic) -> dict
 
 
 def check_all_interest(sections: list[dict], data: dict[str, pd.DataFrame]) -> dict[str, dict]:
-    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     results = {}
     with ThreadPoolExecutor(max_workers=5) as pool:
         futures = {
-            pool.submit(_check_one, sec, data[sec["id"]], client): sec["id"]
+            pool.submit(_check_one, sec, data[sec["id"]]): sec["id"]
             for sec in sections
             if not sec["always_include"]
         }
@@ -808,14 +815,16 @@ def get_exec_summary(rendered_sections: list[dict]) -> list[str]:
             lines.append(f"  {b}")
         lines.append("")
 
-    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    msg = client.messages.create(
-        model="claude-sonnet-4-6",
+    client = _mistral_client()
+    resp = client.chat.complete(
+        model="mistral-small-latest",
         max_tokens=600,
-        system=EXEC_SUMMARY_SYSTEM,
-        messages=[{"role": "user", "content": "\n".join(lines)}],
+        messages=[
+            {"role": "system", "content": EXEC_SUMMARY_SYSTEM},
+            {"role": "user", "content": "\n".join(lines)},
+        ],
     )
-    raw = msg.content[0].text.strip()
+    raw = resp.choices[0].message.content.strip()
     return [line.strip().lstrip("•- ") for line in raw.splitlines() if line.strip()][:6]
 
 

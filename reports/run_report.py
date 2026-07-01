@@ -72,9 +72,10 @@ PROD_SCHEMA = "main_safe"
 # ---------------------------------------------------------------------------
 
 _PRICE = {
-    "claude-sonnet-4-6":     {"input": 3.00,  "output": 15.00},
-    "mistral-small-latest":  {"input": 0.10,  "output": 0.30},
-    "mistral-medium-latest": {"input": 0.40,  "output": 2.00},
+    "claude-sonnet-4-6":        {"input": 3.00,  "output": 15.00},
+    "claude-haiku-4-5-20251001": {"input": 1.00,  "output": 5.00},
+    "mistral-small-latest":     {"input": 0.10,  "output": 0.30},
+    "mistral-medium-latest":    {"input": 0.40,  "output": 2.00},
 }
 
 
@@ -851,7 +852,7 @@ SECTION_CONTENT_SYSTEM = textwrap.dedent("""
 
     If none of the 3 cases apply, write your JSON response immediately.
     Cite only numbers from the provided data or a tool result you actually ran.
-
+{historical_context}
     Return valid JSON only — no markdown fences, no commentary.
 """).strip()
 
@@ -987,6 +988,7 @@ def get_section_content_agentic(
     cost_tracker: dict,
     question_texts: dict[str, str] | None = None,
     client: anthropic.Anthropic | None = None,
+    historical_context: str = "",
 ) -> dict:
     """Return {"finding": str, "bullets": [str, ...]} via an agentic Sonnet loop.
 
@@ -998,9 +1000,12 @@ def get_section_content_agentic(
     # are the only variable parts, and they don't change between sections). The
     # cache_control block tells Anthropic to cache this prefix — subsequent section calls
     # pay only 10% of normal input price for these tokens.
+    # historical_context is pre-rendered as "\n\n## Historical context...\n..." or ""
+    # so the format slot is always safe — empty string leaves no extra blank lines
     system_prompt = SECTION_CONTENT_SYSTEM.format(
         schema_catalogue=mart_catalogue,
         query_templates=MART_QUERY_TEMPLATES,
+        historical_context=f"\n{historical_context}" if historical_context else "",
     )
     cached_system = [{"type": "text", "text": system_prompt,
                       "cache_control": {"type": "ephemeral"}}]
@@ -1275,6 +1280,51 @@ def _add_so_what(content: dict, sec: dict, mistral_client, cost_tracker: dict) -
     except Exception:
         pass  # on any failure, return original unchanged
     return content
+
+
+def _write_wave_memory(
+    wave: int,
+    exec_bullets: list[dict],
+    rendered: list[dict],
+    client: anthropic.Anthropic,
+    con,
+    cost_tracker: dict,
+    lock: threading.Lock,
+) -> None:
+    """Write a 3–4 sentence summary of this wave's notable findings to MotherDuck."""
+    bullet_text = " | ".join(b["bullet"] for b in exec_bullets if b.get("bullet"))
+    findings = " | ".join(r["finding"] for r in rendered if r.get("finding"))
+    prompt = (
+        f"Wave {wave} findings for Slovak firms: {findings}. "
+        f"Executive summary: {bullet_text}. "
+        "Write 3–4 sentences summarising what was most notable for Slovak firms this wave, "
+        "for a reader who will see this as historical context in a FUTURE wave's report. "
+        "Past tense. Include 2–3 specific numbers. Plain text only, no markdown."
+    )
+    try:
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=200,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        summary = resp.content[0].text.strip()
+        with lock:
+            _track_cost(cost_tracker, "claude-haiku-4-5-20251001", resp.usage)
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS main_safe.ref_safe__wave_memory (
+                wave_number INTEGER PRIMARY KEY,
+                run_date    DATE,
+                notable_summary TEXT,
+                model_id    TEXT
+            )
+        """)
+        con.execute(
+            "INSERT OR REPLACE INTO main_safe.ref_safe__wave_memory VALUES (?,?,?,?)",
+            [wave, date.today(), summary, "claude-haiku-4-5-20251001"],
+        )
+        print(f"  Wave memory written for wave {wave}")
+    except Exception as e:
+        print(f"  Wave memory write failed: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -1791,10 +1841,128 @@ def build_html(
 
 
 # ---------------------------------------------------------------------------
-# 8. Main
+# 8. ECB sharpener — post-generation bullet pass
+# ---------------------------------------------------------------------------
+
+ECB_SAFE_INDEX = "https://www.ecb.europa.eu/stats/ecb_surveys/safe/html/index.en.html"
+ECB_BASE = "https://www.ecb.europa.eu"
+_ECB_SHARPEN_MAX_CHARS = 8_000
+
+
+def _fetch_ecb_context() -> tuple[str, str]:
+    """Fetch the latest ECB SAFE publication and return (url, plain_text).
+
+    Returns ("", "") silently on any failure — the sharpener is optional.
+    """
+    import urllib.request
+    try:
+        req = urllib.request.Request(ECB_SAFE_INDEX, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            index_html = r.read().decode("utf-8", errors="replace")
+        m = re.search(r'href="(/stats/ecb_surveys/safe/html/ecb\.safe\d{6}\.en\.html)"',
+                      index_html)
+        if not m:
+            return "", ""
+        ecb_url = ECB_BASE + m.group(1)
+        req2 = urllib.request.Request(ecb_url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req2, timeout=20) as r:
+            page_html = r.read().decode("utf-8", errors="replace")
+        text = re.sub(r"<[^>]+>", " ", page_html)
+        text = re.sub(r"\s+", " ", text).strip()
+        return ecb_url, text[:_ECB_SHARPEN_MAX_CHARS]
+    except Exception:
+        return "", ""
+
+
+ECB_SHARPEN_SYSTEM = textwrap.dedent("""
+    You are an editorial analyst sharpening a Slovakia SAFE survey report against the
+    ECB's own published findings for the same wave.
+
+    You will receive:
+    1. Section-by-section findings and bullets from the automated report
+    2. The ECB publication text
+
+    Your task: revise bullets where a specific improvement is possible — a sharper EA
+    comparison supported by the ECB text, a missed context point the ECB highlights, or
+    more precise language matching the ECB's own framing.
+
+    Rules:
+    - Only revise bullets where improvement is directly supported by the ECB text provided.
+      Do NOT invent numbers or comparisons not in the ECB text.
+    - Preserve all existing numbers and sign conventions.
+    - Keep bullets ≤ 35 words. Do not change the finding headline.
+    - Return JSON only — no markdown fences:
+      {"section_id": {"finding": "unchanged headline", "bullets": ["revised..."]}, ...}
+      Include ONLY sections where you actually changed at least one bullet.
+      If no improvements are possible, return an empty JSON object: {}
+""").strip()
+
+
+def _sharpen_with_ecb(
+    rendered: list[dict],
+    ecb_text: str,
+    mistral_client,
+    cost_tracker: dict,
+) -> list[dict]:
+    """Post-generation pass: sharpen bullets against ECB publication. Returns rendered."""
+    if not ecb_text or not rendered:
+        return rendered
+    sections_text = "\n\n".join(
+        f"### {r['section_id']}\nFinding: {r['finding']}\n"
+        + "\n".join(f"- {b}" for b in r["bullets"])
+        for r in rendered
+    )
+    user_msg = (
+        f"## OUR REPORT SECTIONS\n\n{sections_text}\n\n"
+        f"---\n\n## ECB PUBLICATION TEXT\n\n{ecb_text}"
+    )
+    try:
+        resp = mistral_client.chat.complete(
+            model="mistral-small-latest",
+            max_tokens=1500,
+            messages=[
+                {"role": "system", "content": ECB_SHARPEN_SYSTEM},
+                {"role": "user", "content": user_msg},
+            ],
+        )
+        if resp.usage:
+            _track_cost(cost_tracker, "mistral-small-latest",
+                        _Usage(resp.usage.prompt_tokens, resp.usage.completion_tokens))
+        raw = resp.choices[0].message.content.strip()
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw).strip()
+        revisions: dict = json.loads(raw)
+        if not revisions:
+            print("  ECB sharpener: no improvements identified")
+            return rendered
+        updated = []
+        for r in rendered:
+            sid = r["section_id"]
+            if sid in revisions:
+                rev = revisions[sid]
+                new_bullets = rev.get("bullets", [])
+                # Only apply if bullet count matches (safety check)
+                if new_bullets and len(new_bullets) == len(r["bullets"]):
+                    updated.append({**r, "bullets": [str(b).strip() for b in new_bullets]})
+                    print(f"  ECB sharpener: revised {sid}")
+                else:
+                    updated.append(r)
+            else:
+                updated.append(r)
+        return updated
+    except Exception as e:
+        print(f"  ECB sharpener failed: {e} — keeping original bullets")
+        return rendered
+
+
+# ---------------------------------------------------------------------------
+# 9. Main
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    from datetime import datetime as _dt
+    _run_start = _dt.now()
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--dev", action="store_true",
                         help="Use local dev.duckdb instead of MotherDuck (no MOTHERDUCK_TOKEN needed)")
@@ -1822,6 +1990,43 @@ def main() -> None:
 
     schema = DEV_SCHEMA if args.dev else PROD_SCHEMA
     tool_con = _get_connection(args.dev)
+
+    # Build historical context block injected into every section system prompt.
+    # Sources: (1) wave memory from MotherDuck, (2) interpretation notes from prior gap analysis.
+    historical_context = ""
+    if not args.dev:
+        try:
+            rows = tool_con.execute("""
+                SELECT wave_number, notable_summary
+                FROM main_safe.ref_safe__wave_memory
+                ORDER BY wave_number DESC LIMIT 3
+            """).fetchall()
+            if rows:
+                historical_context = (
+                    "\n\n## Historical context (prior waves — for trend awareness only)\n"
+                    + "\n".join(f"  Wave {r[0]}: {r[1]}" for r in rows)
+                )
+        except Exception:
+            pass
+        interp_path = Path(__file__).parent / "output" / "interpretation_context.md"
+        if interp_path.exists():
+            interp_text = interp_path.read_text().strip()
+            if interp_text:
+                historical_context += (
+                    "\n\n## Interpretation notes from prior gap analysis\n" + interp_text
+                )
+        if historical_context:
+            print(f"  Loaded historical context ({len(historical_context)} chars)")
+
+    ecb_url, ecb_context = "", ""
+    if not args.dev:
+        print("Fetching ECB publication for sharpener pass...")
+        ecb_url, ecb_context = _fetch_ecb_context()
+        if ecb_context:
+            print(f"  Fetched {len(ecb_context):,} chars from {ecb_url}")
+        else:
+            print("  ECB fetch failed or unavailable — sharpener pass skipped")
+
     print("Building mart schema catalogue...")
     mart_catalogue = build_mart_catalogue(tool_con, schema)
 
@@ -1856,6 +2061,7 @@ def main() -> None:
             content = get_section_content_agentic(
                 sec, data[sid], thread_con, schema, mart_catalogue,
                 local_tracker, question_texts, client=anthropic_client,
+                historical_context=historical_context,
             )
 
             # "So what?" pass — adds implication clauses to purely-descriptive bullets
@@ -1902,10 +2108,19 @@ def main() -> None:
     # Restore original SECTIONS order
     rendered = [rendered_map[s["id"]] for s in SECTIONS if s["id"] in rendered_map]
 
+    if ecb_context:
+        print("Sharpening bullets against ECB publication...")
+        rendered = _sharpen_with_ecb(rendered, ecb_context, mistral_client, cost_tracker)
+
     print("Generating executive summary (two-pass)...")
     exec_bullets = get_exec_summary(rendered, cost_tracker) if rendered else []
     for item in exec_bullets:
         print(f"  [{item.get('section_id', '?')}] {item.get('bullet', '')}")
+
+    if not args.dev and exec_bullets and rendered:
+        print("Writing wave memory...")
+        _write_wave_memory(latest_wave, exec_bullets, rendered,
+                           anthropic_client, tool_con, cost_tracker, cost_lock)
 
     print("Building TOC...")
     toc_html = build_toc(rendered)
@@ -1946,6 +2161,19 @@ def main() -> None:
           f"{cost_tracker['input_tokens']:>7,} in  {cost_tracker['output_tokens']:>5,} out  "
           f"${cost_tracker['usd']:.4f}")
     print(f"{'─' * w}")
+
+    cache_read_total = sum(m.get("cache_read", 0) for m in cost_tracker["by_model"].values())
+    (OUTPUT_DIR / "cost_tracker.json").write_text(json.dumps({
+        "wave_number": latest_wave,
+        "total_cost_usd": round(cost_tracker["usd"], 5),
+        "input_tokens": cost_tracker["input_tokens"],
+        "output_tokens": cost_tracker["output_tokens"],
+        "cache_read_tokens": cache_read_total,
+        "model_sonnet": "claude-sonnet-4-6",
+        "model_mistral": "mistral-small-latest",
+        "n_sections": len(rendered),
+        "duration_seconds": round((_dt.now() - _run_start).total_seconds(), 1),
+    }))
     print("Done.")
 
 

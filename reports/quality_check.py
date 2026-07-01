@@ -116,6 +116,12 @@ def main() -> None:
     print(f"  readability={r}/10  substance={s}/10  coherence={c}/10  sign_convention={sc}/10  → {verdict.upper()}")
     print(f"  Reason: {reason}")
 
+    scores = {
+        "readability": r, "substance": s, "coherence": c,
+        "sign_convention": sc, "verdict": verdict, "reason": reason,
+    }
+    (Path(__file__).parent / "output" / "quality_scores.json").write_text(json.dumps(scores))
+
     if verdict == "fail" or min(r, s, c, sc) < PASS_THRESHOLD:
         print("Quality gate FAILED — blocking deploy")
         sys.exit(1)

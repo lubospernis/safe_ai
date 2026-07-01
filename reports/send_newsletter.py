@@ -52,10 +52,12 @@ def parse_report(html: str) -> dict:
 
     # Executive summary bullets
     exec_section = soup.select_one("#exec-summary")
+    import re as _re
     exec_bullets = (
         [li.get_text(strip=True) for li in exec_section.select("li")]
         if exec_section else []
     )
+    exec_bullets = [_re.sub(r":(\S)", r": \1", b) for b in exec_bullets]
 
     # Section findings: h3 (finding headline) + p.section-subtitle (question context)
     findings = []
@@ -157,7 +159,7 @@ def build_email_html(data: dict, pages_url: str) -> str:
 <body style="{_BODY}">
   <div style="{_WRAP}">
 
-    <div style="{_HEADER}">ECB SAFE Survey — Automatic Report</div>
+    <div style="{_HEADER}">{data["h1"]}</div>
     <div style="{_SUBHEADER}">{data['meta']}</div>
 
     <div style="{_SECTION}">

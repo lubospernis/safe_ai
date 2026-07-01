@@ -1183,7 +1183,8 @@ EXEC_SUMMARY_SYSTEM = textwrap.dedent("""
     - Include a number when it sharpens the story — net balance, % change, wave comparison.
       Numbers are allowed and encouraged where they add real intel. Omit them only when the
       direction alone is the point.
-    - Every bullet must name the source section so it can be hyperlinked in the report.
+    - Do NOT include the section_id or any section name in the bullet text itself.
+      The section_id belongs only in the JSON "section_id" field, never in the bullet string.
 
     Return a JSON array only — no markdown fences, no commentary:
     [
@@ -2171,7 +2172,7 @@ def build_html(
         lang=_ui.get("lang", "en"),
         lang_switch=lang_switch,
         title_str=_ui.get("title", "ECB SAFE Survey — Wave {wave} · Slovakia").format(wave=wave_str),
-        h1_str=_ui.get("h1", "ECB SAFE Survey — Wave {wave}").format(wave=wave_str),
+        h1_str=_ui.get("h1", "ECB SAFE Survey — Wave {wave} · Slovakia").format(wave=wave_str),
         meta_str=_ui.get("meta", "Slovakia · Euro Area · Germany &nbsp;|&nbsp; Generated {date}").format(date=today),
         footer_str=_ui.get(
             "footer",

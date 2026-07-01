@@ -58,7 +58,17 @@ MARTS_SCHEMA_YML = Path(__file__).parent.parent / "dbt_project" / "models" / "ma
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 COUNTRIES = {"SK": "Slovakia", "EA": "Euro Area", "DE": "Germany"}
-COUNTRY_COLORS = {"SK": "#bd4e35", "EA": "#0777b3", "DE": "#e18727"}
+# NBS brand palette: primary blues + supplementary accent colours
+NBS_NAVY   = "#2B5291"
+NBS_BLUE   = "#0086DE"
+NBS_TEAL   = "#008C7A"
+NBS_BURG   = "#A63559"
+NBS_ORANGE = "#FF7430"
+NBS_YELLOW = "#FAB937"
+NBS_GREY   = "#D2DBE0"
+NBS_TEXT   = "#231f20"
+
+COUNTRY_COLORS = {"SK": NBS_NAVY, "EA": NBS_BLUE, "DE": NBS_TEAL}
 COUNTRY_ORDER = ["SK", "EA", "DE"]
 
 # Dev DB: local DuckDB built by `dbt run --target dev`, no token needed.
@@ -534,6 +544,31 @@ def _select_panels(sec: dict, df: pd.DataFrame, best_panel) -> list:
     return pinned[: sec["max_panels"]]
 
 
+def _nbs_style_ax(ax, chart_type: str, waves=None, xtick_labels=None) -> None:
+    """Apply NBS visual style to a single axes."""
+    ax.set_facecolor("#ffffff")
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.spines["left"].set_color("#D2DBE0")
+    ax.spines["bottom"].set_color("#D2DBE0")
+    ax.tick_params(colors=NBS_TEXT, labelsize=8)
+    ax.yaxis.label.set_color("#6a6a6a")
+    ax.yaxis.label.set_fontsize(7)
+    ax.title.set_fontsize(10)
+    ax.title.set_color(NBS_TEXT)
+    ax.title.set_fontfamily("Arial")
+    if chart_type == "line" and waves is not None:
+        ax.set_xticks(waves)
+        ax.set_xticklabels(xtick_labels or [], rotation=40, ha="right", fontsize=7)
+        ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%+.0f"))
+        ax.axhline(0, color="#D2DBE0", linewidth=0.9, linestyle="-", zorder=0)
+        ax.yaxis.grid(True, color="#D2DBE0", linewidth=0.5, linestyle="--", zorder=0)
+        ax.set_axisbelow(True)
+    else:
+        ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%.1f"))
+        ax.yaxis.grid(True, color="#D2DBE0", linewidth=0.5, linestyle="--", zorder=0)
+        ax.set_axisbelow(True)
+
+
 def build_chart(sec: dict, df: pd.DataFrame, chart_type: str, best_panel) -> bytes:
     panels = _select_panels(sec, df, best_panel)
     n_panels = len(panels)
@@ -545,13 +580,22 @@ def build_chart(sec: dict, df: pd.DataFrame, chart_type: str, best_panel) -> byt
     ncols = min(n_panels, 2)
     nrows = (n_panels + 1) // 2
 
-    fig, axes = plt.subplots(nrows, ncols, figsize=(6.5 * ncols, 4.2 * nrows))
+    # Compact sizing: single-panel charts are smaller; multi-panel stay wider
+    if n_panels == 1:
+        fig_w, fig_h = 5.5, 3.5
+    else:
+        fig_w, fig_h = 5.5 * ncols, 3.5 * nrows
+
+    # Share y-axis for bar charts so adjacent panels are directly comparable
+    sharey_mode = "row" if (chart_type == "bar" and n_panels > 1) else False
+    fig, axes = plt.subplots(nrows, ncols, figsize=(fig_w, fig_h), sharey=sharey_mode)
     if n_panels == 1:
         axes_flat = [axes]
     else:
         axes_flat = list(np.array(axes).flatten())
 
-    fig.subplots_adjust(top=0.84, hspace=0.6, wspace=0.35, bottom=0.18)
+    fig.subplots_adjust(top=0.84, hspace=0.65, wspace=0.28, bottom=0.20)
+    fig.patch.set_facecolor("#ffffff")
 
     waves = sorted(df["wave_number"].unique())
     wave_labels = (
@@ -576,17 +620,18 @@ def build_chart(sec: dict, df: pd.DataFrame, chart_type: str, best_panel) -> byt
             latest_wave = df["wave_number"].max()
             bar_df = sub_df[sub_df["wave_number"] == latest_wave]
             x = np.arange(len(COUNTRY_ORDER))
-            width = 0.55
+            width = 0.52
             for i, country in enumerate(COUNTRY_ORDER):
                 cdf = bar_df[bar_df[series_col] == country]
                 val = cdf[value_col].iloc[0] if not cdf.empty else 0
-                bar = ax.bar(x[i], val, width, color=COUNTRY_COLORS[country], label=COUNTRIES[country])
+                bar = ax.bar(x[i], val, width, color=COUNTRY_COLORS[country],
+                             edgecolor="white", linewidth=0.5, zorder=2)
                 if panel_val == panels[0]:
                     handles.append(bar)
                     legend_labels.append(COUNTRIES[country])
             ax.set_xticks(x)
             ax.set_xticklabels([COUNTRIES[c] for c in COUNTRY_ORDER], fontsize=8)
-            ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%.1f"))
+            ax.axhline(0, color="#D2DBE0", linewidth=0.9, linestyle="-", zorder=0)
         else:
             # Line chart
             for country in COUNTRY_ORDER:
@@ -605,22 +650,18 @@ def build_chart(sec: dict, df: pd.DataFrame, chart_type: str, best_panel) -> byt
                 if panel_val == panels[0]:
                     handles.append(line)
                     legend_labels.append(COUNTRIES[country])
-            ax.axhline(0, color="#adadad", linewidth=0.8, linestyle="--")
-            ax.set_xticks(waves)
-            ax.set_xticklabels(xtick_labels, rotation=40, ha="right", fontsize=7)
-            ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%+.0f"))
 
-        ax.set_title(label_val, fontsize=9, color="#231f20", pad=6)
-        ax.tick_params(axis="y", labelsize=8)
+        ax.set_title(label_val, fontsize=9, pad=5)
         ax.set_ylabel(value_col.replace("_", " "), fontsize=7, color="#6a6a6a")
-        ax.spines[["top", "right"]].set_visible(False)
-        ax.set_facecolor("#f8f8f8")
+        _nbs_style_ax(ax, chart_type,
+                      waves=(waves if chart_type == "line" else None),
+                      xtick_labels=(xtick_labels if chart_type == "line" else None))
 
     # Hide unused axes
     for ax in axes_flat[n_panels:]:
         ax.set_visible(False)
 
-    # Legend below all panels
+    # Legend below all panels — square markers, NBS style
     fig.legend(
         handles, legend_labels,
         loc="lower center",
@@ -628,12 +669,12 @@ def build_chart(sec: dict, df: pd.DataFrame, chart_type: str, best_panel) -> byt
         ncol=len(COUNTRY_ORDER),
         fontsize=9,
         frameon=False,
+        handlelength=1.0,
+        handleheight=0.8,
     )
 
-    fig.patch.set_facecolor("#f8f8f8")
-
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="#ffffff")
     plt.close(fig)
     buf.seek(0)
     return buf.read()
@@ -660,7 +701,8 @@ def _financing_gap_bars(df: pd.DataFrame) -> bytes:
         .set_index("wave_number")["survey_period_label"]
     )
 
-    fig, ax = plt.subplots(1, 1, figsize=(9, 4.5))
+    fig, ax = plt.subplots(1, 1, figsize=(8, 4.0))
+    fig.patch.set_facecolor("#ffffff")
     fig.subplots_adjust(top=0.82, bottom=0.26, left=0.09, right=0.97)
 
     n_countries = len(COUNTRY_ORDER)
@@ -674,7 +716,7 @@ def _financing_gap_bars(df: pd.DataFrame) -> bytes:
             continue
         base_color = COUNTRY_COLORS[country]
         rgb = mcolors.to_rgb(base_color)
-        light_color = tuple(min(1.0, v + 0.35) for v in rgb)
+        light_color = tuple(min(1.0, v + 0.30) for v in rgb)
 
         for w_idx, wave in enumerate(waves):
             row = cdf[cdf["wave_number"] == wave]
@@ -693,26 +735,29 @@ def _financing_gap_bars(df: pd.DataFrame) -> bytes:
         x_pts = [i * group_gap for i, w in enumerate(waves) if not cdf[cdf["wave_number"] == w].empty]
         gap_vals = [cdf[cdf["wave_number"] == w]["financing_gap_wtd"].iloc[0] for w in waves
                     if not cdf[cdf["wave_number"] == w].empty]
-        line, = ax.plot(x_pts, gap_vals, color=base_color, linewidth=2.2,
-                        marker="D", markersize=5, linestyle="--", zorder=3)
+        line, = ax.plot(x_pts, gap_vals, color=base_color, linewidth=2.0,
+                        marker="D", markersize=4, linestyle="--", zorder=3)
         line_handles.append(line)
         line_labels_leg.append(f"{COUNTRIES[country]} — gap")
 
-    ax.axhline(0, color="#adadad", linewidth=0.8, linestyle="--", zorder=1)
+    ax.axhline(0, color="#D2DBE0", linewidth=0.9, linestyle="-", zorder=1)
+    ax.yaxis.grid(True, color="#D2DBE0", linewidth=0.5, linestyle="--", zorder=0)
+    ax.set_axisbelow(True)
     ax.set_xticks([i * group_gap for i in range(len(waves))])
     ax.set_xticklabels([wave_labels[w] for w in waves], rotation=35, ha="right", fontsize=8)
     ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%+.0f"))
     ax.tick_params(axis="y", labelsize=8)
     ax.set_ylabel("Net balance (pp)", fontsize=7, color="#6a6a6a")
-    ax.set_title(f"{label_val} — need (solid bars) vs availability (hatched); gap (dashed)", fontsize=9)
+    ax.set_title(f"{label_val} — need vs availability (bars); financing gap (dashed)", fontsize=9)
     ax.spines[["top", "right"]].set_visible(False)
-    ax.set_facecolor("#f8f8f8")
-    fig.patch.set_facecolor("#f8f8f8")
+    ax.spines["left"].set_color("#D2DBE0")
+    ax.spines["bottom"].set_color("#D2DBE0")
+    ax.set_facecolor("#ffffff")
     fig.legend(bar_handles + line_handles, bar_labels_leg + line_labels_leg,
                loc="lower center", bbox_to_anchor=(0.5, 0.0), ncol=3, fontsize=7.5, frameon=False)
 
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="#ffffff")
     plt.close(fig)
     buf.seek(0)
     return buf.read()
@@ -730,44 +775,46 @@ INSTRUMENT_LABELS = {
 
 def _financing_gap_sk_instruments(df_sk: pd.DataFrame) -> bytes:
     """
-    Chart 2: financing gap (need − availability) for Slovakia by instrument, line chart.
+    Chart 2: financing gap for Slovakia by instrument — bar chart, latest wave only.
+    Line chart was dropped because not all instruments are asked every wave, causing
+    visually confusing interrupted lines.
     """
-    waves = sorted(df_sk["wave_number"].unique())
-    wave_labels = (
-        df_sk[["wave_number", "survey_period_label"]]
-        .drop_duplicates().sort_values("wave_number")
-        .set_index("wave_number")["survey_period_label"]
-    )
+    latest_wave = df_sk["wave_number"].max()
+    bar_df = df_sk[df_sk["wave_number"] == latest_wave].copy()
 
-    fig, ax = plt.subplots(1, 1, figsize=(7, 4.2))
-    fig.subplots_adjust(top=0.84, bottom=0.22, left=0.1, right=0.97)
+    instruments = [s for s in INSTRUMENT_COLORS if not bar_df[bar_df["sub_item"] == s].empty]
+    x = np.arange(len(instruments))
+    vals, colors, labels = [], [], []
+    for sub_item in instruments:
+        row = bar_df[bar_df["sub_item"] == sub_item]
+        vals.append(row["financing_gap_wtd"].iloc[0] if not row.empty else 0)
+        colors.append(INSTRUMENT_COLORS[sub_item])
+        labels.append(
+            row["sub_item_label"].iloc[0] if ("sub_item_label" in row.columns and not row.empty)
+            else INSTRUMENT_LABELS.get(sub_item, sub_item)
+        )
 
-    handles, labels = [], []
-    for sub_item, color in INSTRUMENT_COLORS.items():
-        idf = df_sk[df_sk["sub_item"] == sub_item].sort_values("wave_number")
-        if idf.empty:
-            continue
-        label = idf["sub_item_label"].iloc[0] if "sub_item_label" in idf.columns else INSTRUMENT_LABELS.get(sub_item, sub_item)
-        line, = ax.plot(idf["wave_number"], idf["financing_gap_wtd"],
-                        color=color, linewidth=2, marker="o", markersize=4, label=label)
-        handles.append(line)
-        labels.append(label)
+    fig, ax = plt.subplots(1, 1, figsize=(6, 3.5))
+    fig.patch.set_facecolor("#ffffff")
+    fig.subplots_adjust(top=0.84, bottom=0.30, left=0.10, right=0.97)
 
-    ax.axhline(0, color="#adadad", linewidth=0.8, linestyle="--")
-    ax.set_xticks(waves)
-    ax.set_xticklabels([wave_labels[w] for w in waves], rotation=40, ha="right", fontsize=7)
+    bars = ax.bar(x, vals, 0.55, color=colors, edgecolor="white", linewidth=0.5, zorder=2)
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, fontsize=7.5, rotation=25, ha="right")
+    ax.axhline(0, color="#D2DBE0", linewidth=0.9, linestyle="-", zorder=1)
+    ax.yaxis.grid(True, color="#D2DBE0", linewidth=0.5, linestyle="--", zorder=0)
+    ax.set_axisbelow(True)
     ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%+.0f"))
     ax.tick_params(axis="y", labelsize=8)
     ax.set_ylabel("Financing gap (pp)", fontsize=7, color="#6a6a6a")
-    ax.set_title("Slovakia — financing gap by instrument (need − availability)", fontsize=9)
+    ax.set_title("Slovakia — financing gap by instrument (latest wave)", fontsize=9)
     ax.spines[["top", "right"]].set_visible(False)
-    ax.set_facecolor("#f8f8f8")
-    fig.patch.set_facecolor("#f8f8f8")
-    fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, 0.0),
-               ncol=3, fontsize=7.5, frameon=False)
+    ax.spines["left"].set_color("#D2DBE0")
+    ax.spines["bottom"].set_color("#D2DBE0")
+    ax.set_facecolor("#ffffff")
 
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="#ffffff")
     plt.close(fig)
     buf.seek(0)
     return buf.read()
@@ -1954,48 +2001,54 @@ HTML_PAGE = textwrap.dedent("""
 <meta charset="UTF-8">
 <title>{title_str}</title>
 <style>
+  /* NBS brand: Sitka Banner for headings, Arial for body */
   body        {{ font-family: Arial, sans-serif; background: #f4f4f4; color: #231f20;
                  max-width: 1200px; margin: 40px auto; padding: 0 24px; }}
-  h1          {{ font-size: 22px; font-weight: bold; margin-bottom: 4px; }}
+  h1          {{ font-family: "Sitka Banner", "Sitka Text", Georgia, serif;
+                 font-size: 26px; font-weight: bold; margin-bottom: 4px; color: #2B5291; }}
   .meta       {{ color: #6a6a6a; font-size: 13px; margin-bottom: 20px; }}
-  section     {{ background: #fff; border: 1px solid #e0e0e0; border-radius: 6px;
+  section     {{ background: #fff; border: 1px solid #D2DBE0; border-radius: 6px;
                  padding: 24px 28px; margin-bottom: 20px; }}
-  h2          {{ font-size: 18px; font-weight: bold; margin: 36px 0 12px 0; color: #231f20;
-                 border-bottom: 2px solid #0777b3; padding-bottom: 6px; }}
-  h3          {{ font-size: 15px; font-weight: bold; margin: 0 0 4px 0; color: #231f20; }}
+  h2          {{ font-family: "Sitka Banner", "Sitka Text", Georgia, serif;
+                 font-size: 18px; font-weight: bold; margin: 36px 0 12px 0; color: #2B5291;
+                 border-bottom: 2px solid #2B5291; padding-bottom: 6px; }}
+  h3          {{ font-family: "Sitka Banner", "Sitka Text", Georgia, serif;
+                 font-size: 15px; font-weight: bold; margin: 0 0 4px 0; color: #231f20; }}
   .section-subtitle {{ font-size: 11px; color: #888; margin: 0 0 12px 0; }}
   ul          {{ padding-left: 20px; margin: 0 0 16px 0; }}
   li          {{ margin-bottom: 6px; font-size: 13.5px; line-height: 1.5; }}
   img         {{ width: 100%; margin-top: 8px; }}
   .footnote   {{ font-size: 11px; color: #888; margin-top: 10px; line-height: 1.4; }}
   .footer     {{ color: #adadad; font-size: 11px; margin-top: 32px; text-align: center; }}
-  .lang-switch {{ float: right; font-size: 12px; color: #0777b3; text-decoration: none;
-                  border: 1px solid #0777b3; border-radius: 4px; padding: 2px 8px;
+  .lang-switch {{ float: right; font-size: 12px; color: #2B5291; text-decoration: none;
+                  border: 1px solid #2B5291; border-radius: 4px; padding: 2px 8px;
                   margin-top: 4px; }}
-  .lang-switch:hover {{ background: #eef4fb; }}
+  .lang-switch:hover {{ background: #eef2f9; }}
 
   /* Exec summary + painting flexbox */
   .exec-flex     {{ display: flex; gap: 24px; align-items: flex-start; margin-bottom: 20px; }}
   .exec-painting {{ flex: 1; min-width: 0; }}
-  .exec-summary  {{ flex: 3; min-width: 0; background: #eef4fb;
-                    border-left: 4px solid #0777b3; padding: 20px 24px; border-radius: 6px; }}
-  .exec-summary h2 {{ font-size: 16px; color: #0777b3; border-bottom: none;
+  .exec-summary  {{ flex: 3; min-width: 0; background: #eef2f9;
+                    border-left: 4px solid #2B5291; padding: 20px 24px; border-radius: 6px; }}
+  .exec-summary h2 {{ font-family: "Sitka Banner", "Sitka Text", Georgia, serif;
+                      font-size: 16px; color: #2B5291; border-bottom: none;
                       margin: 0 0 10px 0; padding-bottom: 0; }}
   .exec-summary li {{ font-size: 14px; line-height: 1.7; }}
-  .exec-summary li a {{ color: inherit; text-decoration: underline dotted #8ab3d4; }}
-  .exec-summary li a:hover {{ text-decoration: underline; color: #0777b3; }}
+  .exec-summary li a {{ color: inherit; text-decoration: underline dotted #7a9dc4; }}
+  .exec-summary li a:hover {{ text-decoration: underline; color: #2B5291; }}
 
   /* TOC */
-  #toc        {{ background: #fff; border: 1px solid #e0e0e0; border-radius: 6px;
+  #toc        {{ background: #fff; border: 1px solid #D2DBE0; border-radius: 6px;
                  padding: 16px 24px; margin-bottom: 20px; font-size: 13px; }}
-  .toc-title  {{ font-weight: bold; margin: 0 0 8px 0; color: #231f20; font-size: 13px; }}
+  .toc-title  {{ font-family: "Sitka Banner", "Sitka Text", Georgia, serif;
+                 font-weight: bold; margin: 0 0 8px 0; color: #2B5291; font-size: 13px; }}
   #toc ul     {{ margin: 4px 0; padding-left: 18px; }}
   #toc li     {{ margin-bottom: 3px; }}
-  #toc a      {{ color: #0777b3; text-decoration: none; }}
+  #toc a      {{ color: #0086DE; text-decoration: none; }}
   #toc a:hover {{ text-decoration: underline; }}
 
   /* Collapsible annex */
-  details     {{ background: #fff; border: 1px solid #e0e0e0; border-radius: 6px;
+  details     {{ background: #fff; border: 1px solid #D2DBE0; border-radius: 6px;
                  padding: 14px 22px; margin-bottom: 20px; }}
   summary     {{ font-weight: bold; font-size: 13px; cursor: pointer; color: #555;
                  user-select: none; }}
@@ -2008,7 +2061,7 @@ HTML_PAGE = textwrap.dedent("""
   .group-cell             {{ color: #888; font-style: italic; white-space: nowrap; }}
   .badge-common           {{ background: #e8f4e8; color: #2d7a00; padding: 1px 6px;
                              border-radius: 3px; font-size: 11px; }}
-  .badge-ecb              {{ background: #eef4fb; color: #0777b3; padding: 1px 6px;
+  .badge-ecb              {{ background: #eef2f9; color: #2B5291; padding: 1px 6px;
                              border-radius: 3px; font-size: 11px; }}
 </style>
 </head>
@@ -2398,6 +2451,10 @@ def main() -> None:
             print(f"  Building chart for {sid}...")
             if sid == "financing_gap":
                 chart_png = build_financing_gap_chart(sec, data[sid])
+            elif sid == "bank_loan_terms":
+                # Q10: not all terms are asked every wave → interrupted lines look broken.
+                # Bar chart (latest wave only) is cleaner and still shows SK vs EA vs DE.
+                chart_png = build_chart(sec, data[sid], "bar", r["best_panel"])
             else:
                 chart_png = build_chart(sec, data[sid], r["chart_type"], r["best_panel"])
 

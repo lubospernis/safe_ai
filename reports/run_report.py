@@ -815,6 +815,21 @@ SECTION_CONTENT_SYSTEM = textwrap.dedent("""
       - Compare to prior wave: "compared with a net X% in the previous quarter"
       - Include sample size for SK and EA where available: "a net 26% of firms (n=80)..."
       - One sentence per bullet, max ~25 words.
+      - When citing a rate (application_rate, discouragement_rate, rejection_rate), always
+        give n_respondents in parentheses immediately after the rate.
+      - Avoid dramatic language: never write "surged", "collapsed", or "plummeted".
+        Write "rose from X% to Y%" instead.
+      - For ambiguous metrics, briefly define what the question asked in plain language
+        (one embedded clause is enough — see the survey question text provided below).
+
+    CRITICAL prose rule for net balances:
+      A net balance value already encodes direction. Always use the ABSOLUTE value in prose
+      and express direction through words only:
+        ✓ "a net 5% of firms expected availability to deteriorate" (net_balance_wtd = -5.16)
+        ✓ "a net 12% of firms reported tightening in interest rates" (net_balance_wtd = +12)
+        ✗ "a net -5% of firms expected deterioration" — double-negative, never write this
+        ✗ "a net +12% reported adverse conditions" — drop the + sign, use a direction word
+      Use + or - ONLY when comparing two numbers showing a change (e.g. "from -3pp to +2pp").
 
     Available mart tables and columns:
     {schema_catalogue}
@@ -969,6 +984,7 @@ def get_section_content_agentic(
     schema: str,
     mart_catalogue: str,
     cost_tracker: dict,
+    question_texts: dict[str, str] | None = None,
 ) -> dict:
     """Return {"finding": str, "bullets": [str, ...]} via an agentic Sonnet loop.
 
@@ -991,11 +1007,24 @@ def get_section_content_agentic(
     # cached system block stays byte-for-byte identical across all section calls.
     base_data = _fmt_data_for_prompt(sec, df)
     divergence = _sme_divergence_note(df, sec["value_col"], sec.get("panel_col"))
+
+    # Inject question text from annex so Claude can explain ambiguous metrics in plain language
+    q_text_block = ""
+    if question_texts:
+        q_ids = sec.get("question_ids", [])
+        found = [(qid.upper(), question_texts.get(qid.lower(), "")) for qid in q_ids]
+        found = [(qid, txt) for qid, txt in found if txt]
+        if found:
+            lines = ["## Survey question text (use to write plain-language explanations)"]
+            for qid, txt in found:
+                lines.append(f"{qid}: {txt}")
+            q_text_block = "\n".join(lines) + "\n\n"
+
     section_header = (
         f"Sign convention: {sec['sign_note']}\n"
         f"Focus: {sec['focus']}\n\n"
     )
-    initial_msg = section_header + base_data + (f"\n\nSME divergence check:\n{divergence}" if divergence else "")
+    initial_msg = q_text_block + section_header + base_data + (f"\n\nSME divergence check:\n{divergence}" if divergence else "")
 
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     messages = [{"role": "user", "content": initial_msg}]
@@ -1138,6 +1167,24 @@ def _clean_question_text(text: str) -> str:
     text = re.sub(r'^[A-Za-z0-9]+(?:/[A-Za-z0-9_]+)*\.\s*', '', text)
     # Also remove leading "Looking ahead, " style if it came from Q34 which has no prefix
     return text.strip()
+
+
+def _load_annex_question_texts(annex_csv_path: Path) -> dict[str, str]:
+    """Return {q_id_lower: cleaned_question_text} for all questions in annex.csv."""
+    texts: dict[str, str] = {}
+    try:
+        with open(annex_csv_path, newline="", encoding="utf-8-sig") as f:
+            reader = csv.reader(f)
+            rows = list(reader)
+        for row in rows[1:]:
+            if len(row) > 7 and row[1] == "question":
+                q_id = row[2].strip().lower()
+                text = row[7].strip()
+                if q_id and text and q_id not in texts:
+                    texts[q_id] = _clean_question_text(text)
+    except FileNotFoundError:
+        pass
+    return texts
 
 
 def build_annex_html(annex_csv_path: Path) -> str:
@@ -1528,6 +1575,10 @@ def main() -> None:
     print("Building mart schema catalogue...")
     mart_catalogue = build_mart_catalogue(tool_con, schema)
 
+    print("Loading annex question texts...")
+    question_texts = _load_annex_question_texts(ANNEX_CSV)
+    print(f"  Loaded {len(question_texts)} question texts from annex")
+
     rendered = []
     for sec in SECTIONS:
         sid = sec["id"]
@@ -1543,7 +1594,7 @@ def main() -> None:
             chart_png = build_chart(sec, data[sid], r["chart_type"], r["best_panel"])
 
         print(f"  Generating finding + bullets for {sid}...")
-        content = get_section_content_agentic(sec, data[sid], tool_con, schema, mart_catalogue, cost_tracker)
+        content = get_section_content_agentic(sec, data[sid], tool_con, schema, mart_catalogue, cost_tracker, question_texts)
         print(f"    finding: {content['finding']}")
         for b in content["bullets"]:
             print(f"    {b}")

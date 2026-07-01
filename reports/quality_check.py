@@ -27,7 +27,7 @@ SUPERVISOR_SYSTEM = """
 You are a quality supervisor for an automatically generated financial survey report.
 You will receive the text content of a report on ECB SAFE survey results for Slovakia.
 
-Score it on three dimensions, each 1–10:
+Score it on four dimensions, each 1–10:
 
 - readability (1–10): Text flows naturally, no jibberish, no parsing artefacts,
   no repeated phrases. Bullets are complete sentences with subject and verb.
@@ -40,8 +40,16 @@ Score it on three dimensions, each 1–10:
 - coherence (1–10): The finding headline matches the bullets. Numbers in bullets are
   directionally consistent with the sign convention stated. No internal contradictions.
 
+- sign_convention (1–10): Net balance values are written correctly in prose.
+  Score 1 if you see "a net -X%" where X > 0 — this is a double-negative (the word
+  "deteriorated/tightened/worsened" already captures the direction; the minus sign is
+  redundant and confusing). Score 1 if you see "surged", "plummeted", or "collapsed"
+  without a precise before/after value comparison. Score 10 if all net balances use
+  absolute values and direction is expressed through words only (e.g. "a net 5% of firms
+  expected deterioration" not "a net -5% expected deterioration").
+
 Return JSON only — no markdown fences:
-{"readability": <1-10>, "substance": <1-10>, "coherence": <1-10>, "verdict": "pass" or "fail", "reason": "<one sentence>"}
+{"readability": <1-10>, "substance": <1-10>, "coherence": <1-10>, "sign_convention": <1-10>, "verdict": "pass" or "fail", "reason": "<one sentence>"}
 
 Set verdict to "fail" if ANY dimension is below 6, or if you see obvious parsing artefacts.
 """.strip()
@@ -83,7 +91,7 @@ def main() -> None:
     client = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
     resp = client.chat.complete(
         model="mistral-small-latest",
-        max_tokens=300,
+        max_tokens=400,
         messages=[
             {"role": "system", "content": SUPERVISOR_SYSTEM},
             {"role": "user", "content": report_text[:8000]},
@@ -101,13 +109,14 @@ def main() -> None:
     r = result.get("readability", 10)
     s = result.get("substance", 10)
     c = result.get("coherence", 10)
+    sc = result.get("sign_convention", 10)
     verdict = result.get("verdict", "pass")
     reason = result.get("reason", "")
 
-    print(f"  readability={r}/10  substance={s}/10  coherence={c}/10  → {verdict.upper()}")
+    print(f"  readability={r}/10  substance={s}/10  coherence={c}/10  sign_convention={sc}/10  → {verdict.upper()}")
     print(f"  Reason: {reason}")
 
-    if verdict == "fail" or min(r, s, c) < PASS_THRESHOLD:
+    if verdict == "fail" or min(r, s, c, sc) < PASS_THRESHOLD:
         print("Quality gate FAILED — blocking deploy")
         sys.exit(1)
 

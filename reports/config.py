@@ -25,6 +25,7 @@ SECTIONS = [
         "sql_file": "bank_loan_terms.sql",
         "group": "Financing Conditions",
         "title": "Changes in Terms and Conditions of Bank Financing (Q10)",
+        "question_ids": ["q10"],
         "sign_note": (
             "positive net balance = net tightening (more firms report worse/tighter conditions, ADVERSE); "
             "negative net balance = net easing (more firms report better/easier conditions, FAVOURABLE). "
@@ -45,6 +46,7 @@ SECTIONS = [
         "sql_file": "financing_gap.sql",
         "group": "Financing Conditions",
         "title": "Financing Need vs Availability Gap (Q5/Q9)",
+        "question_ids": ["q5", "q9"],
         "sign_note": (
             "need_nb = Q5 net balance: positive = more firms report increased financing need. "
             "availability_nb = Q9 net balance: positive = more firms report improved availability (FAVOURABLE). "
@@ -81,13 +83,13 @@ SECTIONS = [
         "sql_file": "loan_applications.sql",
         "group": "Financing Conditions",
         "title": "Bank Loan Applications and Access Conditions (Q7A/Q7B)",
+        "question_ids": ["q7a", "q7b"],
         "sign_note": (
-            "financing_gap_wtd = % of firms discouraged from applying + % of applicants rejected "
-            "(both as share of all valid Q7A respondents). Higher value = worse access to bank credit. "
-            "This is NOT a net balance — it is an access indicator where higher = worse. "
-            "application_rate_wtd = % that actually applied. "
-            "discouragement_rate_wtd = % that did not apply due to fear of rejection. "
-            "rejection_rate_wtd = % of applicants that were rejected."
+            "financing_gap_wtd = share of firms who wanted bank credit but couldn't get it "
+            "(discouragement_rate_wtd + rejection share of all respondents). Higher = worse credit access. "
+            "THIS IS NOT the Q5/Q9 need-vs-availability gap — it measures credit-seeking behaviour. "
+            "application_rate_wtd = % that applied. discouragement_rate_wtd = % that didn't apply "
+            "fearing rejection. rejection_rate_wtd = % of applicants rejected. All are % of respondents."
         ),
         "value_col": "financing_gap_wtd",
         "panel_col": None,
@@ -98,10 +100,18 @@ SECTIONS = [
         "always_include": False,
         "routed": True,
         "focus": (
-            "Lead with Slovakia vs EA comparison on financing_gap_wtd. "
-            "Diagnose whether the gap is driven more by discouragement or rejection. "
-            "If SK discouragement_rate is unusually high relative to EA, flag it — this signals "
-            "self-censorship in credit demand. If rejection_rate is high, that signals supply-side tightening."
+            "WHAT financing_gap_wtd MEANS HERE: this is NOT the need-vs-availability gap from Q5/Q9. "
+            "Here, financing_gap_wtd = discouragement_rate_wtd + rejection_share_of_all_respondents. "
+            "It measures the share of firms who WANTED bank credit but either did not apply (feared "
+            "rejection) or applied and were turned down. Explain this clearly in the bullets: "
+            "e.g. 'X% of Slovak firms seeking bank loans either did not apply out of fear of rejection "
+            "(discouragement) or were turned down, compared with Y% in the EA (n=...).' "
+            "Then break it down: "
+            "application_rate_wtd: share of all respondents that actually applied; compare SK vs EA and prior wave. "
+            "discouragement_rate_wtd: share who did not apply due to fear of rejection; compare SK vs EA and prior wave. "
+            "rejection_rate_wtd: share of applicants rejected; compare SK vs EA and prior wave. "
+            "Always cite n_respondents next to every rate. All figures are for bank loans only (sub_item='a'). "
+            "Never say 'surged' or 'collapsed' — write 'rose from X% (wave N-1) to Y% (wave N)'."
         ),
     },
     {
@@ -109,9 +119,13 @@ SECTIONS = [
         "sql_file": "availability_expectations.sql",
         "group": "Financing Conditions",
         "title": "Expected Availability of External Financing (Q23)",
+        "question_ids": ["q23"],
         "sign_note": (
             "positive net balance = more firms expect availability to IMPROVE (FAVOURABLE). "
             "negative net balance = more firms expect availability to DETERIORATE (ADVERSE). "
+            "CRITICAL sign rule: net_balance_wtd is already signed. When it is negative, write "
+            "'a net X% of firms expected availability to deteriorate' where X = absolute value. "
+            "NEVER write 'a net -X%' — the word 'deteriorate' already captures the direction. "
             "This is a forward-looking complement to Q9 (actual availability changes)."
         ),
         "value_col": "net_balance_wtd",
@@ -125,6 +139,7 @@ SECTIONS = [
         "has_missingness_caveat": True,
         "focus": (
             "Focus on bank loans (b) for Slovakia vs EA. "
+            "Always include n_respondents and the instrument name (e.g. 'bank loans'). "
             "If the SK forward expectation diverges from the EA trend, explain what that signals — "
             "e.g. 'Slovak firms expect availability to deteriorate while EA firms expect improvement, "
             "suggesting persistent local supply tightness not yet visible in EA-wide data.'"
@@ -135,6 +150,7 @@ SECTIONS = [
         "sql_file": "financing_purpose.sql",
         "group": "Financing Conditions",
         "title": "Purpose of Financing (Q6A)",
+        "question_ids": ["q6a"],
         "sign_note": (
             "pct_cited_wtd = % of firms that cited this purpose (multi-select, so percentages can sum > 100%). "
             "Not a net balance. Higher = more firms used financing for this purpose."
@@ -153,6 +169,7 @@ SECTIONS = [
         "sql_file": "financing_factors.sql",
         "group": "Financing Conditions",
         "title": "Factors Affecting Access to External Financing (Q11)",
+        "question_ids": ["q11"],
         "sign_note": (
             "positive net balance = factor IMPROVED (more firms say better than worse — FAVOURABLE for financing access). "
             "negative net balance = factor DETERIORATED (more firms say worse — ADVERSE, potential credit supply constraint). "
@@ -176,6 +193,7 @@ SECTIONS = [
         "sql_file": "business_situation.sql",
         "group": "Economic Situation of Firms",
         "title": "Business Situation Indicators (Q2)",
+        "question_ids": ["q2"],
         "sign_note": (
             "positive net balance = indicator rising (more firms report increase than decrease). "
             "For labour costs (sub_item b), positive = costs rising = ADVERSE for firms. "
@@ -195,6 +213,7 @@ SECTIONS = [
         "sql_file": "outlook.sql",
         "group": "Economic Situation of Firms",
         "title": "Expected Changes in Turnover and Investment (Q26)",
+        "question_ids": ["q26"],
         "sign_note": (
             "positive net balance = more firms expect the indicator to INCREASE (FAVOURABLE). "
             "negative net balance = more firms expect the indicator to DECREASE (ADVERSE). "
@@ -218,6 +237,7 @@ SECTIONS = [
         "sql_file": "expectations_quantitative.sql",
         "group": "Economic Situation of Firms",
         "title": "Price, Wage and Employment Expectations (Q31/Q34)",
+        "question_ids": ["q31", "q34"],
         "sign_note": (
             "mean_wtd is a weighted mean expected % change over the next 12 months. "
             "This is NOT a net balance — it is a level in percent (e.g. 3.5 means firms expect +3.5% change). "
@@ -246,6 +266,7 @@ SECTIONS = [
         "sql_file": "expectations_risk.sql",
         "group": "Economic Situation of Firms",
         "title": "Inflation Risk Outlook (Q33)",
+        "question_ids": ["q33"],
         "sign_note": (
             "net_balance_wtd = % of firms seeing upside inflation risk minus % seeing downside risk. "
             "Positive = more firms see inflation risks to the upside (inflation higher than expected). "
@@ -271,6 +292,7 @@ SECTIONS = [
         "sql_file": "business_problems.sql",
         "group": "Economic Situation of Firms",
         "title": "Most Pressing Business Problems (Q0B)",
+        "question_ids": ["q0b"],
         "sign_note": (
             "values are average pressingness scores on a 1–10 scale (NOT net balances). "
             "Higher score = problem is more pressing for firms. "

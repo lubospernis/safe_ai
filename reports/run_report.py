@@ -832,6 +832,18 @@ SECTION_CONTENT_SYSTEM = textwrap.dedent("""
         ✗ "a net +12% reported adverse conditions" — drop the + sign, use a direction word
       Use + or - ONLY when comparing two numbers showing a change (e.g. "from -3pp to +2pp").
 
+    Wave-over-wave delta (Δ) usage:
+      The latest-wave data includes a pre-computed Δ column showing the change from the
+      previous wave. Always use it to state direction of change in at least one bullet.
+      Format: "rose from X% (wave N−1) to Y% (wave N)" or "eased by Z pp vs the prior quarter".
+      Examples:
+        ✓ "Interest rates tightened for a net 12% of Slovak firms (n=80), easing 1.8 pp from
+           the previous quarter's net 14% — but still above the EA's net 8%."
+        ✓ "Slovak firms' selling price expectations edged up to +4.3% (Δ +0.3 pp vs wave 37),
+           outpacing the EA median of +3.6%."
+        ✗ "The net balance was 12 in wave 38 and 14 in wave 37." — never list raw wave numbers;
+           always translate into direction language.
+
     Available mart tables and columns:
     {schema_catalogue}
 
@@ -901,7 +913,36 @@ def _fmt_data_for_prompt(sec: dict, df: pd.DataFrame) -> str:
     panel_col = sec["panel_col"]
     panel_label_col = sec.get("panel_label_col", panel_col)
 
-    def fmt(d: pd.DataFrame, label: str) -> str:
+    # Build a lookup of prev-wave values keyed by (country_code, panel_value) for delta computation
+    def _prev_key(r) -> tuple:
+        panel_val = r[panel_col] if panel_col and panel_col in r.index else None
+        return (r["country_code"], panel_val)
+
+    prev_vals: dict[tuple, float] = {}
+    for _, r in prev.iterrows():
+        if pd.notna(r.get(value_col)):
+            prev_vals[_prev_key(r)] = float(r[value_col])
+
+    def fmt_latest_with_delta(d: pd.DataFrame, label: str) -> str:
+        rows = [f"{label}:"]
+        for _, r in d.iterrows():
+            n_part = f" | n={r['n_respondents']}" if r.get("country_code") in ("SK", "EA") and "n_respondents" in r else ""
+            val = r[value_col]
+            val_str = f"{val:+.2f}" if pd.notna(val) else "n/a"
+            panel_part = f" | {r[panel_label_col]}" if panel_label_col and panel_label_col in r.index else ""
+
+            # Pre-compute wave-over-wave delta where possible
+            delta_str = ""
+            if pd.notna(val):
+                prev_v = prev_vals.get(_prev_key(r))
+                if prev_v is not None:
+                    delta = float(val) - prev_v
+                    delta_str = f" | Δ={delta:+.2f} vs wave {prev_wave}"
+
+            rows.append(f"  {r['country_code']}{panel_part} | {value_col}={val_str}{delta_str}{n_part}")
+        return "\n".join(rows)
+
+    def fmt_prev(d: pd.DataFrame, label: str) -> str:
         rows = [f"{label}:"]
         for _, r in d.iterrows():
             n_part = f" | n={r['n_respondents']}" if r.get("country_code") in ("SK", "EA") and "n_respondents" in r else ""
@@ -910,7 +951,7 @@ def _fmt_data_for_prompt(sec: dict, df: pd.DataFrame) -> str:
             rows.append(f"  {r['country_code']}{panel_part} | {value_col}={val_str}{n_part}")
         return "\n".join(rows)
 
-    return fmt(latest, f"Wave {latest_wave} (latest)") + "\n\n" + fmt(prev, f"Wave {prev_wave} (previous)")
+    return fmt_latest_with_delta(latest, f"Wave {latest_wave} (latest)") + "\n\n" + fmt_prev(prev, f"Wave {prev_wave} (previous)")
 
 
 def _sme_divergence_note(df: pd.DataFrame, value_col: str, panel_col: str | None, threshold: float = 30.0) -> str:

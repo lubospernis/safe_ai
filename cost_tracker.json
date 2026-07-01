@@ -1,1 +1,1 @@
-{"wave_number": 38, "total_cost_usd": 0.19626, "input_tokens": 96677, "output_tokens": 11264, "cache_read_tokens": 32382, "model_sonnet": "claude-sonnet-4-6", "model_mistral": "mistral-small-latest", "n_sections": 10, "duration_seconds": 81.5}
+{"wave_number": 38, "total_cost_usd": 0.20193, "input_tokens": 99900, "output_tokens": 10989, "cache_read_tokens": 31688, "model_sonnet": "claude-sonnet-4-6", "model_mistral": "mistral-small-latest", "n_sections": 10, "duration_seconds": 75.7}

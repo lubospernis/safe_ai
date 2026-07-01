@@ -2365,6 +2365,8 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dev", action="store_true",
                         help="Use local dev.duckdb instead of MotherDuck (no MOTHERDUCK_TOKEN needed)")
+    parser.add_argument("--wave", type=int, default=None,
+                        help="Cap data at this wave number for retrospective reports (e.g. --wave 37)")
     args = parser.parse_args()
 
     if args.dev:
@@ -2374,6 +2376,12 @@ def main() -> None:
 
     print("Fetching data for all sections...")
     data = fetch_all(dev=args.dev)
+
+    # Retrospective mode: drop rows from waves after the target wave
+    if args.wave is not None:
+        print(f"  [RETROSPECTIVE] Capping data at wave {args.wave}")
+        data = {sid: df[df["wave_number"] <= args.wave].copy() for sid, df in data.items()}
+
     for sid, df in data.items():
         print(f"  {sid}: {len(df)} rows")
     latest_wave = int(max(df["wave_number"].max() for df in data.values()))
@@ -2561,7 +2569,8 @@ def main() -> None:
     print("Assembling HTML (EN)...")
     html = build_html(rendered, annex_html, exec_bullets, toc_html, painting_inner_html, latest_wave)
 
-    out_path = OUTPUT_DIR / "report_latest.html"
+    retro = args.wave is not None
+    out_path = OUTPUT_DIR / (f"report_q{latest_wave}.html" if retro else "report_latest.html")
     out_path.write_text(html, encoding="utf-8")
     print(f"Saved → {out_path}")
 
@@ -2570,7 +2579,7 @@ def main() -> None:
     sk_toc_html = build_toc(sk_rendered, ui=_SK_UI)
     sk_html = build_html(sk_rendered, annex_html, sk_exec_bullets, sk_toc_html,
                          painting_inner_html, latest_wave, ui=_SK_UI)
-    sk_path = OUTPUT_DIR / "report_latest_sk.html"
+    sk_path = OUTPUT_DIR / (f"report_q{latest_wave}_sk.html" if retro else "report_latest_sk.html")
     sk_path.write_text(sk_html, encoding="utf-8")
     print(f"Saved → {sk_path}")
 

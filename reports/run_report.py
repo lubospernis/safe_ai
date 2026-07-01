@@ -6,7 +6,7 @@ Loops over SECTIONS in config.py:
   2. Parallel Haiku interest checks — returns interesting flag, chart_type, best_panel
   3. For interesting sections: build chart + generate Sonnet bullets
   4. Generate executive summary (Sonnet prose) from all rendered sections
-  5. Build collapsible question annex from annex.csv
+  5. Build collapsible question annex from MotherDuck ref_safe__annex
   6. Assemble single multi-section HTML report
 
 Usage:
@@ -20,7 +20,6 @@ Required environment variables:
 
 import argparse
 import base64
-import csv
 import io
 import json
 import os
@@ -53,7 +52,6 @@ from config import SECTIONS  # noqa: E402  (local import after matplotlib setup)
 
 SQL_DIR = Path(__file__).parent / "sql"
 OUTPUT_DIR = Path(__file__).parent / "output"
-ANNEX_CSV = Path(__file__).parent.parent / "collateral" / "annex.csv"
 MARTS_SCHEMA_YML = Path(__file__).parent.parent / "dbt_project" / "models" / "marts" / "schema.yml"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
@@ -1431,11 +1429,11 @@ _MODULE_THEME_FALLBACK: dict[str, str] = {
     "qa2dec": "Green transition",
     "qa2inc": "Green transition",
     "qa3": "Supply chain resilience",
-    "qa4": "AI adoption",
-    "qa5": "Geopolitical risk",
-    "qa6": "Energy costs",
-    "qb1": "Special focus",
-    "qb2": "Special focus",
+    "qa4": "AI Adoption",
+    "qa5": "Geopolitical Risk",
+    "qa6": "Energy Costs",
+    "qb1": "AI Adoption Expectations",
+    "qb2": "Special Focus",
 }
 
 _ECB_FOCUS_INDEX = "https://www.ecb.europa.eu/press/economic-bulletin/focus/"
@@ -1541,6 +1539,18 @@ ADHOC_CONTENT_SYSTEM = textwrap.dedent("""
 """).strip()
 
 
+def _is_continuous(df: pd.DataFrame) -> bool:
+    """True if response_raw looks like an open numeric estimate (>10 distinct values per group).
+
+    Categorical adhoc questions (yes/no, 1-4 scale) have few distinct codes.
+    Continuous questions (e.g. 'what % of peers invested?') produce many distinct integers.
+    """
+    if df.empty:
+        return False
+    max_distinct = df.groupby(["country_code", "sub_item"])["response_raw"].nunique().max()
+    return int(max_distinct) > 10
+
+
 def build_adhoc_spotlight(
     theme: dict,
     wave_number: int,
@@ -1564,14 +1574,34 @@ def build_adhoc_spotlight(
     if df.empty:
         return None
 
-    # Build a compact pivot table for the prompt
-    pivot_lines = ["country_code | sub_item | response_raw | pct_wtd | n_firms"]
-    for _, row in df.iterrows():
-        pivot_lines.append(
-            f"{row['country_code']} | {row['sub_item']} | {row['response_raw']} "
-            f"| {row['pct_wtd']:.1f}% | {int(row['n_firms'])}"
+    # Detect whether responses are categorical codes or continuous numeric estimates
+    if _is_continuous(df):
+        # Collapse distribution to weighted mean + approximate median per country × sub_item
+        lines = ["country_code | sub_item | mean_pct | median_pct | n_firms"]
+        for (cc, sub), grp in df.groupby(["country_code", "sub_item"]):
+            grp = grp.sort_values("response_raw")
+            total_w = grp["n_firms_wtd"].sum()
+            wtd_mean = (grp["response_raw"] * grp["n_firms_wtd"]).sum() / total_w
+            cumw = grp["n_firms_wtd"].cumsum()
+            median_val = int(grp[cumw >= total_w / 2]["response_raw"].iloc[0])
+            lines.append(
+                f"{cc} | {sub} | {wtd_mean:.1f}% | {median_val}% | {int(grp['n_firms'].sum())}"
+            )
+        data_table = "\n".join(lines)
+        data_note = (
+            "\n\nNOTE: Each firm gave a numeric % estimate. "
+            "The table shows the weighted mean and approximate median of those estimates."
         )
-    data_table = "\n".join(pivot_lines)
+    else:
+        # Categorical: list each response code with its share
+        pivot_lines = ["country_code | sub_item | response_raw | pct_wtd | n_firms"]
+        for _, row in df.iterrows():
+            pivot_lines.append(
+                f"{row['country_code']} | {row['sub_item']} | {row['response_raw']} "
+                f"| {row['pct_wtd']:.1f}% | {int(row['n_firms'])}"
+            )
+        data_table = "\n".join(pivot_lines)
+        data_note = ""
 
     question_ctx = ""
     if theme.get("question_texts"):
@@ -1582,7 +1612,7 @@ def build_adhoc_spotlight(
 
     user_msg = (
         f"Topic: {theme['theme_label']}{question_ctx}\n\n"
-        f"Data (wave {wave_number}, SK vs EA):\n{data_table}\n\n"
+        f"Data (wave {wave_number}, SK vs EA):\n{data_table}{data_note}\n\n"
         "Write the finding and 2 bullets as specified."
     )
 
@@ -1700,136 +1730,89 @@ def _clean_question_text(text: str) -> str:
     return text.strip()
 
 
-def _load_annex_question_texts(
-    annex_csv_path: Path, con=None
-) -> dict[str, str]:
-    """Return {q_id_lower: cleaned_question_text} for all questions.
-
-    Tries MotherDuck table main_safe.ref_safe__annex first (prod).
-    Falls back to local annex.csv (dev / offline).
-    """
-    # --- MotherDuck path ---
-    if con is not None:
-        try:
-            cols_res = con.execute(
-                "SELECT column_name FROM information_schema.columns "
-                "WHERE table_schema = 'main_safe' AND table_name = 'ref_safe__annex' "
-                "ORDER BY ordinal_position"
-            ).fetchall()
-            if cols_res:
-                all_cols = [r[0] for r in cols_res]
-                # Wave columns: everything after 'notes' (col index 6 → sanitised 'notes')
-                # The header row maps: col[1]=element, col[2]=question_item, col[6]=notes,
-                # col[7+] = wave columns (SAFE_2024Q1 → safe_2024q1, etc.)
-                try:
-                    notes_idx = all_cols.index("notes")
-                except ValueError:
-                    notes_idx = 6
-                wave_cols = all_cols[notes_idx + 1:]  # newest is first (leftmost in XLSX)
-                element_col = all_cols[1] if len(all_cols) > 1 else "element"
-                q_item_col = all_cols[2] if len(all_cols) > 2 else "question_item"
-
-                wave_sel = ", ".join(f'"{c}"' for c in wave_cols)
-                rows_md = con.execute(
-                    f'SELECT "{q_item_col}", {wave_sel} '
-                    f'FROM main_safe.ref_safe__annex '
-                    f"WHERE \"{element_col}\" = 'question'"
-                ).fetchall()
-
-                texts: dict[str, str] = {}
-                for row in rows_md:
-                    q_id = (row[0] or "").strip().lower()
-                    if not q_id:
-                        continue
-                    # Take the first (most recent) non-empty wave column value
-                    text = ""
-                    for val in row[1:]:
-                        if val and val.strip():
-                            text = val.strip()
-                            break
-                    if text and q_id not in texts:
-                        texts[q_id] = _clean_question_text(text)
-
-                if texts:
-                    print(f"  Loaded {len(texts)} question texts from MotherDuck annex table")
-                    return texts
-        except Exception as exc:
-            print(f"  Warning: MotherDuck annex table unavailable ({exc}) — falling back to CSV")
-
-    # --- Local CSV fallback ---
-    texts = {}
+def _load_annex_question_texts(con=None) -> dict[str, str]:
+    """Return {q_id_lower: cleaned_question_text} for all questions from MotherDuck."""
+    if con is None:
+        return {}
     try:
-        with open(annex_csv_path, newline="", encoding="utf-8-sig") as f:
-            reader = csv.reader(f)
-            rows = list(reader)
-        for row in rows[1:]:
-            if len(row) > 7 and row[1] == "question":
-                q_id = row[2].strip().lower()
-                text = row[7].strip()
-                if q_id and text and q_id not in texts:
-                    texts[q_id] = _clean_question_text(text)
-    except FileNotFoundError:
-        pass
-    return texts
+        cols_res = con.execute(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_schema = 'main_safe' AND table_name = 'ref_safe__annex' "
+            "ORDER BY ordinal_position"
+        ).fetchall()
+        if not cols_res:
+            return {}
+        all_cols = [r[0] for r in cols_res]
+        try:
+            notes_idx = all_cols.index("notes")
+        except ValueError:
+            notes_idx = 6
+        wave_cols = all_cols[notes_idx + 1:]
+        element_col = all_cols[1] if len(all_cols) > 1 else "element"
+        q_item_col = all_cols[2] if len(all_cols) > 2 else "question_item"
+
+        wave_sel = ", ".join(f'"{c}"' for c in wave_cols)
+        rows_md = con.execute(
+            f'SELECT "{q_item_col}", {wave_sel} '
+            f'FROM main_safe.ref_safe__annex '
+            f"WHERE \"{element_col}\" = 'question'"
+        ).fetchall()
+
+        texts: dict[str, str] = {}
+        for row in rows_md:
+            q_id = (row[0] or "").strip().lower()
+            if not q_id:
+                continue
+            text = next((v for v in row[1:] if v and v.strip()), "")
+            if text and q_id not in texts:
+                texts[q_id] = _clean_question_text(text)
+
+        print(f"  Loaded {len(texts)} question texts from MotherDuck annex table")
+        return texts
+    except Exception as exc:
+        print(f"  Warning: MotherDuck annex table unavailable ({exc})")
+        return {}
 
 
-def build_annex_html(annex_csv_path: Path, con=None) -> str:
-    # Read annex and extract one question text per question ID.
-    # Tries MotherDuck table first (prod), falls back to local annex.csv (dev/offline).
+def build_annex_html(con=None) -> str:
+    # Read annex from MotherDuck ref_safe__annex.
     q_texts: dict[str, tuple[str, str]] = {}  # q_id -> (sample, text)
 
-    # --- MotherDuck path ---
-    if con is not None:
-        try:
-            cols_res = con.execute(
-                "SELECT column_name FROM information_schema.columns "
-                "WHERE table_schema = 'main_safe' AND table_name = 'ref_safe__annex' "
-                "ORDER BY ordinal_position"
+    if con is None:
+        return ""
+    try:
+        cols_res = con.execute(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_schema = 'main_safe' AND table_name = 'ref_safe__annex' "
+            "ORDER BY ordinal_position"
+        ).fetchall()
+        if cols_res:
+            all_cols = [r[0] for r in cols_res]
+            try:
+                notes_idx = all_cols.index("notes")
+            except ValueError:
+                notes_idx = 6
+            wave_cols = all_cols[notes_idx + 1:]
+            element_col = all_cols[1] if len(all_cols) > 1 else "element"
+            q_item_col = all_cols[2] if len(all_cols) > 2 else "question_item"
+            sample_col = all_cols[4] if len(all_cols) > 4 else "sample"
+            wave_sel = ", ".join(f'"{c}"' for c in wave_cols)
+            rows_md = con.execute(
+                f'SELECT "{q_item_col}", "{sample_col}", {wave_sel} '
+                f"FROM main_safe.ref_safe__annex "
+                f"WHERE \"{element_col}\" = 'question'"
             ).fetchall()
-            if cols_res:
-                all_cols = [r[0] for r in cols_res]
-                try:
-                    notes_idx = all_cols.index("notes")
-                except ValueError:
-                    notes_idx = 6
-                wave_cols = all_cols[notes_idx + 1:]
-                element_col = all_cols[1] if len(all_cols) > 1 else "element"
-                q_item_col = all_cols[2] if len(all_cols) > 2 else "question_item"
-                sample_col = all_cols[4] if len(all_cols) > 4 else "sample"
-                wave_sel = ", ".join(f'"{c}"' for c in wave_cols)
-                rows_md = con.execute(
-                    f'SELECT "{q_item_col}", "{sample_col}", {wave_sel} '
-                    f"FROM main_safe.ref_safe__annex "
-                    f"WHERE \"{element_col}\" = 'question'"
-                ).fetchall()
-                for row in rows_md:
-                    q_id_raw = (row[0] or "").strip()
-                    sample = (row[1] or "").strip()
-                    matched = next((k for k in ANNEX_Q_IDS if k.lower() == q_id_raw.lower()), None)
-                    if matched and matched not in q_texts:
-                        text = next((v for v in row[2:] if v and v.strip()), "")
-                        if text:
-                            q_texts[matched] = (sample, _clean_question_text(text.strip()))
-        except Exception as exc:
-            print(f"  Warning: MotherDuck annex table unavailable for HTML widget ({exc}) — falling back to CSV")
-
-    # --- Local CSV fallback ---
-    if not q_texts:
-        try:
-            with open(annex_csv_path, newline="", encoding="utf-8-sig") as f:
-                reader = csv.reader(f)
-                rows = list(reader)
-            for row in rows[1:]:
-                if len(row) > 7 and row[1] == "question":
-                    q_id = row[2].strip()
-                    matched = next((k for k in ANNEX_Q_IDS if k.lower() == q_id.lower()), None)
-                    if matched and matched not in q_texts:
-                        sample = row[4].strip()
-                        text = row[7].strip()
-                        if text:
-                            q_texts[matched] = (sample, _clean_question_text(text))
-        except FileNotFoundError:
-            return ""
+            for row in rows_md:
+                q_id_raw = (row[0] or "").strip()
+                sample = (row[1] or "").strip()
+                matched = next((k for k in ANNEX_Q_IDS if k.lower() == q_id_raw.lower()), None)
+                if matched and matched not in q_texts:
+                    text = next((v for v in row[2:] if v and v.strip()), "")
+                    if text:
+                        q_texts[matched] = (sample, _clean_question_text(text.strip()))
+    except Exception as exc:
+        print(f"  Warning: MotherDuck annex table unavailable for HTML widget ({exc})")
+        return ""
 
     # Build HTML groups
     group_rows = []
@@ -2438,7 +2421,7 @@ def main() -> None:
     mart_catalogue = build_mart_catalogue(tool_con, schema)
 
     print("Loading annex question texts...")
-    question_texts = _load_annex_question_texts(ANNEX_CSV, con=tool_con)
+    question_texts = _load_annex_question_texts(con=tool_con)
     print(f"  Loaded {len(question_texts)} question texts from annex")
 
     interesting_sections = [s for s in SECTIONS if interest[s["id"]]["interesting"]]
@@ -2560,7 +2543,7 @@ def main() -> None:
     toc_html = build_toc(rendered)
 
     print("Building question annex...")
-    annex_html = build_annex_html(ANNEX_CSV, con=tool_con)
+    annex_html = build_annex_html(con=tool_con)
     tool_con.close()
 
     print("Fetching painting thumbnail...")

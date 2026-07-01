@@ -2378,7 +2378,7 @@ def main() -> None:
                 cost_tracker["usd"] += local_tracker["usd"]
                 cost_tracker["calls"] += local_tracker["calls"]
                 for model, m in local_tracker["by_model"].items():
-                    bm = cost_tracker["by_model"].setdefault(model, {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0})
+                    bm = cost_tracker["by_model"].setdefault(model, {"calls": 0, "input": 0, "output": 0, "usd": 0.0, "cache_write": 0, "cache_read": 0})
                     for k in bm:
                         bm[k] += m.get(k, 0)
 

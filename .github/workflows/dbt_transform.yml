@@ -42,6 +42,11 @@ jobs:
             | gunzip > "$EXT_DIR/motherduck.duckdb_extension"
           echo "MotherDuck extension v${DUCKDB_VERSION} cached."
 
+      - name: Install dbt packages
+        run: |
+          cd dbt_project
+          dbt deps --profiles-dir . --project-dir .
+
       - name: Run dbt models
         env:
           motherduck_token: ${{ secrets.MOTHERDUCK_TOKEN }}

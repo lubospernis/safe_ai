@@ -33,6 +33,7 @@ from pathlib import Path
 import yaml
 import anthropic
 import duckdb
+from json_repair import repair_json
 from dotenv import load_dotenv
 from mistralai import Mistral
 import matplotlib
@@ -483,8 +484,8 @@ def _check_one(sec: dict, df: pd.DataFrame) -> dict:
     )
     raw = resp.choices[0].message.content.strip()
     try:
-        result = json.loads(raw)
-    except json.JSONDecodeError:
+        result = json.loads(repair_json(raw))
+    except Exception:
         result = {"interesting": True, "chart_type": "line", "best_panel": None, "reason": "parse error"}
     result["section_id"] = sec["id"]
     if resp.usage:
@@ -1334,7 +1335,7 @@ def get_exec_summary(
     raw = re.sub(r"\s*```$", "", raw).strip()
 
     try:
-        items = json.loads(raw)
+        items = json.loads(repair_json(raw))
         # Validate and normalise: keep only dicts with a non-empty bullet field
         result = []
         for item in items:
@@ -1342,6 +1343,9 @@ def get_exec_summary(
                 continue
             bullet = str(item.get("bullet", "")).strip().lstrip("•- ")
             sid = str(item.get("section_id", "")).strip()
+            # Strip 🔍 emoji from non-adhoc bullets (guard against LLM over-applying the rule)
+            if sid != "adhoc_spotlight":
+                bullet = bullet.lstrip("🔍 ")
             if bullet:
                 result.append({"bullet": bullet, "section_id": sid if sid in section_ids else ""})
         return result[:4]
@@ -1375,7 +1379,7 @@ def _add_so_what(content: dict, sec: dict, mistral_client, cost_tracker: dict) -
         raw = resp.choices[0].message.content.strip()
         raw = re.sub(r"^```(?:json)?\s*", "", raw)
         raw = re.sub(r"\s*```$", "", raw).strip()
-        parsed = json.loads(raw)
+        parsed = json.loads(repair_json(raw))
         revised_bullets = parsed.get("bullets", [])
         if revised_bullets and len(revised_bullets) == len(content["bullets"]):
             return {**content, "bullets": [str(b).strip() for b in revised_bullets]}
@@ -1819,7 +1823,9 @@ def build_adhoc_spotlight(
         if resp.usage:
             _track_cost(cost_tracker, model,
                         _Usage(resp.usage.prompt_tokens, resp.usage.completion_tokens))
-        result = json.loads(raw)
+        if raw.startswith("```"):
+            raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+        result = json.loads(repair_json(raw))
     except Exception as e:
         print(f"  Adhoc spotlight generation failed: {e}")
         return None
@@ -1896,7 +1902,7 @@ def _find_ecb_focus_article(theme_label: str, mistral_client, cost_tracker: dict
         if resp.usage:
             _track_cost(cost_tracker, model,
                         _Usage(resp.usage.prompt_tokens, resp.usage.completion_tokens))
-        result = json.loads(raw)
+        result = json.loads(repair_json(raw))
         idx = result.get("index")
         conf = float(result.get("confidence", 0))
         if idx and conf >= 0.90:
@@ -2097,7 +2103,7 @@ def translate_to_slovak(
     if raw.startswith("```"):
         raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
     try:
-        translated = json.loads(raw)
+        translated = json.loads(repair_json(raw))
     except Exception:
         print("  [SK] Translation JSON parse failed — falling back to English content")
         return rendered, exec_bullets
@@ -2522,7 +2528,7 @@ def _sharpen_with_ecb(
         raw = resp.choices[0].message.content.strip()
         raw = re.sub(r"^```(?:json)?\s*", "", raw)
         raw = re.sub(r"\s*```$", "", raw).strip()
-        revisions: dict = json.loads(raw)
+        revisions: dict = json.loads(repair_json(raw))
         if not revisions:
             print("  ECB sharpener: no improvements identified")
             return rendered

@@ -1118,19 +1118,31 @@ EXEC_SUMMARY_SYSTEM = textwrap.dedent("""
     1. Section-by-section findings from the report
     2. Cross-cutting themes identified by a first-pass analyst
 
-    Your task: write 5–7 executive summary bullets that give a balanced picture of BOTH
-    financing conditions AND the economic situation of firms. Do not focus only on financing.
+    Your task: write EXACTLY 3–4 bullets. No more. Cover BOTH financing conditions AND
+    the economic situation of firms. Prioritise the most striking or cross-cutting findings
+    and ruthlessly drop the rest.
+
+    FORMAT — every bullet must follow this exact structure:
+      **Short label (2–4 words):** One concise sentence of explanation.
+
+    Examples of well-formed bullets:
+      **Interest rate tightening:** Slovak firms reported a net increase in bank loan interest costs,
+        with the tightening more pronounced than in the Euro Area average.
+      **Margin squeeze:** Labour costs continued to rise while turnover declined, compressing
+        operating margins for Slovak SMEs — the sharpest divergence in three waves.
+      **Credit access stable:** Despite tighter terms, actual credit availability remained broadly
+        unchanged and access-to-finance was rated the least pressing business obstacle.
 
     Requirements:
-    - Anchor at least one bullet on a cross-cutting theme from the analyst (synthesising
-      across sections), not just paraphrasing a single section.
-    - Pick the most notable finding from each key section. Skip unremarkable sections.
+    - At least one bullet must be anchored on a cross-cutting theme from the first-pass analyst.
+    - Include a number when it sharpens the story — net balance, % change, wave comparison.
+      Numbers are allowed and encouraged where they add real intel. Omit them only when the
+      direction alone is the point.
     - Every bullet must name the source section so it can be hyperlinked in the report.
 
     Return a JSON array only — no markdown fences, no commentary:
     [
-      {"bullet": "...", "section_id": "bank_loan_terms"},
-      {"bullet": "...", "section_id": "financing_gap"},
+      {"bullet": "**Label:** explanation", "section_id": "bank_loan_terms"},
       ...
     ]
 
@@ -1139,16 +1151,8 @@ EXEC_SUMMARY_SYSTEM = textwrap.dedent("""
     financing_purpose, financing_factors, business_situation, outlook,
     expectations_quantitative, expectations_risk, business_problems
 
-    For cross-cutting bullets that span multiple sections, use the most relevant section_id.
-
-    Style rules:
-    - Narrative statements about direction and change, NOT raw numbers.
-      Good: "Interest rates on bank loans tightened while credit line availability remained stable."
-      Good: "Turnover and profits declined while labour costs continued to rise."
-      Bad: "A net 8.3% of firms reported easing." — no raw net balances
-    - Only include a number if the narrative would be misleading without it.
-    - Plain active voice: "Firms reported...", "Slovak firms perceived...", "Applications fell..."
-    - No leading bullet character in the bullet text.
+    For cross-cutting bullets spanning multiple sections, use the most relevant section_id.
+    No leading bullet character inside the bullet text.
 """).strip()
 
 SO_WHAT_SYSTEM = textwrap.dedent("""
@@ -1207,7 +1211,7 @@ def get_exec_summary(
     )
     resp2 = client.chat.complete(
         model="mistral-small-latest",
-        max_tokens=700,
+        max_tokens=500,
         messages=[
             {"role": "system", "content": EXEC_SUMMARY_SYSTEM},
             {"role": "user", "content": user_msg},
@@ -1233,11 +1237,11 @@ def get_exec_summary(
             sid = str(item.get("section_id", "")).strip()
             if bullet:
                 result.append({"bullet": bullet, "section_id": sid if sid in section_ids else ""})
-        return result[:7]
+        return result[:4]
     except Exception:
         # Fallback: treat as plain text, no section links
         plain = [l.strip().lstrip("•- ") for l in raw.splitlines() if l.strip()]
-        return [{"bullet": b, "section_id": ""} for b in plain[:7]]
+        return [{"bullet": b, "section_id": ""} for b in plain[:4]]
 
 
 def _add_so_what(content: dict, sec: dict, mistral_client, cost_tracker: dict) -> dict:
@@ -1744,6 +1748,8 @@ def build_html(
             sid = ""
         if not text:
             continue
+        # Convert **bold** markdown to <strong> HTML
+        text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
         if sid:
             exec_bullet_items.append(f'    <li><a href="#{sid}">{text}</a></li>')
         else:

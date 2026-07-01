@@ -1094,57 +1094,183 @@ def get_section_content_agentic(
 # 5. Executive summary (Sonnet, bullet points)
 # ---------------------------------------------------------------------------
 
+EXEC_CROSS_SECTION_SYSTEM = textwrap.dedent("""
+    You are a senior ECB economist. You will receive section-by-section findings from the
+    latest ECB SAFE survey for Slovakia.
+
+    Your sole task: identify 2–3 cross-cutting tensions or themes that span multiple sections.
+    These are patterns that no single section captures alone — e.g.:
+    - A disconnect between two financing instruments ("bank loans eased while credit lines remained tight")
+    - A cost-revenue squeeze ("labour costs rose while turnover fell, squeezing margins")
+    - A divergence between current conditions and forward expectations
+    - A contrast between Slovakia and the Euro Area that is consistent across topics
+
+    Rules:
+    - Write exactly 2–3 short plain-English bullet points. No headers, no numbers, no markdown.
+    - Only name a tension if it is actually visible in the findings given — do not invent themes.
+    - If fewer than 2 genuine tensions exist, write only those you see.
+    - These bullets are internal notes for a second analyst — they will NOT appear verbatim in the report.
+""").strip()
+
 EXEC_SUMMARY_SYSTEM = textwrap.dedent("""
     You are an economist writing an executive summary of the latest ECB SAFE survey results
-    for Slovakia. You will be given the key findings from each section of the report.
+    for Slovakia. You will receive:
+    1. Section-by-section findings from the report
+    2. Cross-cutting themes identified by a first-pass analyst
 
-    Your task: read ALL the section findings and distill them into 5–7 bullet points that
-    give a balanced picture of BOTH financing conditions AND the economic situation of firms.
-    Do not focus only on financing — business situation, pressingness scores, and economic
-    outlook findings are equally important and should appear in the summary.
+    Your task: write 5–7 executive summary bullets that give a balanced picture of BOTH
+    financing conditions AND the economic situation of firms. Do not focus only on financing.
 
-    Pick the most notable finding from each section. If a finding is unremarkable, skip it.
-    If something stands out strongly across sections (e.g. a disconnect between tight credit
-    lines and easy bank loans, or rising costs alongside falling turnover), synthesise it
-    into a single cross-cutting bullet.
+    Requirements:
+    - Anchor at least one bullet on a cross-cutting theme from the analyst (synthesising
+      across sections), not just paraphrasing a single section.
+    - Pick the most notable finding from each key section. Skip unremarkable sections.
+    - Every bullet must name the source section so it can be hyperlinked in the report.
+
+    Return a JSON array only — no markdown fences, no commentary:
+    [
+      {"bullet": "...", "section_id": "bank_loan_terms"},
+      {"bullet": "...", "section_id": "financing_gap"},
+      ...
+    ]
+
+    Valid section_id values (use exactly as written):
+    bank_loan_terms, financing_gap, loan_applications, availability_expectations,
+    financing_purpose, financing_factors, business_situation, outlook,
+    expectations_quantitative, expectations_risk, business_problems
+
+    For cross-cutting bullets that span multiple sections, use the most relevant section_id.
 
     Style rules:
-    - Write narrative statements about direction and change, NOT about numbers.
-      Good: "Firms reported a net tightening in interest rates on bank loans."
-      Good: "Unchanged needs and a marginal decrease in availability led to a wider financing gap."
-      Good: "Turnover and profits declined sharply while labour costs continued to rise."
-      Good: "Access to finance was perceived as the least pressing business obstacle."
-      Bad: "A net 8.3% of firms reported easing in interest rates."
-      Bad: "The net balance improved by 5pp to -7.6pp."
-    - Only include a number if it is exceptionally striking and the narrative would be misleading without it.
-    - Use plain active voice: "Firms reported...", "Slovak firms perceived...", "Applications declined..."
-    - Bullets only — no prose, no headers, no leading bullet character.
+    - Narrative statements about direction and change, NOT raw numbers.
+      Good: "Interest rates on bank loans tightened while credit line availability remained stable."
+      Good: "Turnover and profits declined while labour costs continued to rise."
+      Bad: "A net 8.3% of firms reported easing." — no raw net balances
+    - Only include a number if the narrative would be misleading without it.
+    - Plain active voice: "Firms reported...", "Slovak firms perceived...", "Applications fell..."
+    - No leading bullet character in the bullet text.
+""").strip()
+
+SO_WHAT_SYSTEM = textwrap.dedent("""
+    You are an editorial analyst reviewing bullet points from an ECB SAFE survey section.
+    Your task: for each bullet, add a brief "so what" implication clause if the bullet is
+    purely descriptive — i.e. it states what happened but not why it matters for Slovak firms.
+
+    Rules:
+    - Add ONE embedded implication clause per bullet that needs it (a subordinate clause or
+      "—" dash phrase). Keep the original wording; just extend it.
+    - Do NOT add any numbers that are not already in the bullet.
+    - Do NOT change bullets that already have an implication (e.g. already say "suggesting",
+      "putting pressure on", "compressing", "signalling", "indicating", etc.).
+    - Do NOT change the finding headline — only revise the bullets array.
+    - Return valid JSON only — no markdown fences:
+      {"finding": "<original finding unchanged>", "bullets": ["revised bullet 1", ...]}
 """).strip()
 
 
-def get_exec_summary(rendered_sections: list[dict], cost_tracker: dict) -> list[str]:
-    lines = ["Below are the key findings per topic from the latest wave:\n"]
+def get_exec_summary(
+    rendered_sections: list[dict], cost_tracker: dict
+) -> list[dict]:
+    """Two-pass exec summary. Returns list of {bullet, section_id} dicts."""
+    section_ids = {s["section_id"] for s in rendered_sections}
+
+    # Build the shared input block (same for both passes)
+    lines = ["Section findings:\n"]
     for s in rendered_sections:
-        lines.append(f"## {s['title']}")
+        lines.append(f"## {s['title']} [section_id: {s['section_id']}]")
         lines.append(f"Sign convention: {s['sign_note']}")
         for b in s["bullets"]:
             lines.append(f"  {b}")
         lines.append("")
+    section_text = "\n".join(lines)
 
     client = _mistral_client()
-    resp = client.chat.complete(
+
+    # Pass 1: identify cross-cutting themes
+    resp1 = client.chat.complete(
         model="mistral-small-latest",
-        max_tokens=600,
+        max_tokens=200,
         messages=[
-            {"role": "system", "content": EXEC_SUMMARY_SYSTEM},
-            {"role": "user", "content": "\n".join(lines)},
+            {"role": "system", "content": EXEC_CROSS_SECTION_SYSTEM},
+            {"role": "user", "content": section_text},
         ],
     )
-    if resp.usage:
+    if resp1.usage:
         _track_cost(cost_tracker, "mistral-small-latest",
-                    _Usage(resp.usage.prompt_tokens, resp.usage.completion_tokens))
-    raw = resp.choices[0].message.content.strip()
-    return [line.strip().lstrip("•- ") for line in raw.splitlines() if line.strip()][:6]
+                    _Usage(resp1.usage.prompt_tokens, resp1.usage.completion_tokens))
+    themes = resp1.choices[0].message.content.strip()
+
+    # Pass 2: write final bullets as JSON with section_id
+    user_msg = (
+        f"{section_text}\n\n"
+        f"Cross-cutting themes identified by first-pass analyst:\n{themes}"
+    )
+    resp2 = client.chat.complete(
+        model="mistral-small-latest",
+        max_tokens=700,
+        messages=[
+            {"role": "system", "content": EXEC_SUMMARY_SYSTEM},
+            {"role": "user", "content": user_msg},
+        ],
+    )
+    if resp2.usage:
+        _track_cost(cost_tracker, "mistral-small-latest",
+                    _Usage(resp2.usage.prompt_tokens, resp2.usage.completion_tokens))
+
+    raw = resp2.choices[0].message.content.strip()
+    # Strip markdown fences if model wraps output despite instructions
+    raw = re.sub(r"^```(?:json)?\s*", "", raw)
+    raw = re.sub(r"\s*```$", "", raw).strip()
+
+    try:
+        items = json.loads(raw)
+        # Validate and normalise: keep only dicts with a non-empty bullet field
+        result = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            bullet = str(item.get("bullet", "")).strip().lstrip("•- ")
+            sid = str(item.get("section_id", "")).strip()
+            if bullet:
+                result.append({"bullet": bullet, "section_id": sid if sid in section_ids else ""})
+        return result[:7]
+    except Exception:
+        # Fallback: treat as plain text, no section links
+        plain = [l.strip().lstrip("•- ") for l in raw.splitlines() if l.strip()]
+        return [{"bullet": b, "section_id": ""} for b in plain[:7]]
+
+
+def _add_so_what(content: dict, sec: dict, mistral_client, cost_tracker: dict) -> dict:
+    """Add implication clauses to purely-descriptive section bullets via Mistral Small."""
+    bullets_text = "\n".join(f"- {b}" for b in content["bullets"])
+    user_msg = (
+        f"Section: {sec['title']}\n"
+        f"Sign convention: {sec['sign_note']}\n\n"
+        f"Finding: {content['finding']}\n\n"
+        f"Bullets:\n{bullets_text}"
+    )
+    try:
+        resp = mistral_client.chat.complete(
+            model="mistral-small-latest",
+            max_tokens=400,
+            messages=[
+                {"role": "system", "content": SO_WHAT_SYSTEM},
+                {"role": "user", "content": user_msg},
+            ],
+        )
+        if resp.usage:
+            _track_cost(cost_tracker, "mistral-small-latest",
+                        _Usage(resp.usage.prompt_tokens, resp.usage.completion_tokens))
+        raw = resp.choices[0].message.content.strip()
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw).strip()
+        parsed = json.loads(raw)
+        revised_bullets = parsed.get("bullets", [])
+        if revised_bullets and len(revised_bullets) == len(content["bullets"]):
+            return {**content, "bullets": [str(b).strip() for b in revised_bullets]}
+    except Exception:
+        pass  # on any failure, return original unchanged
+    return content
 
 
 # ---------------------------------------------------------------------------
@@ -1351,11 +1477,13 @@ def build_annex_html(annex_csv_path: Path, con=None) -> str:
 
 def translate_to_slovak(
     rendered: list[dict],
-    exec_bullets: list[str],
+    exec_bullets: list[dict],
     cost_tracker: dict,
-) -> tuple[list[dict], list[str]]:
+) -> tuple[list[dict], list[dict]]:
+    # Send only bullet text for translation; section_id is restored afterwards
+    exec_bullet_texts = [item.get("bullet", "") for item in exec_bullets]
     payload = {
-        "exec_bullets": exec_bullets,
+        "exec_bullets": exec_bullet_texts,
         "sections": [
             {"id": s["section_id"], "finding": s["finding"], "bullets": s["bullets"]}
             for s in rendered
@@ -1379,7 +1507,6 @@ def translate_to_slovak(
                     _Usage(resp.usage.prompt_tokens, resp.usage.completion_tokens))
 
     raw = resp.choices[0].message.content.strip()
-    # Strip accidental markdown fences
     if raw.startswith("```"):
         raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
     try:
@@ -1397,7 +1524,14 @@ def translate_to_slovak(
             "finding": t.get("finding", s["finding"]),
             "bullets": t.get("bullets", s["bullets"]),
         })
-    return sk_rendered, translated.get("exec_bullets", exec_bullets)
+
+    # Restore section_id on translated exec bullets
+    sk_bullet_texts = translated.get("exec_bullets", exec_bullet_texts)
+    sk_exec_bullets = [
+        {"bullet": str(text), "section_id": orig.get("section_id", "")}
+        for text, orig in zip(sk_bullet_texts, exec_bullets)
+    ]
+    return sk_rendered, sk_exec_bullets
 
 
 # ---------------------------------------------------------------------------
@@ -1485,6 +1619,8 @@ HTML_PAGE = textwrap.dedent("""
   .exec-summary h2 {{ font-size: 16px; color: #0777b3; border-bottom: none;
                       margin: 0 0 10px 0; padding-bottom: 0; }}
   .exec-summary li {{ font-size: 14px; line-height: 1.7; }}
+  .exec-summary li a {{ color: inherit; text-decoration: underline dotted #8ab3d4; }}
+  .exec-summary li a:hover {{ text-decoration: underline; color: #0777b3; }}
 
   /* TOC */
   #toc        {{ background: #fff; border: 1px solid #e0e0e0; border-radius: 6px;
@@ -1545,7 +1681,7 @@ _AGENTIC_FOOTNOTE = (
 def build_html(
     rendered_sections: list[dict],
     annex_html: str,
-    exec_bullets: list[str],
+    exec_bullets: list[dict],
     toc_html: str,
     painting_inner_html: str = "",
     latest_wave: int = 0,
@@ -1597,9 +1733,22 @@ def build_html(
         f'<div class="exec-painting">{painting_inner_html}</div>'
         if painting_inner_html else ""
     )
-    exec_bullets_html = "\n".join(
-        f"    <li>{b.lstrip('• ').strip()}</li>" for b in exec_bullets
-    )
+    # exec_bullets is list[dict{bullet, section_id}]; render with anchor links where available
+    exec_bullet_items = []
+    for item in exec_bullets:
+        if isinstance(item, dict):
+            text = item.get("bullet", "").lstrip("• ").strip()
+            sid = item.get("section_id", "").strip()
+        else:
+            text = str(item).lstrip("• ").strip()
+            sid = ""
+        if not text:
+            continue
+        if sid:
+            exec_bullet_items.append(f'    <li><a href="#{sid}">{text}</a></li>')
+        else:
+            exec_bullet_items.append(f"    <li>{text}</li>")
+    exec_bullets_html = "\n".join(exec_bullet_items)
     exec_summary_div = (
         f'<div class="exec-summary" id="exec-summary">\n'
         f'  <h2>{exec_h2}</h2>\n'
@@ -1680,6 +1829,7 @@ def main() -> None:
         print(f"  Skipping {sid} (not interesting)")
 
     anthropic_client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    mistral_client = _mistral_client()
     cost_lock = threading.Lock()
 
     def _build_section(sec: dict) -> dict:
@@ -1701,6 +1851,11 @@ def main() -> None:
                 sec, data[sid], thread_con, schema, mart_catalogue,
                 local_tracker, question_texts, client=anthropic_client,
             )
+
+            # "So what?" pass — adds implication clauses to purely-descriptive bullets
+            print(f"  Adding implications for {sid}...")
+            content = _add_so_what(content, sec, mistral_client, local_tracker)
+
             with cost_lock:
                 cost_tracker["input_tokens"] += local_tracker["input_tokens"]
                 cost_tracker["output_tokens"] += local_tracker["output_tokens"]
@@ -1741,10 +1896,10 @@ def main() -> None:
     # Restore original SECTIONS order
     rendered = [rendered_map[s["id"]] for s in SECTIONS if s["id"] in rendered_map]
 
-    print("Generating executive summary...")
+    print("Generating executive summary (two-pass)...")
     exec_bullets = get_exec_summary(rendered, cost_tracker) if rendered else []
-    for b in exec_bullets:
-        print(f"  {b}")
+    for item in exec_bullets:
+        print(f"  [{item.get('section_id', '?')}] {item.get('bullet', '')}")
 
     print("Building TOC...")
     toc_html = build_toc(rendered)

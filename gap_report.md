@@ -4,19 +4,28 @@ _Generated 01 Jul 2026 — ECB source: [https://www.ecb.europa.eu/stats/ecb_surv
 
 ## Structural Gaps
 
-**Missing SK composite financing gap:** No aggregated indicator combining bank loans, credit lines, trade credit, debt securities, and equity for Slovakia, limiting cross-instrument financing stress comparison (ECB Chart 4).
-**No SK six-month trend data:** Lacks six-month reference period responses for interest rates, financing gaps, and purposes, obscuring longer-term Slovak financing shifts (ECB grey panels in Charts 1-5).
-**Absent SK sector breakdown:** Missing sector-specific (construction, trade, services, industry) data for input costs, selling prices, and employment expectations (ECB Section 3.3).
-**No SK firm-size inflation split:** Lacks SME vs. large firm inflation expectations (1/3/5-year horizons) for Slovakia, hindering vulnerability assessment (ECB Chart 18).
-**Missing SK daily war impact:** No pre/post-28 Feb 2026 split for SK expectations on loan availability, economic outlook, or inflation, masking geopolitical sensitivity (ECB Section 3.4).
-**No SK financing obstacle detail:** Lacks granular reasons (e.g., high costs, collateral) for the 6% SK firms facing loan obstacles (ECB Chart 10).
-**Absent SK trade credit/credit line costs:** No data on non-interest costs (fees, commissions) for trade credit or credit lines in Slovakia, unlike EA aggregates (ECB Q10).
-**No SK vulnerable firms trend:** Missing time series for the 7% of SK firms in financial distress (ECB Chart 12), critical for risk monitoring.
+**Missing SK composite financing gap:** No aggregated indicator combining bank loans, credit lines, trade credit, debt securities, and equity for Slovakia, limiting comparison with EA’s net 3% gap (ECB Chart 4).
+
+**No SK six-month trend data:** ECB reports six-month changes (e.g., interest rates +25pp net), but Slovak report lacks this, obscuring longer-term tightening patterns.
+
+**Missing SK sectoral breakdown:** ECB provides sector-specific expectations (e.g., construction’s higher input costs), but Slovak report omits sector splits, masking industry-specific pressures.
+
+**No SK inflation expectation horizons:** ECB includes 1/3/5-year inflation expectations (e.g., 1-year +0.4pp to 3.0%), but Slovak report lacks these, limiting forward-looking price pressure analysis.
+
+**Missing SK bank lending survey link:** ECB contextualises SAFE with bank lending survey (e.g., credit standards tightening), but Slovak report lacks this cross-reference for local bank behaviour.
+
+**No SK vulnerable firms metric:** ECB tracks financially vulnerable firms (4% EA-wide), but Slovak report omits this, hiding solvency risks.
+
+**Missing SK employment growth expectations:** ECB reports 1% average employment growth expectations, but Slovak report excludes this, obscuring labour market dynamics.
+
+**No SK daily response analysis:** ECB analyses pre/post-war Middle East responses (e.g., inflation expectations shift), but Slovak report lacks this granularity for local shocks.
+
+---
 
 ## Interpretation Notes
 
-- Compare SK’s 55.7% working capital financing vs. EA’s 39.5% to highlight liquidity dependence.
-- Contrast SK’s -26% turnover decline with EA’s +1% to stress domestic demand weakness.
-- Frame SK’s 8.31% input cost vs. 4.27% selling price gap as margin compression risk.
-- Note SK’s 59% upside inflation risk exceeds EA’s 55%, signaling persistent cost pressures.
-- Link SK’s +14.8pp credit line gap to liquidity strain despite stable bank loan conditions.
+- Compare SK’s 55.7% working capital financing (vs. EA 39.5%) to highlight liquidity reliance.
+- Contrast SK’s -4.0pp bank loan gap (availability > need) with EA’s +1.7pp to stress local resilience.
+- Frame SK’s 84% labour cost rises against EA’s 63% to underscore margin compression.
+- Note SK’s 59% upside inflation risk (vs. EA 55%) as a signal of persistent local price pressures.
+- Emphasise SK’s 26% turnover decline (vs. EA’s +1%) to spotlight revenue divergence.

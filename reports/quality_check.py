@@ -9,8 +9,10 @@ Usage:
   python reports/quality_check.py
 """
 
+import base64
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -55,6 +57,59 @@ Set verdict to "fail" if ANY dimension is below 6, or if you see obvious parsing
 """.strip()
 
 
+CHART_CHECK_PROMPT = """You are a chart quality inspector. Look at this matplotlib chart image and check for rendering problems.
+
+Flag any of the following as FAIL:
+- Axis tick labels showing Python object repr (e.g. "Name: survey_period_label, dtype: object", "Series(...)", "<pandas...")
+- Tick labels that are truncated or overlap each other badly
+- Axis labels cut off by the figure boundary
+- Chart is completely blank or has no data
+- Legend text that is cut off
+
+If none of the above are present, return PASS.
+
+Return JSON only: {"verdict": "pass" or "fail", "reason": "<one short sentence or empty string>"}"""
+
+
+def extract_charts(html: str) -> list[str]:
+    """Extract base64 PNG data URLs from embedded chart images."""
+    return re.findall(r'data:image/png;base64,([A-Za-z0-9+/=]+)', html)
+
+
+def check_charts(html: str, client: Mistral) -> tuple[str, str]:
+    """Run Pixtral vision check on up to 6 charts. Returns (verdict, reason)."""
+    chart_b64s = extract_charts(html)
+    if not chart_b64s:
+        return "pass", ""
+
+    failures = []
+    for i, b64 in enumerate(chart_b64s[:6]):
+        try:
+            resp = client.chat.complete(
+                model="pixtral-12b-2409",
+                max_tokens=100,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": CHART_CHECK_PROMPT},
+                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
+                    ],
+                }],
+            )
+            raw = resp.choices[0].message.content.strip()
+            if raw.startswith("```"):
+                raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+            result = json.loads(raw)
+            if result.get("verdict") == "fail":
+                failures.append(f"Chart {i+1}: {result.get('reason', 'rendering issue')}")
+        except Exception as e:
+            print(f"  Chart check {i+1} error: {e}")
+
+    if failures:
+        return "fail", "; ".join(failures)
+    return "pass", ""
+
+
 def extract_report_text(html: str) -> str:
     soup = BeautifulSoup(html, "lxml")
     parts = []
@@ -89,6 +144,19 @@ def main() -> None:
     print(f"Quality check: evaluating {len(report_text):,} chars of report text...")
 
     client = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
+
+    # Chart sanity check via Pixtral vision
+    print("Quality check: inspecting charts...")
+    chart_verdict, chart_reason = check_charts(html, client)
+    if chart_verdict == "fail":
+        print(f"  CHART FAIL: {chart_reason}")
+        scores = {"readability": 1, "substance": 1, "coherence": 1, "sign_convention": 1,
+                  "verdict": "fail", "reason": f"Chart rendering error: {chart_reason}"}
+        (Path(__file__).parent / "output" / "quality_scores.json").write_text(json.dumps(scores))
+        print("Quality gate FAILED — chart rendering issues detected")
+        sys.exit(1)
+    print(f"  Charts OK")
+
     resp = client.chat.complete(
         model="mistral-small-latest",
         max_tokens=400,

@@ -230,6 +230,7 @@ ALLOWED_MART_TABLES = {
     "mart_safe__business_situation", "mart_safe__outlook",
     "mart_safe__availability_expectations", "mart_safe__expectations",
     "mart_safe__survey_participants", "mart_safe__question_coverage",
+    "mart_safe__adhoc_responses",
     "int_safe__core_questions_long",
 }
 _WRITE_RE = re.compile(
@@ -610,11 +611,11 @@ def build_chart(sec: dict, df: pd.DataFrame, chart_type: str, best_panel) -> byt
     waves = sorted(df["wave_number"].unique())
     wave_labels = (
         df[["wave_number", "survey_period_label"]]
-        .drop_duplicates()
+        .drop_duplicates(subset=["wave_number"])
         .sort_values("wave_number")
         .set_index("wave_number")["survey_period_label"]
     )
-    xtick_labels = [wave_labels[w] for w in waves]
+    xtick_labels = [str(wave_labels[w]) for w in waves]
 
     handles, legend_labels = [], []
 
@@ -707,7 +708,7 @@ def _financing_gap_bars(df: pd.DataFrame) -> bytes:
     waves = sorted(sub_df["wave_number"].unique())
     wave_labels = (
         sub_df[["wave_number", "survey_period_label"]]
-        .drop_duplicates().sort_values("wave_number")
+        .drop_duplicates(subset=["wave_number"]).sort_values("wave_number")
         .set_index("wave_number")["survey_period_label"]
     )
 
@@ -759,7 +760,7 @@ def _financing_gap_bars(df: pd.DataFrame) -> bytes:
     ax.set_axisbelow(True)
     ax.axhline(0, color="#9aa5ad", linewidth=0.8, zorder=1)
     ax.set_xticks([i * group_gap for i in range(len(waves))])
-    ax.set_xticklabels([wave_labels[w] for w in waves], rotation=35, ha="right", fontsize=8)
+    ax.set_xticklabels([str(wave_labels[w]) for w in waves], rotation=35, ha="right", fontsize=8)
     ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%+.0f"))
     ax.set_ylabel("")
     ax.set_title(f"{label_val} — need vs availability (bars); financing gap (dashed)", fontsize=9)
@@ -1566,6 +1567,178 @@ def _is_continuous(df: pd.DataFrame) -> bool:
     return int(max_distinct) > 10
 
 
+_ADHOC_CHART_AGENT_SYSTEM = textwrap.dedent("""
+    You are a data analyst building a chart for an ECB SAFE adhoc survey question.
+
+    You have access to mart_safe__adhoc_responses (columns: wave_number, period_asked,
+    module_id, sub_item, country_code, response_raw, n_firms, n_firms_wtd, n_total_wtd, pct_wtd).
+    Always use fully-qualified names: main_safe.mart_safe__adhoc_responses.
+
+    Your task:
+    1. Call query_mart to fetch chart data for the given module. Filter to wave_number,
+       module_id, and country_code IN ('SK', 'EA').
+    2. For CONTINUOUS questions (open numeric 0-100 estimates): bucket into 10-unit intervals
+       using FLOOR(CAST(response_raw AS INTEGER) / 10) * 10 AS bucket, aggregate pct_wtd.
+    3. For CATEGORICAL questions: return response_raw codes with pct_wtd as-is.
+    4. After getting the data, return JSON only (no markdown):
+       {
+         "chart_type": "continuous" or "categorical",
+         "rows": [
+           {"country_code": "SK", "sub_item": "a", "response_raw": 10, "pct_wtd": 23.5},
+           ...
+         ]
+       }
+
+    Return only the final JSON — no explanation, no markdown fences.
+""").strip()
+
+
+def _build_adhoc_chart_agentic(
+    theme: dict,
+    wave_number: int,
+    schema: str,
+    con,
+    cost_tracker: dict,
+    client: anthropic.Anthropic,
+) -> pd.DataFrame | None:
+    """Use Claude + query_mart tool to fetch chart-ready data for the adhoc module.
+    Returns a DataFrame with columns country_code, sub_item, response_raw, pct_wtd,
+    or None on failure.
+    """
+    is_cont = _is_continuous(
+        con.execute(
+            f"SELECT country_code, sub_item, response_raw FROM {schema}.mart_safe__adhoc_responses "
+            f"WHERE wave_number={wave_number} AND module_id='{theme['module_id']}' "
+            f"AND country_code IN ('SK','EA')"
+        ).df()
+    )
+    question_ctx = ""
+    if theme.get("question_texts"):
+        question_ctx = "\n".join(f"  Sub-item {k}: {v}" for k, v in theme["question_texts"].items())
+
+    user_msg = (
+        f"Module: {theme['module_id']} — {theme['theme_label']}\n"
+        f"Wave: {wave_number}, Schema: {schema}\n"
+        f"Question type: {'CONTINUOUS (open numeric 0-100 estimates)' if is_cont else 'CATEGORICAL'}\n"
+        + (f"Question text:\n{question_ctx}\n" if question_ctx else "")
+        + "\nFetch the data and return the JSON chart spec."
+    )
+
+    messages = [{"role": "user", "content": user_msg}]
+    for turn in range(3):
+        response = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=800,
+            system=_ADHOC_CHART_AGENT_SYSTEM,
+            tools=[QUERY_MART_TOOL],
+            messages=messages,
+        )
+        _track_cost(cost_tracker, "claude-sonnet-4-6", response.usage)
+
+        if response.stop_reason != "tool_use":
+            # Parse final JSON chart spec
+            text_blocks = [b.text for b in response.content if hasattr(b, "text")]
+            raw = (text_blocks[-1] if text_blocks else "").strip()
+            if raw.startswith("```"):
+                raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+            try:
+                spec = json.loads(raw)
+                rows = spec.get("rows", [])
+                if not rows:
+                    return None
+                return pd.DataFrame(rows)
+            except Exception as e:
+                print(f"  Adhoc chart spec parse failed: {e}")
+                return None
+
+        messages.append({"role": "assistant", "content": response.content})
+        tool_results = []
+        for block in response.content:
+            if block.type != "tool_use":
+                continue
+            sql = block.input.get("sql", "")
+            print(f"    [adhoc chart] query_mart: {sql[:100]!r}")
+            result = _run_query_tool(sql, con, schema)
+            tool_results.append({
+                "type": "tool_result",
+                "tool_use_id": block.id,
+                "content": result,
+            })
+        messages.append({"role": "user", "content": tool_results})
+
+    return None
+
+
+def _build_adhoc_chart(df: pd.DataFrame, theme: dict) -> bytes | None:
+    """Render NBS-styled bar chart from adhoc chart DataFrame. Returns PNG bytes or None."""
+    if df is None or df.empty:
+        return None
+    try:
+        sub_items = sorted(df["sub_item"].unique())
+        n_panels = len(sub_items)
+        ncols = min(n_panels, 2)
+        nrows = (n_panels + 1) // 2
+        fig_w = 5.0 if n_panels == 1 else 4.5 * ncols
+        fig_h = 3.2 if n_panels == 1 else 3.2 * nrows
+
+        fig, axes = plt.subplots(nrows, ncols, figsize=(fig_w, fig_h))
+        axes_flat = [axes] if n_panels == 1 else list(np.array(axes).flatten())
+        fig.patch.set_facecolor("#f4f4f4")
+        fig.subplots_adjust(top=0.86, hspace=0.70, wspace=0.30, bottom=0.22)
+
+        countries = [c for c in ["SK", "EA"] if c in df["country_code"].values]
+        handles, legend_labels_list = [], []
+
+        for ax, sub in zip(axes_flat, sub_items):
+            sub_df = df[df["sub_item"] == sub]
+            x_vals = sorted(sub_df["response_raw"].unique())
+            x = np.arange(len(x_vals))
+            width = 0.35
+
+            for i, country in enumerate(countries):
+                cdf = sub_df[sub_df["country_code"] == country]
+                vals = [
+                    cdf[cdf["response_raw"] == v]["pct_wtd"].iloc[0]
+                    if not cdf[cdf["response_raw"] == v].empty else 0
+                    for v in x_vals
+                ]
+                offset = (i - len(countries) / 2 + 0.5) * width
+                bar = ax.bar(x + offset, vals, width,
+                             color=COUNTRY_COLORS.get(country, "#888"),
+                             edgecolor="none", zorder=2)
+                if sub == sub_items[0]:
+                    handles.append(bar)
+                    legend_labels_list.append(COUNTRIES.get(country, country))
+
+            ax.set_xticks(x)
+            # If values look like 10-unit buckets, label as ranges
+            if len(x_vals) > 5 and all(v % 10 == 0 for v in x_vals if isinstance(v, (int, float))):
+                ax.set_xticklabels([f"{int(v)}–{int(v)+9}%" for v in x_vals],
+                                   rotation=35, ha="right", fontsize=7.5)
+            else:
+                ax.set_xticklabels([str(v) for v in x_vals], fontsize=8)
+
+            title = (theme.get("question_texts") or {}).get(sub, sub or theme["theme_label"])
+            ax.set_title(str(title)[:55], fontsize=8, pad=5)
+            _nbs_style_ax(ax, "bar")
+
+        for ax in axes_flat[n_panels:]:
+            ax.set_visible(False)
+
+        fig.legend(handles, legend_labels_list, loc="lower center",
+                   bbox_to_anchor=(0.5, 0.01), ncol=len(countries),
+                   fontsize=9, frameon=False, handlelength=1.0)
+
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="#f4f4f4")
+        plt.close(fig)
+        buf.seek(0)
+        return buf.read()
+    except Exception as e:
+        print(f"  Adhoc chart render failed: {e}")
+        return None
+
+
 def build_adhoc_spotlight(
     theme: dict,
     wave_number: int,
@@ -1573,6 +1746,7 @@ def build_adhoc_spotlight(
     schema: str,
     mistral_client,
     cost_tracker: dict,
+    anthropic_client: anthropic.Anthropic | None = None,
 ) -> dict | None:
     """Generate the adhoc spotlight section. Returns a rendered-section dict or None."""
     sql_template = (SQL_DIR / "adhoc_spotlight.sql").read_text()
@@ -1650,12 +1824,25 @@ def build_adhoc_spotlight(
         print(f"  Adhoc spotlight generation failed: {e}")
         return None
 
+    # Build chart via agentic SQL query
+    chart_png = None
+    if anthropic_client is not None:
+        try:
+            chart_df = _build_adhoc_chart_agentic(
+                theme, wave_number, schema, con, cost_tracker, anthropic_client
+            )
+            chart_png = _build_adhoc_chart(chart_df, theme)
+            if chart_png:
+                print(f"  Adhoc chart built ({len(chart_df)} rows)")
+        except Exception as e:
+            print(f"  Adhoc chart skipped: {e}")
+
     return {
         "section_id": "adhoc_spotlight",
         "title": f"Special Focus: {theme['theme_label']}",
         "finding": result.get("finding", ""),
         "bullets": result.get("bullets", []),
-        "chart_png": None,
+        "chart_png": chart_png,
         "theme_label": theme["theme_label"],
     }
 
@@ -2162,6 +2349,13 @@ def build_html(
         spotlight_bullets = "\n".join(
             f"    <li>{b.lstrip('• ').strip()}</li>" for b in adhoc_s.get("bullets", [])
         )
+        adhoc_chart_html = ""
+        if adhoc_s.get("chart_png"):
+            chart_b64 = base64.b64encode(adhoc_s["chart_png"]).decode()
+            adhoc_chart_html = (
+                f'<img src="data:image/png;base64,{chart_b64}" '
+                f'alt="{theme_label} chart" style="max-width:100%;margin:10px 0 16px;">\n'
+            )
         spotlight_html = textwrap.dedent(f"""
             <details id="adhoc_spotlight" data-theme="{theme_label}" open>
               <summary>
@@ -2170,7 +2364,7 @@ def build_html(
               <section>
                 <h3>{adhoc_s['finding']}</h3>
                 <p class="section-subtitle">{adhoc_s['title']}</p>
-                <ul>
+            {adhoc_chart_html}    <ul>
             {spotlight_bullets}
                 </ul>
             {ecb_link_html}  </section>
@@ -2530,7 +2724,8 @@ def main() -> None:
     if adhoc_theme:
         print(f"  Adhoc theme detected: {adhoc_theme['theme_label']} ({adhoc_theme['module_id']})")
         adhoc_section = build_adhoc_spotlight(
-            adhoc_theme, latest_wave, tool_con, schema, mistral_client, cost_tracker
+            adhoc_theme, latest_wave, tool_con, schema, mistral_client, cost_tracker,
+            anthropic_client=anthropic_client,
         )
         if adhoc_section:
             rendered.append(adhoc_section)

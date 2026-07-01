@@ -1002,3 +1002,46 @@ models:
           Range 0–100.
       - name: response_rate_unwtd
         description: Unweighted response rate for reference. Range 0–100.
+
+  - name: mart_safe__adhoc_responses
+    description: >
+      Aggregated adhoc module responses (QA/QB series) at wave × country × module_id
+      × sub_item × response_raw level. Covers all waves where adhoc columns are populated.
+
+      Each row is one response code's weighted count and percentage share within the
+      country × module × sub_item denominator (all valid respondents for that combination).
+      Non-response codes excluded from denominator.
+
+      Use module_id to identify the topic block (e.g. 'qa4' = AI adoption, 'qa1' = digital
+      transformation, 'qa2' = green transition). Use period_asked to match to a wave label.
+      pct_wtd is the weighted share of valid respondents who gave that response code.
+
+    config:
+      tags: ["safe", "ecb", "survey", "mart", "adhoc"]
+
+    columns:
+      - name: wave_number
+        description: Survey wave number.
+      - name: period_asked
+        description: "Survey wave label in which this adhoc module was asked (e.g. '2024Q3')."
+      - name: module_id
+        description: >
+          Adhoc module identifier (e.g. 'qa4', 'qa1a', 'qb1'). Maps to QA/QB series
+          in the questionnaire. Use ref_safe__annex to look up question text per module.
+      - name: sub_item
+        description: Sub-item within the module (e.g. 'a', 'b', 'c').
+      - name: country_code
+        description: ISO 3166-1 alpha-2 country code.
+      - name: response_raw
+        description: Raw response code from the microdata (integer).
+      - name: n_firms
+        description: Unweighted count of firms giving this response code.
+      - name: n_firms_wtd
+        description: Weighted count using weight_common.
+      - name: n_total_wtd
+        description: Total weighted respondents for this wave × module × sub_item × country.
+      - name: pct_wtd
+        description: >
+          Weighted percentage: n_firms_wtd / n_total_wtd * 100.
+          Shares across all response_raw codes within a (wave, module_id, sub_item, country_code)
+          group sum to 100.

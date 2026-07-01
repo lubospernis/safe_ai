@@ -14,7 +14,6 @@ Claude: tick items off as they get built; don't add speculative sub-tasks.
 ## Next
 
 - [ ] SK translation quality — Mistral Small output is fluent but not analyst-grade; consider prompt refinement or few-shot examples
-- [ ] Adhoc questions — surface per-wave ad-hoc module questions as a collapsible special section
 - [ ] Ask for feedback on the exec summary (in-report form or email link)
 - [ ] SK newsletter — adapt `send_newsletter.py` to send the Slovak HTML variant
 - [ ] Mobile viewing — report CSS is desktop-only; add responsive breakpoints
@@ -23,6 +22,8 @@ Claude: tick items off as they get built; don't add speculative sub-tasks.
 - [ ] Wave comparison toggle — show current wave vs previous wave side-by-side in charts
 - [ ] EA breakdown by country — allow drilling into EA aggregate to see member-state spread
 - [ ] Surface open structural gaps from `ref_safe__gap_log` on a status page or in the gap report HTML
+- [ ] Add more data validation
+- [ ] Make sure that ref periods are really 3m
 
 ---
 
@@ -71,3 +72,4 @@ Claude: tick items off as they get built; don't add speculative sub-tasks.
 - [x] Wave memory — after each run, Mistral Small writes a 3–4 sentence notable-findings summary to `main_safe.ref_safe__wave_memory`; next run reads last 3 waves and injects as historical context into every section prompt
 - [x] Gap structural log — `gap_agent.py` prompt rewritten to produce `## Structural Gaps` (upserted to `ref_safe__gap_log`, accumulating across waves) and `## Interpretation Notes` (written to `interpretation_context.md`, injected into next run's prompts)
 - [x] ECB sharpener — post-generation Mistral Small pass sharpens bullets against the live ECB SAFE publication; EA comparisons and ECB framing incorporated where directly supported
+- [x] Adhoc questions — `mart_safe__adhoc_responses` dbt mart + `detect_adhoc_theme()` + `build_adhoc_spotlight()` + ECB focus article search (≥90% confidence gate); collapsible Special Focus section in HTML + spotlight block in newsletter email subject & body

@@ -1330,6 +1330,234 @@ def _write_wave_memory(
 
 
 # ---------------------------------------------------------------------------
+# 5b. Adhoc module spotlight
+# ---------------------------------------------------------------------------
+
+_MODULE_THEME_FALLBACK: dict[str, str] = {
+    "qa1": "Digital transformation",
+    "qa1a": "Digital transformation",
+    "qa1b": "Digital transformation",
+    "qa1c": "Digital transformation",
+    "qa2": "Green transition",
+    "qa2dec": "Green transition",
+    "qa2inc": "Green transition",
+    "qa3": "Supply chain resilience",
+    "qa4": "AI adoption",
+    "qa5": "Geopolitical risk",
+    "qa6": "Energy costs",
+    "qb1": "Special focus",
+    "qb2": "Special focus",
+}
+
+_ECB_FOCUS_INDEX = "https://www.ecb.europa.eu/press/economic-bulletin/focus/"
+
+
+def detect_adhoc_theme(wave_number: int, con, schema: str) -> dict | None:
+    """Return {module_id, theme_label, question_texts} for the wave's adhoc modules, or None."""
+    try:
+        rows = con.execute(f"""
+            SELECT module_id, sum(n_firms) as n
+            FROM {schema}.mart_safe__adhoc_responses
+            WHERE wave_number = {wave_number}
+            GROUP BY module_id
+            ORDER BY n DESC
+        """).fetchall()
+    except Exception:
+        return None
+    if not rows:
+        return None
+
+    # Pick the module with the most respondents
+    primary_module_id = rows[0][0]
+    theme_label = _MODULE_THEME_FALLBACK.get(primary_module_id, primary_module_id.upper())
+
+    # Try to get question text from annex table
+    question_texts: dict[str, str] = {}
+    try:
+        # Wave columns in annex are named safe_2024q1, safe_2023h1 etc.
+        # Fetch all column names first to find the rightmost populated wave column
+        annex_cols = con.execute(f"""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = '{schema}'
+              AND table_name = 'ref_safe__annex'
+              AND column_name LIKE 'safe_%'
+            ORDER BY column_name DESC
+        """).fetchall()
+        wave_cols = [r[0] for r in annex_cols]
+        if wave_cols:
+            coalesce_expr = ", ".join(wave_cols)
+            ann_rows = con.execute(f"""
+                SELECT question_item, COALESCE({coalesce_expr}) as question_text
+                FROM {schema}.ref_safe__annex
+                WHERE element = 'question'
+                  AND UPPER(question_item) LIKE UPPER('{primary_module_id}%')
+            """).fetchall()
+            for qitem, qtext in ann_rows:
+                if qtext:
+                    sub = qitem.lower().replace(primary_module_id.lower(), "").strip() or "a"
+                    question_texts[sub] = qtext
+    except Exception:
+        pass
+
+    return {
+        "module_id": primary_module_id,
+        "theme_label": theme_label,
+        "question_texts": question_texts,
+    }
+
+
+ADHOC_CONTENT_SYSTEM = textwrap.dedent("""
+    You are a concise economic analyst writing a "Special Focus" sidebar for a Slovakia
+    SAFE survey report. Your task: write exactly 2 short bullets (≤ 30 words each)
+    comparing Slovak firms (SK) to the Euro Area (EA) on the topic indicated.
+
+    RULES — READ CAREFULLY:
+    1. Only cite numbers that appear in the data table below. Do NOT invent or estimate.
+    2. If SK or EA data is missing, say so explicitly rather than omitting the comparison.
+    3. Bullets start with a bolded 3–5 word label: **Label:** sentence.
+    4. One sentence per bullet. Plain text only, no markdown headers or lists beyond bullets.
+    5. Return valid JSON only (no markdown fences):
+       {"finding": "One sentence headline ≤ 20 words", "bullets": ["bullet 1", "bullet 2"]}
+    6. The finding must name the theme and the most striking difference (SK vs EA).
+       If results are similar, say so.
+""").strip()
+
+
+def build_adhoc_spotlight(
+    theme: dict,
+    wave_number: int,
+    con,
+    schema: str,
+    mistral_client,
+    cost_tracker: dict,
+) -> dict | None:
+    """Generate the adhoc spotlight section. Returns a rendered-section dict or None."""
+    sql_template = (SQL_DIR / "adhoc_spotlight.sql").read_text()
+    sql = sql_template.format(
+        wave_number=wave_number,
+        module_id=theme["module_id"],
+        schema=schema,
+    )
+    try:
+        df = con.execute(sql).df()
+    except Exception as e:
+        print(f"  Adhoc spotlight SQL failed: {e}")
+        return None
+    if df.empty:
+        return None
+
+    # Build a compact pivot table for the prompt
+    pivot_lines = ["country_code | sub_item | response_raw | pct_wtd | n_firms"]
+    for _, row in df.iterrows():
+        pivot_lines.append(
+            f"{row['country_code']} | {row['sub_item']} | {row['response_raw']} "
+            f"| {row['pct_wtd']:.1f}% | {int(row['n_firms'])}"
+        )
+    data_table = "\n".join(pivot_lines)
+
+    question_ctx = ""
+    if theme.get("question_texts"):
+        question_ctx = "\n".join(
+            f"  Sub-item {k}: {v}" for k, v in theme["question_texts"].items()
+        )
+        question_ctx = f"\n\nQuestion text:\n{question_ctx}"
+
+    user_msg = (
+        f"Topic: {theme['theme_label']}{question_ctx}\n\n"
+        f"Data (wave {wave_number}, SK vs EA):\n{data_table}\n\n"
+        "Write the finding and 2 bullets as specified."
+    )
+
+    model = "mistral-small-latest"
+    try:
+        resp = mistral_client.chat.complete(
+            model=model,
+            max_tokens=200,
+            messages=[
+                {"role": "system", "content": ADHOC_CONTENT_SYSTEM},
+                {"role": "user", "content": user_msg},
+            ],
+        )
+        raw = resp.choices[0].message.content.strip()
+        if resp.usage:
+            _track_cost(cost_tracker, model,
+                        _Usage(resp.usage.prompt_tokens, resp.usage.completion_tokens))
+        result = json.loads(raw)
+    except Exception as e:
+        print(f"  Adhoc spotlight generation failed: {e}")
+        return None
+
+    return {
+        "section_id": "adhoc_spotlight",
+        "title": f"Special Focus: {theme['theme_label']}",
+        "finding": result.get("finding", ""),
+        "bullets": result.get("bullets", []),
+        "chart_png": None,
+        "theme_label": theme["theme_label"],
+    }
+
+
+def _find_ecb_focus_article(theme_label: str, mistral_client, cost_tracker: dict) -> str | None:
+    """Search ECB Economic Bulletin focus articles for a match. Returns URL or None."""
+    import urllib.request
+    try:
+        req = urllib.request.Request(_ECB_FOCUS_INDEX, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            html = r.read().decode("utf-8", errors="replace")
+    except Exception:
+        return None
+
+    # Extract (url, title) pairs from ECB focus article links
+    pairs = re.findall(
+        r'href="(https://www\.ecb\.europa\.eu/press/economic-bulletin/focus/\d{4}/html/[^"]+)"'
+        r'[^>]*>([^<]+)<',
+        html,
+    )
+    # Also try relative URLs
+    rel_pairs = re.findall(
+        r'href="(/press/economic-bulletin/focus/\d{4}/html/[^"]+)"[^>]*>([^<]+)<',
+        html,
+    )
+    for path, title in rel_pairs:
+        pairs.append(("https://www.ecb.europa.eu" + path, title))
+
+    if not pairs:
+        return None
+
+    listing = "\n".join(
+        f"{i + 1}. {title.strip()} — {url}" for i, (url, title) in enumerate(pairs[:20])
+    )
+    model = "mistral-small-latest"
+    try:
+        resp = mistral_client.chat.complete(
+            model=model,
+            max_tokens=80,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Theme: {theme_label}\n\nECB Economic Bulletin focus articles:\n{listing}\n\n"
+                    "Return JSON only: {\"index\": <1-based number or null if no match>, "
+                    "\"confidence\": <0.0-1.0>}\n"
+                    "Set confidence=0 if no article clearly matches the theme."
+                ),
+            }],
+        )
+        raw = resp.choices[0].message.content.strip()
+        if resp.usage:
+            _track_cost(cost_tracker, model,
+                        _Usage(resp.usage.prompt_tokens, resp.usage.completion_tokens))
+        result = json.loads(raw)
+        idx = result.get("index")
+        conf = float(result.get("confidence", 0))
+        if idx and conf >= 0.90:
+            url, _ = pairs[int(idx) - 1]
+            return url
+    except Exception:
+        pass
+    return None
+
+
+# ---------------------------------------------------------------------------
 # 6. Collapsible question annex
 # ---------------------------------------------------------------------------
 
@@ -1623,6 +1851,14 @@ def build_toc(rendered_sections: list[dict], ui: dict | None = None) -> str:
         )
         items.append(f"    <li><strong>{label}</strong>\n      <ul>\n{inner}\n      </ul>\n    </li>")
 
+    # Add adhoc spotlight link if present
+    adhoc_s = next((s for s in rendered_sections if s.get("section_id") == "adhoc_spotlight"), None)
+    if adhoc_s:
+        theme_label = adhoc_s.get("theme_label", "Special Focus")
+        items.append(
+            f'    <li><a href="#adhoc_spotlight">⭐ Special Focus: {theme_label}</a></li>'
+        )
+
     if not items:
         return ""
     rows = "\n".join(items)
@@ -1755,9 +1991,13 @@ def build_html(
     fn_missing  = _ui.get("footnote_missing",  MISSINGNESS_FOOTNOTE)
     fn_agentic  = _ui.get("footnote_agentic",  _AGENTIC_FOOTNOTE)
 
+    # Separate adhoc spotlight from regular sections
+    adhoc_s = next((s for s in rendered_sections if s.get("section_id") == "adhoc_spotlight"), None)
+    regular_sections = [s for s in rendered_sections if s.get("section_id") != "adhoc_spotlight"]
+
     # Group sections and emit h2 group headings between them
     by_group: dict[str, list[dict]] = {}
-    for s in rendered_sections:
+    for s in regular_sections:
         g = s.get("group", "Other")
         by_group.setdefault(g, []).append(s)
 
@@ -1768,6 +2008,10 @@ def build_html(
             continue
         sections_parts.append(f"<h2>{group_labels.get(group, group)}</h2>")
         for s in secs:
+            chart_html = (
+                f'  <img src="data:image/png;base64,{base64.b64encode(s["chart_png"]).decode()}" alt="{s["title"]} chart">'
+                if s.get("chart_png") else ""
+            )
             sections_parts.append(
                 SECTION_TMPL.format(
                     section_id=s["section_id"],
@@ -1779,9 +2023,38 @@ def build_html(
                         (fn_missing + "\n" if s.get("has_missingness_caveat") else "")
                     ),
                     agentic_footnote=fn_agentic if s.get("tool_calls", 0) > 0 else "",
-                    chart_b64=base64.b64encode(s["chart_png"]).decode(),
+                    chart_b64=base64.b64encode(s["chart_png"]).decode() if s.get("chart_png") else "",
                 )
             )
+
+    # Adhoc spotlight section (appended after all groups, collapsible)
+    if adhoc_s:
+        ecb_link_html = ""
+        if adhoc_s.get("ecb_article_url"):
+            ecb_link_html = (
+                f'  <p class="footnote">Read more: '
+                f'<a href="{adhoc_s["ecb_article_url"]}" target="_blank" rel="noopener">'
+                f'ECB Economic Bulletin focus article</a></p>\n'
+            )
+        theme_label = adhoc_s.get("theme_label", "Special Focus")
+        spotlight_bullets = "\n".join(
+            f"    <li>{b.lstrip('• ').strip()}</li>" for b in adhoc_s.get("bullets", [])
+        )
+        spotlight_html = textwrap.dedent(f"""
+            <details id="adhoc_spotlight" data-theme="{theme_label}" open>
+              <summary>
+                <h2>Special Focus: {theme_label}</h2>
+              </summary>
+              <section>
+                <h3>{adhoc_s['finding']}</h3>
+                <p class="section-subtitle">{adhoc_s['title']}</p>
+                <ul>
+            {spotlight_bullets}
+                </ul>
+            {ecb_link_html}  </section>
+            </details>
+        """).strip()
+        sections_parts.append(spotlight_html)
 
     # Build exec-flex: painting (1) + exec summary (3)
     exec_h2 = _ui.get("exec_h2", "Executive Summary")
@@ -1979,7 +2252,7 @@ def main() -> None:
     data = fetch_all(dev=args.dev)
     for sid, df in data.items():
         print(f"  {sid}: {len(df)} rows")
-    latest_wave = max(df["wave_number"].max() for df in data.values())
+    latest_wave = int(max(df["wave_number"].max() for df in data.values()))
     print(f"  Latest wave: {latest_wave}")
 
     cost_tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
@@ -2123,6 +2396,29 @@ def main() -> None:
         print("Writing wave memory...")
         _write_wave_memory(latest_wave, exec_bullets, rendered,
                            mistral_client, tool_con, cost_tracker)
+
+    # Adhoc spotlight — detect theme, generate section, find ECB article
+    adhoc_section: dict | None = None
+    adhoc_ecb_url: str | None = None
+    print("Checking for adhoc module spotlight...")
+    adhoc_theme = detect_adhoc_theme(latest_wave, tool_con, schema)
+    if adhoc_theme:
+        print(f"  Adhoc theme detected: {adhoc_theme['theme_label']} ({adhoc_theme['module_id']})")
+        adhoc_section = build_adhoc_spotlight(
+            adhoc_theme, latest_wave, tool_con, schema, mistral_client, cost_tracker
+        )
+        if adhoc_section:
+            rendered.append(adhoc_section)
+            print(f"  Adhoc spotlight generated: {adhoc_section['finding']}")
+            if not args.dev:
+                adhoc_ecb_url = _find_ecb_focus_article(
+                    adhoc_theme["theme_label"], mistral_client, cost_tracker
+                )
+                if adhoc_ecb_url:
+                    adhoc_section["ecb_article_url"] = adhoc_ecb_url
+                    print(f"  ECB focus article: {adhoc_ecb_url}")
+    else:
+        print("  No adhoc module data for this wave.")
 
     print("Building TOC...")
     toc_html = build_toc(rendered)

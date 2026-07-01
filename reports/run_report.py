@@ -26,6 +26,7 @@ import json
 import os
 import re
 import textwrap
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 from pathlib import Path
@@ -985,6 +986,7 @@ def get_section_content_agentic(
     mart_catalogue: str,
     cost_tracker: dict,
     question_texts: dict[str, str] | None = None,
+    client: anthropic.Anthropic | None = None,
 ) -> dict:
     """Return {"finding": str, "bullets": [str, ...]} via an agentic Sonnet loop.
 
@@ -1026,7 +1028,8 @@ def get_section_content_agentic(
     )
     initial_msg = q_text_block + section_header + base_data + (f"\n\nSME divergence check:\n{divergence}" if divergence else "")
 
-    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    if client is None:
+        client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     messages = [{"role": "user", "content": initial_msg}]
     tool_calls_made = 0
 
@@ -1671,38 +1674,72 @@ def main() -> None:
     question_texts = _load_annex_question_texts(ANNEX_CSV, con=tool_con)
     print(f"  Loaded {len(question_texts)} question texts from annex")
 
-    rendered = []
-    for sec in SECTIONS:
+    interesting_sections = [s for s in SECTIONS if interest[s["id"]]["interesting"]]
+    skipped = [s["id"] for s in SECTIONS if not interest[s["id"]]["interesting"]]
+    for sid in skipped:
+        print(f"  Skipping {sid} (not interesting)")
+
+    anthropic_client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    cost_lock = threading.Lock()
+
+    def _build_section(sec: dict) -> dict:
         sid = sec["id"]
         r = interest[sid]
-        if not r["interesting"]:
-            print(f"  Skipping {sid} (not interesting)")
-            continue
+        # Each thread needs its own DuckDB connection — connections aren't thread-safe
+        thread_con = _get_connection(args.dev)
+        try:
+            print(f"  Building chart for {sid}...")
+            if sid == "financing_gap":
+                chart_png = build_financing_gap_chart(sec, data[sid])
+            else:
+                chart_png = build_chart(sec, data[sid], r["chart_type"], r["best_panel"])
 
-        print(f"  Building chart for {sid}...")
-        if sid == "financing_gap":
-            chart_png = build_financing_gap_chart(sec, data[sid])
-        else:
-            chart_png = build_chart(sec, data[sid], r["chart_type"], r["best_panel"])
+            # Thread-local cost accumulator — merged under lock after the call
+            local_tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
+            print(f"  Generating finding + bullets for {sid}...")
+            content = get_section_content_agentic(
+                sec, data[sid], thread_con, schema, mart_catalogue,
+                local_tracker, question_texts, client=anthropic_client,
+            )
+            with cost_lock:
+                cost_tracker["input_tokens"] += local_tracker["input_tokens"]
+                cost_tracker["output_tokens"] += local_tracker["output_tokens"]
+                cost_tracker["usd"] += local_tracker["usd"]
+                cost_tracker["calls"] += local_tracker["calls"]
+                for model, m in local_tracker["by_model"].items():
+                    bm = cost_tracker["by_model"].setdefault(model, {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0})
+                    for k in bm:
+                        bm[k] += m.get(k, 0)
 
-        print(f"  Generating finding + bullets for {sid}...")
-        content = get_section_content_agentic(sec, data[sid], tool_con, schema, mart_catalogue, cost_tracker, question_texts)
-        print(f"    finding: {content['finding']}")
-        for b in content["bullets"]:
-            print(f"    {b}")
+            print(f"    [{sid}] finding: {content['finding']}")
+            for b in content["bullets"]:
+                print(f"    [{sid}] {b}")
 
-        rendered.append({
-            "section_id": sid,
-            "title": sec["title"],
-            "group": sec.get("group", "Other"),
-            "finding": content["finding"],
-            "bullets": content["bullets"],
-            "chart_png": chart_png,
-            "sign_note": sec["sign_note"],
-            "routed": sec.get("routed", False),
-            "has_missingness_caveat": sec.get("has_missingness_caveat", False),
-            "tool_calls": content.get("tool_calls", 0),
-        })
+            return {
+                "section_id": sid,
+                "title": sec["title"],
+                "group": sec.get("group", "Other"),
+                "finding": content["finding"],
+                "bullets": content["bullets"],
+                "chart_png": chart_png,
+                "sign_note": sec["sign_note"],
+                "routed": sec.get("routed", False),
+                "has_missingness_caveat": sec.get("has_missingness_caveat", False),
+                "tool_calls": content.get("tool_calls", 0),
+            }
+        finally:
+            thread_con.close()
+
+    print(f"Generating {len(interesting_sections)} sections (parallel)...")
+    rendered_map: dict[str, dict] = {}
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = {pool.submit(_build_section, sec): sec["id"] for sec in interesting_sections}
+        for future in as_completed(futures):
+            result = future.result()
+            rendered_map[result["section_id"]] = result
+
+    # Restore original SECTIONS order
+    rendered = [rendered_map[s["id"]] for s in SECTIONS if s["id"] in rendered_map]
 
     print("Generating executive summary...")
     exec_bullets = get_exec_summary(rendered, cost_tracker) if rendered else []

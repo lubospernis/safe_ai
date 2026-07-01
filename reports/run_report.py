@@ -1290,7 +1290,8 @@ def get_exec_summary(
     lines = ["Section findings:\n"]
     for s in rendered_sections:
         lines.append(f"## {s['title']} [section_id: {s['section_id']}]")
-        lines.append(f"Sign convention: {s['sign_note']}")
+        if s.get("sign_note"):
+            lines.append(f"Sign convention: {s['sign_note']}")
         for b in s["bullets"]:
             lines.append(f"  {b}")
         lines.append("")

@@ -1,0 +1,48 @@
+name: SAFE — Send Newsletter
+
+on:
+  # Triggers automatically when the report generation workflow finishes successfully
+  workflow_run:
+    workflows: ["SAFE — Generate Report"]
+    types:
+      - completed
+
+  # Manual trigger — useful for resends or testing subscriber list changes
+  workflow_dispatch:
+
+jobs:
+  newsletter:
+    name: Send newsletter digest
+    runs-on: ubuntu-latest
+
+    # Only run if upstream succeeded (or if manually triggered)
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Checkout repository (main branch — for script and subscribers)
+        uses: actions/checkout@v4
+
+      - name: Checkout gh-pages for report HTML
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+
+      - name: Copy report HTML into expected path
+        run: |
+          mkdir -p reports/output
+          cp gh-pages/index.html reports/output/report_latest.html
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Send newsletter
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: python reports/send_newsletter.py

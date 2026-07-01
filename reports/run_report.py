@@ -42,6 +42,19 @@ import numpy as np
 import pandas as pd
 
 matplotlib.use("Agg")
+
+# NBS brand: Arial everywhere in charts
+matplotlib.rcParams.update({
+    "font.family": "Arial",
+    "font.size": 9,
+    "axes.labelsize": 8,
+    "xtick.labelsize": 9,
+    "ytick.labelsize": 9,
+    "legend.fontsize": 9,
+    "figure.facecolor": "#f4f4f4",
+    "axes.facecolor": "#f4f4f4",
+})
+
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 from config import SECTIONS  # noqa: E402  (local import after matplotlib setup)
@@ -544,27 +557,26 @@ def _select_panels(sec: dict, df: pd.DataFrame, best_panel) -> list:
 
 def _nbs_style_ax(ax, chart_type: str, waves=None, xtick_labels=None) -> None:
     """Apply NBS visual style to a single axes."""
-    ax.set_facecolor("#ffffff")
-    ax.spines[["top", "right"]].set_visible(False)
-    ax.spines["left"].set_color("#D2DBE0")
-    ax.spines["bottom"].set_color("#D2DBE0")
-    ax.tick_params(colors=NBS_TEXT, labelsize=8)
-    ax.yaxis.label.set_color("#6a6a6a")
-    ax.yaxis.label.set_fontsize(7)
+    ax.set_facecolor("#f4f4f4")
+    # All spines off — zero line and horizontal grid carry the reference
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    # No tick marks, only labels
+    ax.tick_params(which="both", length=0, colors=NBS_TEXT)
     ax.title.set_fontsize(10)
     ax.title.set_color(NBS_TEXT)
-    ax.title.set_fontfamily("Arial")
+    # Horizontal grid only — solid, very light
+    ax.yaxis.grid(True, color="#D2DBE0", linewidth=0.6, linestyle="-", zorder=0)
+    ax.xaxis.grid(False)
+    ax.set_axisbelow(True)
+    # Zero baseline — thin dark line
+    ax.axhline(0, color="#9aa5ad", linewidth=0.8, zorder=1)
     if chart_type == "line" and waves is not None:
         ax.set_xticks(waves)
-        ax.set_xticklabels(xtick_labels or [], rotation=40, ha="right", fontsize=7)
+        ax.set_xticklabels(xtick_labels or [], rotation=35, ha="right", fontsize=8)
         ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%+.0f"))
-        ax.axhline(0, color="#D2DBE0", linewidth=0.9, linestyle="-", zorder=0)
-        ax.yaxis.grid(True, color="#D2DBE0", linewidth=0.5, linestyle="--", zorder=0)
-        ax.set_axisbelow(True)
     else:
         ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%.1f"))
-        ax.yaxis.grid(True, color="#D2DBE0", linewidth=0.5, linestyle="--", zorder=0)
-        ax.set_axisbelow(True)
 
 
 def build_chart(sec: dict, df: pd.DataFrame, chart_type: str, best_panel) -> bytes:
@@ -578,11 +590,11 @@ def build_chart(sec: dict, df: pd.DataFrame, chart_type: str, best_panel) -> byt
     ncols = min(n_panels, 2)
     nrows = (n_panels + 1) // 2
 
-    # Compact sizing: single-panel charts are smaller; multi-panel stay wider
+    # Sizing: single-panel compact; multi-panel capped at 4.5" wide per column
     if n_panels == 1:
-        fig_w, fig_h = 5.5, 3.5
+        fig_w, fig_h = 5.0, 3.2
     else:
-        fig_w, fig_h = 5.5 * ncols, 3.5 * nrows
+        fig_w, fig_h = 4.5 * ncols, 3.2 * nrows
 
     # Share y-axis for bar charts so adjacent panels are directly comparable
     sharey_mode = "row" if (chart_type == "bar" and n_panels > 1) else False
@@ -592,8 +604,8 @@ def build_chart(sec: dict, df: pd.DataFrame, chart_type: str, best_panel) -> byt
     else:
         axes_flat = list(np.array(axes).flatten())
 
-    fig.subplots_adjust(top=0.84, hspace=0.65, wspace=0.28, bottom=0.20)
-    fig.patch.set_facecolor("#ffffff")
+    fig.subplots_adjust(top=0.86, hspace=0.70, wspace=0.30, bottom=0.22)
+    fig.patch.set_facecolor("#f4f4f4")
 
     waves = sorted(df["wave_number"].unique())
     wave_labels = (
@@ -623,7 +635,7 @@ def build_chart(sec: dict, df: pd.DataFrame, chart_type: str, best_panel) -> byt
                 cdf = bar_df[bar_df[series_col] == country]
                 val = cdf[value_col].iloc[0] if not cdf.empty else 0
                 bar = ax.bar(x[i], val, width, color=COUNTRY_COLORS[country],
-                             edgecolor="white", linewidth=0.5, zorder=2)
+                             edgecolor="none", zorder=2)
                 if panel_val == panels[0]:
                     handles.append(bar)
                     legend_labels.append(COUNTRIES[country])
@@ -649,8 +661,8 @@ def build_chart(sec: dict, df: pd.DataFrame, chart_type: str, best_panel) -> byt
                     handles.append(line)
                     legend_labels.append(COUNTRIES[country])
 
-        ax.set_title(label_val, fontsize=9, pad=5)
-        ax.set_ylabel(value_col.replace("_", " "), fontsize=7, color="#6a6a6a")
+        ax.set_title(label_val, fontsize=9, pad=6)
+        ax.set_ylabel("")
         _nbs_style_ax(ax, chart_type,
                       waves=(waves if chart_type == "line" else None),
                       xtick_labels=(xtick_labels if chart_type == "line" else None))
@@ -672,7 +684,7 @@ def build_chart(sec: dict, df: pd.DataFrame, chart_type: str, best_panel) -> byt
     )
 
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="#ffffff")
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="#f4f4f4")
     plt.close(fig)
     buf.seek(0)
     return buf.read()
@@ -699,8 +711,8 @@ def _financing_gap_bars(df: pd.DataFrame) -> bytes:
         .set_index("wave_number")["survey_period_label"]
     )
 
-    fig, ax = plt.subplots(1, 1, figsize=(8, 4.0))
-    fig.patch.set_facecolor("#ffffff")
+    fig, ax = plt.subplots(1, 1, figsize=(7.5, 3.8))
+    fig.patch.set_facecolor("#f4f4f4")
     fig.subplots_adjust(top=0.82, bottom=0.26, left=0.09, right=0.97)
 
     n_countries = len(COUNTRY_ORDER)
@@ -738,24 +750,24 @@ def _financing_gap_bars(df: pd.DataFrame) -> bytes:
         line_handles.append(line)
         line_labels_leg.append(f"{COUNTRIES[country]} — gap")
 
-    ax.axhline(0, color="#D2DBE0", linewidth=0.9, linestyle="-", zorder=1)
-    ax.yaxis.grid(True, color="#D2DBE0", linewidth=0.5, linestyle="--", zorder=0)
+    ax.set_facecolor("#f4f4f4")
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    ax.tick_params(which="both", length=0, colors=NBS_TEXT)
+    ax.yaxis.grid(True, color="#D2DBE0", linewidth=0.6, linestyle="-", zorder=0)
+    ax.xaxis.grid(False)
     ax.set_axisbelow(True)
+    ax.axhline(0, color="#9aa5ad", linewidth=0.8, zorder=1)
     ax.set_xticks([i * group_gap for i in range(len(waves))])
     ax.set_xticklabels([wave_labels[w] for w in waves], rotation=35, ha="right", fontsize=8)
     ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%+.0f"))
-    ax.tick_params(axis="y", labelsize=8)
-    ax.set_ylabel("Net balance (pp)", fontsize=7, color="#6a6a6a")
+    ax.set_ylabel("")
     ax.set_title(f"{label_val} — need vs availability (bars); financing gap (dashed)", fontsize=9)
-    ax.spines[["top", "right"]].set_visible(False)
-    ax.spines["left"].set_color("#D2DBE0")
-    ax.spines["bottom"].set_color("#D2DBE0")
-    ax.set_facecolor("#ffffff")
     fig.legend(bar_handles + line_handles, bar_labels_leg + line_labels_leg,
                loc="lower center", bbox_to_anchor=(0.5, 0.0), ncol=3, fontsize=7.5, frameon=False)
 
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="#ffffff")
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="#f4f4f4")
     plt.close(fig)
     buf.seek(0)
     return buf.read()
@@ -792,27 +804,27 @@ def _financing_gap_sk_instruments(df_sk: pd.DataFrame) -> bytes:
             else INSTRUMENT_LABELS.get(sub_item, sub_item)
         )
 
-    fig, ax = plt.subplots(1, 1, figsize=(6, 3.5))
-    fig.patch.set_facecolor("#ffffff")
-    fig.subplots_adjust(top=0.84, bottom=0.30, left=0.10, right=0.97)
+    fig, ax = plt.subplots(1, 1, figsize=(5.5, 3.2))
+    fig.patch.set_facecolor("#f4f4f4")
+    fig.subplots_adjust(top=0.86, bottom=0.30, left=0.10, right=0.97)
 
-    bars = ax.bar(x, vals, 0.55, color=colors, edgecolor="white", linewidth=0.5, zorder=2)
+    ax.bar(x, vals, 0.55, color=colors, edgecolor="none", zorder=2)
     ax.set_xticks(x)
-    ax.set_xticklabels(labels, fontsize=7.5, rotation=25, ha="right")
-    ax.axhline(0, color="#D2DBE0", linewidth=0.9, linestyle="-", zorder=1)
-    ax.yaxis.grid(True, color="#D2DBE0", linewidth=0.5, linestyle="--", zorder=0)
+    ax.set_xticklabels(labels, fontsize=8, rotation=25, ha="right")
+    ax.set_facecolor("#f4f4f4")
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    ax.tick_params(which="both", length=0, colors=NBS_TEXT)
+    ax.yaxis.grid(True, color="#D2DBE0", linewidth=0.6, linestyle="-", zorder=0)
+    ax.xaxis.grid(False)
     ax.set_axisbelow(True)
+    ax.axhline(0, color="#9aa5ad", linewidth=0.8, zorder=1)
     ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%+.0f"))
-    ax.tick_params(axis="y", labelsize=8)
-    ax.set_ylabel("Financing gap (pp)", fontsize=7, color="#6a6a6a")
+    ax.set_ylabel("")
     ax.set_title("Slovakia — financing gap by instrument (latest wave)", fontsize=9)
-    ax.spines[["top", "right"]].set_visible(False)
-    ax.spines["left"].set_color("#D2DBE0")
-    ax.spines["bottom"].set_color("#D2DBE0")
-    ax.set_facecolor("#ffffff")
 
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="#ffffff")
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="#f4f4f4")
     plt.close(fig)
     buf.seek(0)
     return buf.read()

@@ -18,3 +18,4 @@ resend>=2.0,<3
 tabulate>=0.9,<1
 mistralai>=1.0,<2
 python-dotenv>=1.0,<2
+openpyxl>=3.1,<4

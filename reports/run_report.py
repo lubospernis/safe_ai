@@ -1169,9 +1169,64 @@ def _clean_question_text(text: str) -> str:
     return text.strip()
 
 
-def _load_annex_question_texts(annex_csv_path: Path) -> dict[str, str]:
-    """Return {q_id_lower: cleaned_question_text} for all questions in annex.csv."""
-    texts: dict[str, str] = {}
+def _load_annex_question_texts(
+    annex_csv_path: Path, con=None
+) -> dict[str, str]:
+    """Return {q_id_lower: cleaned_question_text} for all questions.
+
+    Tries MotherDuck table main_safe.ref_safe__annex first (prod).
+    Falls back to local annex.csv (dev / offline).
+    """
+    # --- MotherDuck path ---
+    if con is not None:
+        try:
+            cols_res = con.execute(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema = 'main_safe' AND table_name = 'ref_safe__annex' "
+                "ORDER BY ordinal_position"
+            ).fetchall()
+            if cols_res:
+                all_cols = [r[0] for r in cols_res]
+                # Wave columns: everything after 'notes' (col index 6 → sanitised 'notes')
+                # The header row maps: col[1]=element, col[2]=question_item, col[6]=notes,
+                # col[7+] = wave columns (SAFE_2024Q1 → safe_2024q1, etc.)
+                try:
+                    notes_idx = all_cols.index("notes")
+                except ValueError:
+                    notes_idx = 6
+                wave_cols = all_cols[notes_idx + 1:]  # newest is first (leftmost in XLSX)
+                element_col = all_cols[1] if len(all_cols) > 1 else "element"
+                q_item_col = all_cols[2] if len(all_cols) > 2 else "question_item"
+
+                wave_sel = ", ".join(f'"{c}"' for c in wave_cols)
+                rows_md = con.execute(
+                    f'SELECT "{q_item_col}", {wave_sel} '
+                    f'FROM main_safe.ref_safe__annex '
+                    f"WHERE \"{element_col}\" = 'question'"
+                ).fetchall()
+
+                texts: dict[str, str] = {}
+                for row in rows_md:
+                    q_id = (row[0] or "").strip().lower()
+                    if not q_id:
+                        continue
+                    # Take the first (most recent) non-empty wave column value
+                    text = ""
+                    for val in row[1:]:
+                        if val and val.strip():
+                            text = val.strip()
+                            break
+                    if text and q_id not in texts:
+                        texts[q_id] = _clean_question_text(text)
+
+                if texts:
+                    print(f"  Loaded {len(texts)} question texts from MotherDuck annex table")
+                    return texts
+        except Exception as exc:
+            print(f"  Warning: MotherDuck annex table unavailable ({exc}) — falling back to CSV")
+
+    # --- Local CSV fallback ---
+    texts = {}
     try:
         with open(annex_csv_path, newline="", encoding="utf-8-sig") as f:
             reader = csv.reader(f)
@@ -1576,7 +1631,7 @@ def main() -> None:
     mart_catalogue = build_mart_catalogue(tool_con, schema)
 
     print("Loading annex question texts...")
-    question_texts = _load_annex_question_texts(ANNEX_CSV)
+    question_texts = _load_annex_question_texts(ANNEX_CSV, con=tool_con)
     print(f"  Loaded {len(question_texts)} question texts from annex")
 
     rendered = []

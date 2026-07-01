@@ -65,3 +65,37 @@ jobs:
           # Required by MotherDuck's internal HTTPS component
           HOME: /home/runner
         run: python pipeline.py
+
+      - name: Fetch and store ECB annex
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+          HOME: /home/runner
+        run: python fetch_annex.py
+
+      - name: Open issue if annex fetch failed
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[AUTO] ECB annex fetch failed — ${new Date().toISOString().slice(0,10)}`,
+              body: [
+                '## Annex fetch failed',
+                '',
+                'The ECB SAFE annex could not be downloaded or parsed.',
+                '',
+                `**URL**: \`https://www.ecb.europa.eu/stats/pdf/surveys/sme/Annex_3.en.xlsx\``,
+                '',
+                `**Workflow run**: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                '',
+                '**What to check:**',
+                '- Is the URL still valid? (ECB sometimes changes paths between waves)',
+                '- Has the sheet name in the XLSX changed from "Questionnaire"?',
+                '- Did the column structure change?',
+                '',
+                'If the URL changed, update `ANNEX_URL` in `fetch_annex.py` and close this issue.',
+              ].join('\n'),
+              labels: ['bug', 'data'],
+            })

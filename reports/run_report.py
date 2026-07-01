@@ -1352,8 +1352,12 @@ _MODULE_THEME_FALLBACK: dict[str, str] = {
 _ECB_FOCUS_INDEX = "https://www.ecb.europa.eu/press/economic-bulletin/focus/"
 
 
-def detect_adhoc_theme(wave_number: int, con, schema: str) -> dict | None:
-    """Return {module_id, theme_label, question_texts} for the wave's adhoc modules, or None."""
+def detect_adhoc_theme(wave_number: int, con, schema: str, mistral_client=None, cost_tracker: dict | None = None) -> dict | None:
+    """Return {module_id, theme_label, question_texts} for the wave's adhoc modules, or None.
+
+    Theme label is derived from annex question text via Mistral Small (2–3 word phrase).
+    Falls back to _MODULE_THEME_FALLBACK if Mistral is unavailable or annex has no text.
+    """
     try:
         rows = con.execute(f"""
             SELECT module_id, sum(n_firms) as n
@@ -1369,13 +1373,10 @@ def detect_adhoc_theme(wave_number: int, con, schema: str) -> dict | None:
 
     # Pick the module with the most respondents
     primary_module_id = rows[0][0]
-    theme_label = _MODULE_THEME_FALLBACK.get(primary_module_id, primary_module_id.upper())
 
-    # Try to get question text from annex table
+    # Fetch question text from annex table
     question_texts: dict[str, str] = {}
     try:
-        # Wave columns in annex are named safe_2024q1, safe_2023h1 etc.
-        # Fetch all column names first to find the rightmost populated wave column
         annex_cols = con.execute(f"""
             SELECT column_name FROM information_schema.columns
             WHERE table_schema = '{schema}'
@@ -1398,6 +1399,34 @@ def detect_adhoc_theme(wave_number: int, con, schema: str) -> dict | None:
                     question_texts[sub] = qtext
     except Exception:
         pass
+
+    # Derive theme label from annex text via Mistral Small
+    theme_label = _MODULE_THEME_FALLBACK.get(primary_module_id, primary_module_id.upper())
+    if mistral_client and question_texts:
+        sample_texts = "\n".join(f"- {t}" for t in list(question_texts.values())[:4])
+        model = "mistral-small-latest"
+        try:
+            resp = mistral_client.chat.complete(
+                model=model,
+                max_tokens=20,
+                messages=[{
+                    "role": "user",
+                    "content": (
+                        f"These are ECB SAFE survey questions from module '{primary_module_id}':\n"
+                        f"{sample_texts}\n\n"
+                        "In 2–4 words, what is the single overarching topic of these questions? "
+                        "Reply with the topic only, title case, no punctuation."
+                    ),
+                }],
+            )
+            label = resp.choices[0].message.content.strip().rstrip(".")
+            if label:
+                theme_label = label
+            if resp.usage and cost_tracker is not None:
+                _track_cost(cost_tracker, model,
+                            _Usage(resp.usage.prompt_tokens, resp.usage.completion_tokens))
+        except Exception:
+            pass  # keep fallback label
 
     return {
         "module_id": primary_module_id,
@@ -2401,7 +2430,7 @@ def main() -> None:
     adhoc_section: dict | None = None
     adhoc_ecb_url: str | None = None
     print("Checking for adhoc module spotlight...")
-    adhoc_theme = detect_adhoc_theme(latest_wave, tool_con, schema)
+    adhoc_theme = detect_adhoc_theme(latest_wave, tool_con, schema, mistral_client, cost_tracker)
     if adhoc_theme:
         print(f"  Adhoc theme detected: {adhoc_theme['theme_label']} ({adhoc_theme['module_id']})")
         adhoc_section = build_adhoc_spotlight(

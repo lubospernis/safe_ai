@@ -2144,7 +2144,7 @@ def build_html(
         if not text:
             continue
         # Convert **bold** markdown to <strong> HTML
-        text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
+        text = re.sub(r'\*\*(.+?)\*\*\s*', lambda m: f'<strong>{m.group(1)}</strong>' + (' ' if m.group(1).endswith(':') else ''), text)
         if sid:
             exec_bullet_items.append(f'    <li><a href="#{sid}">{text}</a></li>')
         else:

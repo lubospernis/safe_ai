@@ -24,7 +24,13 @@ OUTPUT_DIR = Path(__file__).parent / "output"
 
 def main() -> None:
     cost = json.loads((OUTPUT_DIR / "cost_tracker.json").read_text())
-    quality = json.loads((OUTPUT_DIR / "quality_scores.json").read_text())
+    quality_path = OUTPUT_DIR / "quality_scores.json"
+    quality = (
+        json.loads(quality_path.read_text())
+        if quality_path.exists()
+        else {"readability": None, "substance": None, "coherence": None,
+              "sign_convention": None, "verdict": "unknown", "reason": "quality_scores.json missing"}
+    )
 
     wave = cost["wave_number"]
     sha = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"]).decode().strip()

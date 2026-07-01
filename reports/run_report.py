@@ -72,10 +72,9 @@ PROD_SCHEMA = "main_safe"
 # ---------------------------------------------------------------------------
 
 _PRICE = {
-    "claude-sonnet-4-6":        {"input": 3.00,  "output": 15.00},
-    "claude-haiku-4-5-20251001": {"input": 1.00,  "output": 5.00},
-    "mistral-small-latest":     {"input": 0.10,  "output": 0.30},
-    "mistral-medium-latest":    {"input": 0.40,  "output": 2.00},
+    "claude-sonnet-4-6":     {"input": 3.00,  "output": 15.00},
+    "mistral-small-latest":  {"input": 0.10,  "output": 0.30},
+    "mistral-medium-latest": {"input": 0.40,  "output": 2.00},
 }
 
 
@@ -1286,10 +1285,9 @@ def _write_wave_memory(
     wave: int,
     exec_bullets: list[dict],
     rendered: list[dict],
-    client: anthropic.Anthropic,
+    mistral_client,
     con,
     cost_tracker: dict,
-    lock: threading.Lock,
 ) -> None:
     """Write a 3–4 sentence summary of this wave's notable findings to MotherDuck."""
     bullet_text = " | ".join(b["bullet"] for b in exec_bullets if b.get("bullet"))
@@ -1301,15 +1299,19 @@ def _write_wave_memory(
         "for a reader who will see this as historical context in a FUTURE wave's report. "
         "Past tense. Include 2–3 specific numbers. Plain text only, no markdown."
     )
+    model = "mistral-small-latest"
     try:
-        resp = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+        resp = mistral_client.chat.complete(
+            model=model,
             max_tokens=200,
             messages=[{"role": "user", "content": prompt}],
         )
-        summary = resp.content[0].text.strip()
-        with lock:
-            _track_cost(cost_tracker, "claude-haiku-4-5-20251001", resp.usage)
+        summary = resp.choices[0].message.content.strip()
+        # Strip any accidental markdown formatting
+        summary = re.sub(r"\*+", "", summary).strip()
+        if resp.usage:
+            _track_cost(cost_tracker, model,
+                        _Usage(resp.usage.prompt_tokens, resp.usage.completion_tokens))
         con.execute("""
             CREATE TABLE IF NOT EXISTS main_safe.ref_safe__wave_memory (
                 wave_number INTEGER PRIMARY KEY,
@@ -1320,7 +1322,7 @@ def _write_wave_memory(
         """)
         con.execute(
             "INSERT OR REPLACE INTO main_safe.ref_safe__wave_memory VALUES (?,?,?,?)",
-            [wave, date.today(), summary, "claude-haiku-4-5-20251001"],
+            [wave, date.today(), summary, model],
         )
         print(f"  Wave memory written for wave {wave}")
     except Exception as e:
@@ -2120,7 +2122,7 @@ def main() -> None:
     if not args.dev and exec_bullets and rendered:
         print("Writing wave memory...")
         _write_wave_memory(latest_wave, exec_bullets, rendered,
-                           anthropic_client, tool_con, cost_tracker, cost_lock)
+                           mistral_client, tool_con, cost_tracker)
 
     print("Building TOC...")
     toc_html = build_toc(rendered)

@@ -13,18 +13,16 @@ Claude: tick items off as they get built; don't add speculative sub-tasks.
 
 ## Next
 
-- [ ] Include hyperlinks from exec summary bullets to the relevant section
 - [ ] SK translation quality — Mistral Small output is fluent but not analyst-grade; consider prompt refinement or few-shot examples
 - [ ] Adhoc questions — surface per-wave ad-hoc module questions as a collapsible special section
-- [ ] Gap report — improve clarity and coverage of the gap analysis output
 - [ ] Ask for feedback on the exec summary (in-report form or email link)
 - [ ] SK newsletter — adapt `send_newsletter.py` to send the Slovak HTML variant
 - [ ] Mobile viewing — report CSS is desktop-only; add responsive breakpoints
 - [ ] Auto subscription through Vercel + Supabase
-- [ ] Adhoc questions queries fully automatic (wave-adaptive SQL)?
 - [ ] Country selector — let the user pick a focal country in config (currently hard-coded to SK)
 - [ ] Wave comparison toggle — show current wave vs previous wave side-by-side in charts
 - [ ] EA breakdown by country — allow drilling into EA aggregate to see member-state spread
+- [ ] Surface open structural gaps from `ref_safe__gap_log` on a status page or in the gap report HTML
 
 ---
 
@@ -63,3 +61,13 @@ Claude: tick items off as they get built; don't add speculative sub-tasks.
 - [x] Annex auto-fetch — `fetch_annex.py` downloads the ECB annex XLSX into `main_safe.ref_safe__annex` on each pipeline run; CI opens a GitHub Issue if the fetch fails
 - [x] Removed Q26 outlook section (data too sparse at country level)
 - [x] Removed loan applications section (Q7A/Q7B) — re-added later as `loan_applications`
+- [x] Parallelised section generation — `ThreadPoolExecutor(max_workers=4)`, thread-local DuckDB connections, thread-safe cost tracking
+- [x] Two-pass exec summary — cross-section analyst (Mistral, 200 tok) + editor writing JSON `[{bullet, section_id}]` (Sonnet)
+- [x] "So what?" pass — Mistral Small adds implication clauses to purely-descriptive section bullets
+- [x] Exec summary bullets hyperlink to source sections in HTML
+- [x] Exec summary format: max 4 bullets, `**Bold label:**` + numbers encouraged
+- [x] Newsletter separated into standalone `send_newsletter.yml` workflow (triggers after report generation or manual dispatch)
+- [x] Run manifest — `quality_check.py` writes `quality_scores.json`; `run_report.py` writes `cost_tracker.json`; `write_run_manifest.py` logs cost, quality, git SHA, duration to `main_safe.ref_safe__run_log`
+- [x] Wave memory — after each run, Mistral Small writes a 3–4 sentence notable-findings summary to `main_safe.ref_safe__wave_memory`; next run reads last 3 waves and injects as historical context into every section prompt
+- [x] Gap structural log — `gap_agent.py` prompt rewritten to produce `## Structural Gaps` (upserted to `ref_safe__gap_log`, accumulating across waves) and `## Interpretation Notes` (written to `interpretation_context.md`, injected into next run's prompts)
+- [x] ECB sharpener — post-generation Mistral Small pass sharpens bullets against the live ECB SAFE publication; EA comparisons and ECB framing incorporated where directly supported

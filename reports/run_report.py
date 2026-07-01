@@ -1240,10 +1240,13 @@ EXEC_SUMMARY_SYSTEM = textwrap.dedent("""
     Valid section_id values (use exactly as written):
     bank_loan_terms, financing_gap, loan_applications, availability_expectations,
     financing_purpose, financing_factors, business_situation, outlook,
-    expectations_quantitative, expectations_risk, business_problems
+    expectations_quantitative, expectations_risk, business_problems, adhoc_spotlight
 
     For cross-cutting bullets spanning multiple sections, use the most relevant section_id.
     No leading bullet character inside the bullet text.
+
+    Special rule for adhoc_spotlight: if you include a bullet for that section, prefix the
+    bullet text with the 🔍 emoji, e.g. "🔍 **AI Peer Estimates:** Slovak firms estimated..."
 """).strip()
 
 SO_WHAT_SYSTEM = textwrap.dedent("""
@@ -2506,17 +2509,8 @@ def main() -> None:
         print("Sharpening bullets against ECB publication...")
         rendered = _sharpen_with_ecb(rendered, ecb_context, mistral_client, cost_tracker)
 
-    print("Generating executive summary (two-pass)...")
-    exec_bullets = get_exec_summary(rendered, cost_tracker) if rendered else []
-    for item in exec_bullets:
-        print(f"  [{item.get('section_id', '?')}] {item.get('bullet', '')}")
-
-    if not args.dev and exec_bullets and rendered:
-        print("Writing wave memory...")
-        _write_wave_memory(latest_wave, exec_bullets, rendered,
-                           mistral_client, tool_con, cost_tracker)
-
     # Adhoc spotlight — detect theme, generate section, find ECB article
+    # Built BEFORE exec summary so Mistral can synthesise it as a peer section
     adhoc_section: dict | None = None
     adhoc_ecb_url: str | None = None
     print("Checking for adhoc module spotlight...")
@@ -2538,6 +2532,16 @@ def main() -> None:
                     print(f"  ECB focus article: {adhoc_ecb_url}")
     else:
         print("  No adhoc module data for this wave.")
+
+    print("Generating executive summary (two-pass)...")
+    exec_bullets = get_exec_summary(rendered, cost_tracker) if rendered else []
+    for item in exec_bullets:
+        print(f"  [{item.get('section_id', '?')}] {item.get('bullet', '')}")
+
+    if not args.dev and exec_bullets and rendered:
+        print("Writing wave memory...")
+        _write_wave_memory(latest_wave, exec_bullets, rendered,
+                           mistral_client, tool_con, cost_tracker)
 
     print("Building TOC...")
     toc_html = build_toc(rendered)

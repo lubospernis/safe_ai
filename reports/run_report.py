@@ -1242,26 +1242,63 @@ def _load_annex_question_texts(
     return texts
 
 
-def build_annex_html(annex_csv_path: Path) -> str:
-    # Read annex and extract one question text per question ID (round 30 = col index 7)
+def build_annex_html(annex_csv_path: Path, con=None) -> str:
+    # Read annex and extract one question text per question ID.
+    # Tries MotherDuck table first (prod), falls back to local annex.csv (dev/offline).
     q_texts: dict[str, tuple[str, str]] = {}  # q_id -> (sample, text)
-    try:
-        with open(annex_csv_path, newline="", encoding="utf-8-sig") as f:
-            reader = csv.reader(f)
-            rows = list(reader)
-        for row in rows[1:]:
-            if len(row) > 7 and row[1] == "question":
-                q_id = row[2].strip()
-                # Normalise: Q0b -> Q0b, Q7A -> Q7A  (keep case)
-                # Check against ANNEX_Q_IDS case-insensitively
-                matched = next((k for k in ANNEX_Q_IDS if k.lower() == q_id.lower()), None)
-                if matched and matched not in q_texts:
-                    sample = row[4].strip()
-                    text = row[7].strip()
-                    if text:
-                        q_texts[matched] = (sample, _clean_question_text(text))
-    except FileNotFoundError:
-        return ""
+
+    # --- MotherDuck path ---
+    if con is not None:
+        try:
+            cols_res = con.execute(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema = 'main_safe' AND table_name = 'ref_safe__annex' "
+                "ORDER BY ordinal_position"
+            ).fetchall()
+            if cols_res:
+                all_cols = [r[0] for r in cols_res]
+                try:
+                    notes_idx = all_cols.index("notes")
+                except ValueError:
+                    notes_idx = 6
+                wave_cols = all_cols[notes_idx + 1:]
+                element_col = all_cols[1] if len(all_cols) > 1 else "element"
+                q_item_col = all_cols[2] if len(all_cols) > 2 else "question_item"
+                sample_col = all_cols[4] if len(all_cols) > 4 else "sample"
+                wave_sel = ", ".join(f'"{c}"' for c in wave_cols)
+                rows_md = con.execute(
+                    f'SELECT "{q_item_col}", "{sample_col}", {wave_sel} '
+                    f"FROM main_safe.ref_safe__annex "
+                    f"WHERE \"{element_col}\" = 'question'"
+                ).fetchall()
+                for row in rows_md:
+                    q_id_raw = (row[0] or "").strip()
+                    sample = (row[1] or "").strip()
+                    matched = next((k for k in ANNEX_Q_IDS if k.lower() == q_id_raw.lower()), None)
+                    if matched and matched not in q_texts:
+                        text = next((v for v in row[2:] if v and v.strip()), "")
+                        if text:
+                            q_texts[matched] = (sample, _clean_question_text(text.strip()))
+        except Exception as exc:
+            print(f"  Warning: MotherDuck annex table unavailable for HTML widget ({exc}) — falling back to CSV")
+
+    # --- Local CSV fallback ---
+    if not q_texts:
+        try:
+            with open(annex_csv_path, newline="", encoding="utf-8-sig") as f:
+                reader = csv.reader(f)
+                rows = list(reader)
+            for row in rows[1:]:
+                if len(row) > 7 and row[1] == "question":
+                    q_id = row[2].strip()
+                    matched = next((k for k in ANNEX_Q_IDS if k.lower() == q_id.lower()), None)
+                    if matched and matched not in q_texts:
+                        sample = row[4].strip()
+                        text = row[7].strip()
+                        if text:
+                            q_texts[matched] = (sample, _clean_question_text(text))
+        except FileNotFoundError:
+            return ""
 
     # Build HTML groups
     group_rows = []
@@ -1667,8 +1704,6 @@ def main() -> None:
             "tool_calls": content.get("tool_calls", 0),
         })
 
-    tool_con.close()
-
     print("Generating executive summary...")
     exec_bullets = get_exec_summary(rendered, cost_tracker) if rendered else []
     for b in exec_bullets:
@@ -1678,7 +1713,8 @@ def main() -> None:
     toc_html = build_toc(rendered)
 
     print("Building question annex...")
-    annex_html = build_annex_html(ANNEX_CSV)
+    annex_html = build_annex_html(ANNEX_CSV, con=tool_con)
+    tool_con.close()
 
     print("Fetching painting thumbnail...")
     painting_inner_html = _fetch_painting_inner_html()

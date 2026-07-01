@@ -38,7 +38,15 @@ CRITICAL: Before writing ANY descriptions, labels, or mappings for survey variab
 on prior knowledge — the actual codes differ from common assumptions.
 
 1. **Authoritative question text, sub-item labels, and answer codes**:
-   `/Users/lubospernis/Documents/safe_ai/collateral/annex.csv`
+   MotherDuck table `main_safe.ref_safe__annex` (auto-fetched from ECB on each pipeline run).
+   Query pattern:
+   ```sql
+   SELECT question_item, sample, safe_2024q1
+   FROM main_safe.ref_safe__annex
+   WHERE element = 'question' AND question_item ILIKE 'Q5'
+   ```
+   Wave columns are named `safe_2024q1`, `safe_2023h1`, etc. — take the leftmost non-empty one for the current wording.
+   Fallback for dev/offline: `/Users/lubospernis/Documents/safe_ai/collateral/annex.csv` (may be stale).
 
 2. **Questionnaire (how it looks to respondents)**:
    https://www.ecb.europa.eu/stats/accesstofinancesofenterprises/pdf/questionnaire/ecb.safeq202602.en.pdf

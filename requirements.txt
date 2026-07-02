@@ -20,3 +20,5 @@ mistralai>=1.0,<2
 python-dotenv>=1.0,<2
 openpyxl>=3.1,<4
 json-repair
+pytest>=8.0
+pytest-mock>=3.12

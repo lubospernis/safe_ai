@@ -73,3 +73,8 @@ Claude: tick items off as they get built; don't add speculative sub-tasks.
 - [x] Gap structural log — `gap_agent.py` prompt rewritten to produce `## Structural Gaps` (upserted to `ref_safe__gap_log`, accumulating across waves) and `## Interpretation Notes` (written to `interpretation_context.md`, injected into next run's prompts)
 - [x] ECB sharpener — post-generation Mistral Small pass sharpens bullets against the live ECB SAFE publication; EA comparisons and ECB framing incorporated where directly supported
 - [x] Adhoc questions — `mart_safe__adhoc_responses` dbt mart + `detect_adhoc_theme()` + `build_adhoc_spotlight()` + ECB focus article search (≥90% confidence gate); collapsible Special Focus section in HTML + spotlight block in newsletter email subject & body
+- [x] AI adoption spotlight — `mart_safe__ai_adoption` dbt mart + `build_ai_adoption_spotlight()` with three structured sub-sections (QA1/QA4 current use, QA2/QA3 drivers/barriers, QB1/QB2 peer expectations); agentic Claude tool-use chart generation; Pixtral chart quality check
+- [x] json-repair library — all 7 Mistral JSON parse sites wrapped with `repair_json()` to handle malformed LLM output
+- [x] Non-response sentinel filtering — `-9999` codes excluded from adhoc continuous charts with `response_raw BETWEEN 0 AND 100`
+- [x] Modularise run_report.py — split 3,175-line monolith into 6 focused modules: `cost.py`, `db.py`, `charts.py`, `adhoc.py`, `llm.py`, `html_builder.py`; `run_report.py` reduced to thin orchestrator
+- [x] Unit test framework — pytest + pytest-mock; 39 tests across `test_cost.py`, `test_charts.py`, `test_llm.py`, `test_html.py`; all passing; `_md_to_html()` extracted to `html_builder.py` fixing `**bold**` rendering in section bullets and adhoc sub-section bullets

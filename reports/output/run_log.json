@@ -1,1 +1,17 @@
-[]
+[
+  {
+    "run_id": "38_20260702_104600",
+    "run_type": "main",
+    "wave_number": 38,
+    "run_date": "2026-07-02",
+    "run_time": "10:45:32",
+    "total_cost_usd": 0.21575,
+    "input_tokens": 115167,
+    "output_tokens": 12225,
+    "cache_read_tokens": 41740,
+    "n_sections": 10,
+    "duration_seconds": 248.1,
+    "model_sonnet": "claude-sonnet-4-6",
+    "model_mistral": "mistral-small-latest"
+  }
+]

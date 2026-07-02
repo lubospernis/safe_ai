@@ -72,6 +72,9 @@ def mock_con(electrification_rows, electrification_df):
             result.fetchall.return_value = [
                 ("qe1", "To what extent has your firm invested in electrification of equipment or vehicles?"),
             ]
+        elif "mart_safe__slovakia_kpis" in sql_lower:
+            # Return None so questionnaire URL lookup gracefully skips
+            result.fetchone.return_value = None
         else:
             result.df.return_value = electrification_df
             result.fetchall.return_value = []

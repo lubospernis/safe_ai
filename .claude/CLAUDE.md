@@ -18,7 +18,9 @@ When a new wave arrives with previously unseen adhoc modules (e.g., a module not
 
 4. **Optional: add fallback label** — if the auto-classified label is poor, add the module ID to `_MODULE_THEME_FALLBACK` in `reports/adhoc.py` with the correct label.
 
-5. **Quality gate** — after the full run, `quality_check.py` runs a second supervisor call on the adhoc spotlight. If it scores < 6 on any dimension, CI blocks the deploy and you must investigate the prompt/data.
+5. **Questionnaire URL** — `reports/questionnaire.py` derives the PDF URL automatically from the dlt load timestamp (`raw._dlt_loads.inserted_at` → YYYYMM suffix). If the run log shows `questionnaire_labels_parsed: false`, add the wave's entry to `_PERIOD_TO_QUESTIONNAIRE_SUFFIX` in `questionnaire.py` as a confirmed override. The suffix is `{YYYY}{MM}` of the ECB release month (same month raw data was loaded).
+
+6. **Quality gate** — after the full run, `quality_check.py` runs a second supervisor call on the adhoc spotlight. If it scores < 8 on any dimension, CI blocks the deploy and you must investigate the prompt/data.
 When you complete a task that corresponds to a roadmap item, tick it off (change `[ ]` to `[x]`
 and move it to the Done section). Do not add speculative sub-tasks — only mark things done
 when the code is actually shipped.

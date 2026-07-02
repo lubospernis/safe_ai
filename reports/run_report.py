@@ -230,10 +230,24 @@ def main() -> None:
         print("[--adhoc-only] Skipping main sections, interest checks, and ECB sharpener.")
 
     adhoc_section: dict | None = None
+    _adhoc_module: str | None = None
+    _adhoc_topic: str | None = None
+    _questionnaire_url: str | None = None
+    _questionnaire_labels_ok: bool = False
+    _annex_loaded_ok = (len(question_texts) > 0) if not args.adhoc_only else None
+
     print("Checking for adhoc module spotlight...")
     adhoc_theme = detect_adhoc_theme(latest_wave, tool_con, schema, mistral_client, cost_tracker)
     if adhoc_theme:
+        _adhoc_module = adhoc_theme["module_id"]
+        _adhoc_topic = adhoc_theme["theme_label"]
+        _questionnaire_url = adhoc_theme.get("questionnaire_url")
+        _questionnaire_labels_ok = bool(adhoc_theme.get("response_labels"))
         print(f"  Adhoc theme detected: {adhoc_theme['theme_label']} ({adhoc_theme['module_id']})")
+        if not _questionnaire_url:
+            print("  WARN: No questionnaire URL resolved — response code labels unavailable")
+        elif not _questionnaire_labels_ok:
+            print(f"  WARN: Questionnaire fetched ({_questionnaire_url}) but no answer labels parsed")
         adhoc_section = build_adhoc_spotlight(
             adhoc_theme, latest_wave, tool_con, schema, mistral_client, cost_tracker,
             anthropic_client=anthropic_client,
@@ -317,7 +331,7 @@ def main() -> None:
     # Derive model_mistral from whichever Mistral model was actually used
     _mistral_models = [m for m in cost_tracker["by_model"] if "mistral" in m]
     _mistral_model_used = _mistral_models[0] if _mistral_models else "mistral-small-latest"
-    (OUTPUT_DIR / "cost_tracker.json").write_text(json.dumps({
+    _run_snapshot = {
         "run_type": _run_type,
         "run_date": _now.strftime("%Y-%m-%d"),
         "run_time": _now.strftime("%H:%M:%S"),
@@ -330,7 +344,19 @@ def main() -> None:
         "model_mistral": _mistral_model_used,
         "n_sections": len(rendered),
         "duration_seconds": round((_dt.now() - _run_start).total_seconds(), 1),
-    }))
+        "context_sources": {
+            "annex_loaded": _annex_loaded_ok,
+            "adhoc_module": _adhoc_module,
+            "adhoc_topic": _adhoc_topic,
+            "questionnaire_url": _questionnaire_url,
+            "questionnaire_labels_parsed": _questionnaire_labels_ok,
+        },
+    }
+    # Append to run_log.json (array of all runs; last entry = this run)
+    _run_log_path = OUTPUT_DIR / "run_log.json"
+    _existing_log: list = json.loads(_run_log_path.read_text()) if _run_log_path.exists() else []
+    _existing_log.append(_run_snapshot)
+    _run_log_path.write_text(json.dumps(_existing_log, indent=2, ensure_ascii=False))
     print("Done.")
 
 

@@ -230,14 +230,16 @@ def main() -> None:
     GAP_REPORT.write_text(output, encoding="utf-8")
     print(f"Saved → {GAP_REPORT}")
 
-    # Extract wave number for MotherDuck logging — try cost_tracker.json first
+    # Extract wave number for MotherDuck logging — read last entry from run_log.json
     wave = args.wave
     if not wave:
-        cost_json = OUTPUT_DIR / "cost_tracker.json"
-        if cost_json.exists():
+        run_log_path = OUTPUT_DIR / "run_log.json"
+        if run_log_path.exists():
             try:
                 import json
-                wave = json.loads(cost_json.read_text()).get("wave_number")
+                entries = json.loads(run_log_path.read_text())
+                if entries:
+                    wave = entries[-1].get("wave_number")
             except Exception:
                 pass
     if not wave:

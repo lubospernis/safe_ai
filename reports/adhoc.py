@@ -10,6 +10,11 @@ from json_repair import repair_json
 
 from charts import _build_adhoc_chart
 from cost import _Usage, _track_cost
+from questionnaire import (
+    build_response_label_context,
+    fetch_adhoc_response_labels,
+    questionnaire_url_for_wave,
+)
 
 _SONNET_MODEL = "claude-sonnet-4-6"
 
@@ -258,10 +263,27 @@ def detect_adhoc_theme(wave_number: int, con, schema: str, mistral_client=None, 
         except Exception:
             pass
 
+    # Fetch questionnaire PDF to get response code → label mappings
+    questionnaire_url = questionnaire_url_for_wave(wave_number, con, schema)
+    response_labels: dict[str, dict[int, str]] = {}
+    if questionnaire_url:
+        all_module_ids = [r[0] for r in rows]
+        print(f"  Fetching questionnaire PDF for response labels: {questionnaire_url}")
+        response_labels = fetch_adhoc_response_labels(questionnaire_url, all_module_ids)
+        if response_labels:
+            total_codes = sum(len(v) for v in response_labels.values())
+            print(f"  Questionnaire parsed: {total_codes} response codes across {len(response_labels)} modules")
+        else:
+            print("  Questionnaire parse returned no labels — proceeding without them")
+    else:
+        print(f"  No questionnaire URL mapped for wave {wave_number} — proceeding without response labels")
+
     return {
         "module_id": primary_module_id,
         "theme_label": theme_label,
         "question_texts": question_texts,
+        "questionnaire_url": questionnaire_url,
+        "response_labels": response_labels,
     }
 
 
@@ -303,6 +325,7 @@ def _select_interesting_sub_items(
     theme_label: str,
     cost_tracker: dict,
     mistral_client=None,
+    response_label_ctx: str = "",
 ) -> tuple[list[str], dict[str, str]]:
     """Phase 1: ask Mistral Small to classify sub-items as interesting or not.
 
@@ -318,9 +341,11 @@ def _select_interesting_sub_items(
             f"  Sub-item {k}: {v}" for k, v in question_texts.items()
         )
 
+    label_block = f"\n\n{response_label_ctx}" if response_label_ctx else ""
+
     user_msg = (
         f"Topic: {theme_label}\n"
-        f"Sub-items present: {', '.join(all_subs)}{qt_block}\n\n"
+        f"Sub-items present: {', '.join(all_subs)}{qt_block}{label_block}\n\n"
         f"Data (SK vs EA):\n{full_table}\n\n"
         "Classify each sub-item and return routing notes."
     )
@@ -395,10 +420,16 @@ def build_adhoc_spotlight(
 
     full_table, data_note = _build_full_data_table(df)
 
+    # Build response label context from questionnaire PDF (may be empty if not mapped)
+    response_labels = theme.get("response_labels", {})
+    all_module_ids = list({theme["module_id"]} | set(response_labels.keys()))
+    response_label_ctx = build_response_label_context(response_labels, all_module_ids)
+
     # ── Phase 1: select interesting sub-items ────────────────────────────────
     interesting_subs, routing_notes = _select_interesting_sub_items(
         df, full_table, theme.get("question_texts", {}), theme["theme_label"],
         cost_tracker, mistral_client=mistral_client,
+        response_label_ctx=response_label_ctx,
     )
 
     # Filter df to interesting sub-items for the writing prompt
@@ -423,9 +454,14 @@ def build_adhoc_spotlight(
             if k in interesting_subs and v
         )
 
+    # Include response labels in the writing prompt if available
+    label_ctx = ""
+    if response_label_ctx:
+        label_ctx = f"\n\n{response_label_ctx}"
+
     # ── Phase 2: write bullets ───────────────────────────────────────────────
     user_msg = (
-        f"Topic: {theme['theme_label']}{question_ctx}{routing_ctx}\n\n"
+        f"Topic: {theme['theme_label']}{question_ctx}{routing_ctx}{label_ctx}\n\n"
         f"Data (wave {wave_number}, SK vs EA, interesting sub-items only):\n"
         f"{interesting_table}{data_note}\n\n"
         "Write the finding, 2-4 bullets, and chart_sub_items as specified."

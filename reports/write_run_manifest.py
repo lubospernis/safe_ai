@@ -2,7 +2,7 @@
 Write run manifest to main_safe.ref_safe__run_log after each report CI run.
 
 Reads:
-  reports/output/cost_tracker.json   — written by run_report.py
+  reports/output/run_log.json        — written by run_report.py (last entry = current run)
   reports/output/quality_scores.json — written by quality_check.py
 
 Usage:
@@ -19,13 +19,13 @@ from pathlib import Path
 
 import duckdb
 
-from append_run_log import append_run_log
-
 OUTPUT_DIR = Path(__file__).parent / "output"
 
 
 def main() -> None:
-    cost = json.loads((OUTPUT_DIR / "cost_tracker.json").read_text())
+    run_log_path = OUTPUT_DIR / "run_log.json"
+    all_runs = json.loads(run_log_path.read_text())
+    cost = all_runs[-1]  # last entry = current run
     quality_path = OUTPUT_DIR / "quality_scores.json"
     quality = (
         json.loads(quality_path.read_text())
@@ -92,9 +92,6 @@ def main() -> None:
         f"cost=${cost['total_cost_usd']:.3f}  "
         f"verdict={quality['verdict']}"
     )
-
-    log_entry = append_run_log(cost)
-    print(f"Run log appended: {log_entry['run_id']}  type={log_entry['run_type']}")
 
 
 if __name__ == "__main__":

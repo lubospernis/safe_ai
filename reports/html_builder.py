@@ -109,7 +109,7 @@ HTML_PAGE = textwrap.dedent("""
   .section-subtitle {{ font-size: 11px; color: #888; margin: 0 0 12px 0; }}
   ul          {{ padding-left: 20px; margin: 0 0 16px 0; }}
   li          {{ margin-bottom: 6px; font-size: 13.5px; line-height: 1.5; }}
-  img         {{ width: 100%; margin-top: 8px; }}
+  .chart-img  {{ display: block; max-width: 560px; width: 100%; margin-top: 8px; }}
   .footnote   {{ font-size: 11px; color: #888; margin-top: 10px; line-height: 1.4; }}
   .footer     {{ color: #adadad; font-size: 11px; margin-top: 32px; text-align: center; }}
   .lang-switch {{ float: right; font-size: 12px; color: #2B5291; text-decoration: none;
@@ -176,7 +176,7 @@ SECTION_TMPL = textwrap.dedent("""
   <ul>
 {bullets}
   </ul>
-{footnote}{agentic_footnote}  <img src="data:image/png;base64,{chart_b64}" alt="{title} chart">
+{footnote}{agentic_footnote}  <img class="chart-img" src="data:image/png;base64,{chart_b64}" alt="{title} chart">
 </section>
 """).strip()
 
@@ -469,8 +469,8 @@ def build_html(
                 if ss.get("chart_png"):
                     ss_b64 = base64.b64encode(ss["chart_png"]).decode()
                     ss_chart_html = (
-                        f'<img src="data:image/png;base64,{ss_b64}" '
-                        f'alt="{ss["heading"]} chart" style="max-width:100%;margin:8px 0 12px;">\n'
+                        f'<img class="chart-img" src="data:image/png;base64,{ss_b64}" '
+                        f'alt="{ss["heading"]} chart" style="margin:8px 0 12px;">\n'
                     )
                 ss_bullets = "\n".join(
                     f"    <li>{_md_to_html(b.lstrip('• ').strip())}</li>"
@@ -504,8 +504,8 @@ def build_html(
             if adhoc_s.get("chart_png"):
                 chart_b64 = base64.b64encode(adhoc_s["chart_png"]).decode()
                 adhoc_chart_html = (
-                    f'<img src="data:image/png;base64,{chart_b64}" '
-                    f'alt="{theme_label} chart" style="max-width:100%;margin:10px 0 16px;">\n'
+                    f'<img class="chart-img" src="data:image/png;base64,{chart_b64}" '
+                    f'alt="{theme_label} chart" style="margin:10px 0 16px;">\n'
                 )
             spotlight_html = textwrap.dedent(f"""
                 <details id="adhoc_spotlight" data-theme="{theme_label}" open>

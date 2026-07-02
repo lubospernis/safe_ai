@@ -23,7 +23,8 @@ from mistralai import Mistral
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 REPORT_HTML = Path(__file__).parent / "output" / "report_latest.html"
-PASS_THRESHOLD = 6  # any dimension below this = fail
+PASS_THRESHOLD = 6        # main report: any dimension below this = fail
+ADHOC_PASS_THRESHOLD = 8  # adhoc spotlight: stricter gate (Mistral Large reviewer)
 
 SUPERVISOR_SYSTEM = """
 You are a quality supervisor for an automatically generated financial survey report.
@@ -55,6 +56,29 @@ Return JSON only — no markdown fences:
 
 Set verdict to "fail" if ANY dimension is below 6, or if you see obvious parsing artefacts.
 """.strip()
+
+
+ADHOC_SUPERVISOR_SYSTEM = """You are a critical editor reviewing a "Special Focus" sidebar for a financial survey
+report on ECB SAFE data for Slovakia. You will receive the text of the sidebar.
+
+Score on four dimensions, each 1–10:
+- grounding (1–10): Every number in the bullets appears verbatim in the underlying data.
+  Score 1 if you see a percentage, net balance, or count that looks invented or paraphrased.
+  Score 10 if all cited numbers are specific and plausible given the context.
+- coverage (1–10): The bullets address the most striking SK vs EA differences.
+  Score low if bullets discuss marginal or obvious findings while ignoring large gaps.
+  Score 10 if the finding and bullets capture the headline story clearly.
+- readability (1–10): Plain English accessible to a non-expert. Complete sentences.
+  No jargon. Score 1 if the text is robotic, boilerplate, or hard to parse.
+- chart_alignment (1–10): The section's chart should correspond to the key bullets.
+  If no chart information is available, score this dimension 8 (neutral).
+
+You are a strict reviewer — a 7 is a real failure here. The threshold for pass is 8.
+Return JSON only (no markdown fences):
+{"grounding": <1-10>, "coverage": <1-10>, "readability": <1-10>, "chart_alignment": <1-10>,
+ "verdict": "pass" or "fail", "reason": "<one sentence>"}
+
+Set verdict to "fail" if ANY dimension is below 8.""".strip()
 
 
 CHART_CHECK_PROMPT = """You are a chart quality inspector. Look at this matplotlib chart image and check for rendering problems.
@@ -129,6 +153,30 @@ def extract_report_text(html: str) -> str:
     return "\n".join(parts)
 
 
+def extract_adhoc_text(html: str) -> str:
+    """Extract adhoc spotlight text (finding + sub-section bullets) for quality checking."""
+    soup = BeautifulSoup(html, "lxml")
+    adhoc_sec = soup.select_one("#adhoc_spotlight")
+    if not adhoc_sec:
+        return ""
+    parts = ["ADHOC SPECIAL FOCUS:"]
+    finding = adhoc_sec.select_one(".section-finding")
+    if finding:
+        parts.append(f"  Finding: {finding.get_text(strip=True)}")
+    for h4 in adhoc_sec.select("h4"):
+        parts.append(f"\n  Sub-section: {h4.get_text(strip=True)}")
+        sibling = h4.find_next_sibling()
+        while sibling and sibling.name not in ("h4", "h3"):
+            for li in sibling.select("li") if hasattr(sibling, "select") else []:
+                parts.append(f"    - {li.get_text(strip=True)}")
+            sibling = sibling.find_next_sibling()
+    for li in adhoc_sec.select("li"):
+        text = li.get_text(strip=True)
+        if text and text not in "\n".join(parts):
+            parts.append(f"  - {text}")
+    return "\n".join(parts)
+
+
 def main() -> None:
     if not REPORT_HTML.exists():
         print(f"ERROR: {REPORT_HTML} not found — run run_report.py first")
@@ -191,10 +239,50 @@ def main() -> None:
         "readability": r, "substance": s, "coherence": c,
         "sign_convention": sc, "verdict": verdict, "reason": reason,
     }
+
+    # Adhoc spotlight quality check (if present)
+    adhoc_text = extract_adhoc_text(html)
+    adhoc_verdict = "pass"
+    if adhoc_text:
+        print("Quality check: evaluating adhoc spotlight (Mistral Large, threshold ≥ 8)...")
+        try:
+            adhoc_resp = client.chat.complete(
+                model="mistral-large-2512",
+                max_tokens=300,
+                messages=[
+                    {"role": "system", "content": ADHOC_SUPERVISOR_SYSTEM},
+                    {"role": "user", "content": adhoc_text[:4000]},
+                ],
+            )
+            adhoc_raw = adhoc_resp.choices[0].message.content.strip()
+            if adhoc_raw.startswith("```"):
+                adhoc_raw = adhoc_raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+            adhoc_result = json.loads(adhoc_raw)
+            ag = adhoc_result.get("grounding", 10)
+            aco = adhoc_result.get("coverage", 10)
+            ar = adhoc_result.get("readability", 10)
+            aca = adhoc_result.get("chart_alignment", 10)
+            adhoc_verdict = adhoc_result.get("verdict", "pass")
+            adhoc_reason = adhoc_result.get("reason", "")
+            print(f"  adhoc: grounding={ag}/10  coverage={aco}/10  readability={ar}/10  chart_alignment={aca}/10  → {adhoc_verdict.upper()}")
+            print(f"  Adhoc reason: {adhoc_reason}")
+            scores["adhoc"] = {
+                "grounding": ag, "coverage": aco, "readability": ar,
+                "chart_alignment": aca, "verdict": adhoc_verdict, "reason": adhoc_reason,
+            }
+            if adhoc_verdict == "fail" or min(ag, aco, ar, aca) < ADHOC_PASS_THRESHOLD:
+                adhoc_verdict = "fail"
+        except Exception as e:
+            print(f"  Adhoc quality check error: {e} — assuming pass")
+
     (Path(__file__).parent / "output" / "quality_scores.json").write_text(json.dumps(scores))
 
     if verdict == "fail" or min(r, s, c, sc) < PASS_THRESHOLD:
         print("Quality gate FAILED — blocking deploy")
+        sys.exit(1)
+
+    if adhoc_verdict == "fail":
+        print("Quality gate FAILED — adhoc spotlight below threshold")
         sys.exit(1)
 
     print("Quality gate passed")

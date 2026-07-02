@@ -52,6 +52,13 @@ SECTION_CONTENT_SYSTEM = textwrap.dedent("""
     You are an ECB analyst writing content for a SAFE survey report focused on Slovakia.
     Return a JSON object with exactly two fields:
 
+    CRITICAL DATA RULE:
+    Only cite numbers that appear verbatim in the section data provided to you, or in a
+    query_mart tool result you actually ran in this session. Do NOT invent, estimate, or
+    paraphrase percentages, net balances, or counts. If a number you want to cite is not
+    in the provided data, either call query_mart (only in the 3 permitted cases below)
+    or omit the comparison entirely.
+
     "finding": A single declarative headline (max 12 words) summarising the most notable
       finding for Slovakia. Use active voice, name the direction. Do NOT mention question
       codes (Q10, Q5, etc.). Example: "Net tightening in interest rates reported by Slovak firms"
@@ -159,6 +166,11 @@ EXEC_SUMMARY_SYSTEM = textwrap.dedent("""
       direction alone is the point.
     - Do NOT include the section_id or any section name in the bullet text itself.
       The section_id belongs only in the JSON "section_id" field, never in the bullet string.
+    - Historical context (prior waves) may be provided below the section findings. Use it ONLY
+      when it makes a current finding meaningfully more striking — e.g. "the sharpest reading
+      in three waves" or "the first improvement since wave X". Do NOT mention prior waves just
+      to show awareness of them. If the current wave finding stands on its own, omit the history.
+      Never invent a historical comparison that is not explicitly supported by the context given.
 
     Return a JSON array only — no markdown fences, no commentary:
     [
@@ -174,8 +186,10 @@ EXEC_SUMMARY_SYSTEM = textwrap.dedent("""
     For cross-cutting bullets spanning multiple sections, use the most relevant section_id.
     No leading bullet character inside the bullet text.
 
-    Special rule for adhoc_spotlight: if you include a bullet for that section, prefix the
-    bullet text with the 🔍 emoji, e.g. "🔍 **AI Peer Estimates:** Slovak firms estimated..."
+    Special rule for adhoc_spotlight: if adhoc_spotlight appears in the section findings,
+    you MUST include exactly one bullet for it, prefixed with the 🔍 emoji,
+    e.g. "🔍 **AI Peer Estimates:** Slovak firms estimated..."
+    This bullet counts toward your 3–4 total. Drop the weakest other bullet if needed.
 """).strip()
 
 SO_WHAT_SYSTEM = textwrap.dedent("""
@@ -533,7 +547,10 @@ def get_section_content_agentic(
 
 
 def get_exec_summary(
-    rendered_sections: list[dict], cost_tracker: dict
+    rendered_sections: list[dict],
+    cost_tracker: dict,
+    historical_context: str = "",
+    adhoc_section: dict | None = None,
 ) -> list[dict]:
     """Two-pass exec summary. Returns list of {bullet, section_id} dicts."""
     section_ids = {s["section_id"] for s in rendered_sections}
@@ -549,9 +566,11 @@ def get_exec_summary(
     section_text = "\n".join(lines)
 
     client = _mistral_client()
+    _EXEC_MODEL = "mistral-large-2512"
 
+    # Pass 1: cross-section analyst — current wave only, no historical context
     resp1 = client.chat.complete(
-        model="mistral-small-latest",
+        model=_EXEC_MODEL,
         max_tokens=200,
         messages=[
             {"role": "system", "content": EXEC_CROSS_SECTION_SYSTEM},
@@ -559,16 +578,23 @@ def get_exec_summary(
         ],
     )
     if resp1.usage:
-        _track_cost(cost_tracker, "mistral-small-latest",
+        _track_cost(cost_tracker, _EXEC_MODEL,
                     _Usage(resp1.usage.prompt_tokens, resp1.usage.completion_tokens))
     themes = resp1.choices[0].message.content.strip()
 
+    # Pass 2: editor — receives historical context so it can add wave comparisons where warranted
+    history_block = (
+        f"\n\nHistorical context (prior waves — use ONLY when it makes a current finding "
+        f"more striking; omit otherwise):\n{historical_context}"
+        if historical_context else ""
+    )
     user_msg = (
         f"{section_text}\n\n"
         f"Cross-cutting themes identified by first-pass analyst:\n{themes}"
+        f"{history_block}"
     )
     resp2 = client.chat.complete(
-        model="mistral-small-latest",
+        model=_EXEC_MODEL,
         max_tokens=500,
         messages=[
             {"role": "system", "content": EXEC_SUMMARY_SYSTEM},
@@ -576,7 +602,7 @@ def get_exec_summary(
         ],
     )
     if resp2.usage:
-        _track_cost(cost_tracker, "mistral-small-latest",
+        _track_cost(cost_tracker, _EXEC_MODEL,
                     _Usage(resp2.usage.prompt_tokens, resp2.usage.completion_tokens))
 
     raw = resp2.choices[0].message.content.strip()
@@ -595,10 +621,21 @@ def get_exec_summary(
                 bullet = bullet.lstrip("🔍 ")
             if bullet:
                 result.append({"bullet": bullet, "section_id": sid if sid in section_ids else ""})
-        return result[:4]
+        result = result[:4]
     except Exception:
         plain = [l.strip().lstrip("•- ") for l in raw.splitlines() if l.strip()]
-        return [{"bullet": b, "section_id": ""} for b in plain[:4]]
+        result = [{"bullet": b, "section_id": ""} for b in plain[:4]]
+
+    # Guarantee one 🔍 adhoc bullet when adhoc_spotlight was rendered
+    if adhoc_section and not any(r.get("section_id") == "adhoc_spotlight" for r in result):
+        theme = adhoc_section.get("theme_label", "Special Focus")
+        finding = adhoc_section.get("finding", "")
+        fallback_bullet = f"🔍 **{theme}:** {finding}" if finding else f"🔍 **{theme}:** See Special Focus section."
+        if len(result) >= 4:
+            result = result[:3]  # drop weakest (last) to stay at 4
+        result.append({"bullet": fallback_bullet, "section_id": "adhoc_spotlight"})
+
+    return result
 
 
 def _add_so_what(content: dict, sec: dict, mistral_client, cost_tracker: dict) -> dict:
@@ -727,13 +764,14 @@ def translate_to_slovak(
         + json.dumps(payload, ensure_ascii=False)
     )
     client = _mistral_client()
+    _TRANSLATE_MODEL = "mistral-medium-2505"
     resp = client.chat.complete(
-        model="mistral-small-latest",
+        model=_TRANSLATE_MODEL,
         max_tokens=5500,
         messages=[{"role": "user", "content": prompt}],
     )
     if resp.usage:
-        _track_cost(cost_tracker, "mistral-small-latest",
+        _track_cost(cost_tracker, _TRANSLATE_MODEL,
                     _Usage(resp.usage.prompt_tokens, resp.usage.completion_tokens))
 
     raw = resp.choices[0].message.content.strip()

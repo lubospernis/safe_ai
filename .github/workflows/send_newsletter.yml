@@ -11,12 +11,44 @@ on:
   workflow_dispatch:
 
 jobs:
-  newsletter:
+  check:
+    name: Check for adhoc content
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    outputs:
+      has_adhoc: ${{ steps.detect.outputs.has_adhoc }}
+
+    steps:
+      - name: Checkout gh-pages for cost tracker
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+
+      - name: Detect adhoc run type
+        id: detect
+        run: |
+          if [ -f gh-pages/cost_tracker.json ]; then
+            run_type=$(python3 -c "import json; d=json.load(open('gh-pages/cost_tracker.json')); print(d.get('run_type',''))")
+            if echo "$run_type" | grep -q "adhoc"; then
+              echo "has_adhoc=true" >> "$GITHUB_OUTPUT"
+              echo "Adhoc content detected (run_type=$run_type) — manual approval required before send"
+            else
+              echo "has_adhoc=false" >> "$GITHUB_OUTPUT"
+              echo "No adhoc content (run_type=$run_type) — newsletter will send automatically"
+            fi
+          else
+            echo "has_adhoc=false" >> "$GITHUB_OUTPUT"
+            echo "No cost_tracker.json found — assuming no adhoc"
+          fi
+
+  send:
     name: Send newsletter digest
     runs-on: ubuntu-latest
-
-    # Only run if upstream succeeded (or if manually triggered)
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    needs: check
+    # When adhoc content is present, require manual approval via the newsletter-gate environment.
+    # No-adhoc runs bypass the gate and send automatically.
+    environment: ${{ needs.check.outputs.has_adhoc == 'true' && 'newsletter-gate' || '' }}
 
     steps:
       - name: Checkout repository (main branch — for script and subscribers)

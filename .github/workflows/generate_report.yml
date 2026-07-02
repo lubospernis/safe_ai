@@ -71,6 +71,14 @@ jobs:
           MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
         run: python reports/write_run_manifest.py
 
+      - name: Update run log
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add reports/output/run_log.json
+          git diff --cached --quiet || git commit -m "chore: update run log [skip ci]"
+          git push
+
       - name: Rename reports for Pages
         run: |
           mv reports/output/report_latest.html reports/output/index.html

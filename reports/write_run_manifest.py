@@ -19,6 +19,8 @@ from pathlib import Path
 
 import duckdb
 
+from append_run_log import append_run_log
+
 OUTPUT_DIR = Path(__file__).parent / "output"
 
 
@@ -90,6 +92,9 @@ def main() -> None:
         f"cost=${cost['total_cost_usd']:.3f}  "
         f"verdict={quality['verdict']}"
     )
+
+    log_entry = append_run_log(cost)
+    print(f"Run log appended: {log_entry['run_id']}  type={log_entry['run_type']}")
 
 
 if __name__ == "__main__":

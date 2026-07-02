@@ -4,11 +4,14 @@ import json
 import textwrap
 from pathlib import Path
 
+import anthropic
 import pandas as pd
 from json_repair import repair_json
 
-from charts import _build_adhoc_chart, _build_ai_chart, _nbs_style_ax  # noqa: F401
+from charts import _build_adhoc_chart
 from cost import _Usage, _track_cost
+
+_SONNET_MODEL = "claude-sonnet-4-6"
 
 SQL_DIR = Path(__file__).parent / "sql"
 
@@ -32,31 +35,78 @@ _ECB_FOCUS_INDEX = "https://www.ecb.europa.eu/press/economic-bulletin/focus/"
 
 ADHOC_CONTENT_SYSTEM = textwrap.dedent("""
     You are a concise economic analyst writing a "Special Focus" sidebar for a Slovakia
-    SAFE survey report. Your task: write exactly 2 short bullets (≤ 30 words each)
-    comparing Slovak firms (SK) to the Euro Area (EA) on the topic indicated.
+    SAFE survey report. Your task: write 2–4 short bullets (≤ 35 words each) comparing
+    Slovak firms (SK) to the Euro Area (EA) on the topic indicated.
 
     RULES — READ CAREFULLY:
-    1. Only cite numbers that appear in the data table below. Do NOT invent or estimate.
-    2. If SK or EA data is missing, say so explicitly rather than omitting the comparison.
-    3. Bullets start with a bolded 3–5 word label: **Label:** sentence.
-    4. One sentence per bullet. Plain text only, no markdown headers or lists beyond bullets.
-    5. Return valid JSON only (no markdown fences):
-       {"finding": "One sentence headline ≤ 20 words", "bullets": ["bullet 1", "bullet 2"]}
-    6. The finding must name the theme and the most striking difference (SK vs EA).
-       If results are similar, say so.
+    1. Only cite numbers that appear verbatim in the data table below. Do NOT invent,
+       estimate, or paraphrase percentages — if a number is not in the table, omit it.
+    2. Write a bullet ONLY if it reflects a genuine difference (≥ 3pp) or a striking
+       majority/minority pattern. Skip sub-items where SK and EA are near-identical.
+    3. If SK or EA data is missing for a sub-item, say so explicitly.
+    4. Bullets start with a bolded 3–5 word label: **Label:** sentence. One sentence each.
+    5. If routing notes are provided for a sub-item, reflect the base population in the
+       bullet (e.g. "among AI-using firms" or "among firms that applied for a loan").
+    6. Survey question texts are provided for context — use them to name what was measured,
+       but do NOT invent response categories not in the data.
+    7. Also return chart_sub_items: the list of sub-item codes (e.g. ["a", "c"]) that
+       should appear in the chart — only sub-items mentioned in your bullets.
+    8. Return valid JSON only (no markdown fences):
+       {"finding": "One sentence headline ≤ 20 words",
+        "bullets": ["bullet 1", ..., "bullet N"],
+        "chart_sub_items": ["a", ...]}
+    9. The finding must name the theme and the most striking SK vs EA difference.
+       If results are broadly similar across sub-items, say so and write 2 bullets.
 """).strip()
 
-_AI_SECTION_SYSTEM = textwrap.dedent("""
-    You are a concise economic analyst writing one sub-section of a "Special Focus: AI Adoption"
-    sidebar for a Slovakia SAFE survey report. Write exactly 2 short bullets (≤ 35 words each)
-    and one headline finding comparing Slovak firms (SK) to the Euro Area (EA).
+_SELECTION_SYSTEM = textwrap.dedent("""
+    You are a statistical analyst evaluating ECB SAFE survey data for a Slovakia report.
+    You will receive a table of response distributions for Slovak firms (SK) and the
+    Euro Area (EA) across multiple survey sub-items. For each sub-item, classify it:
 
-    RULES:
-    1. Only cite numbers from the data table provided. Do NOT invent.
-    2. Bullets start with a bolded 3–5 word label: **Label:** sentence.
-    3. If a routing note is provided, mention it where relevant (e.g. "among AI-using firms").
-    4. Return valid JSON only (no markdown fences):
-       {"finding": "One sentence ≤ 20 words", "bullets": ["bullet 1", "bullet 2"]}
+    - "interesting" if: categorical sub-item has SK vs EA difference ≥ 3pp on any
+      response category, OR a clear majority/minority pattern (>50% in one code);
+      continuous sub-item has SK vs EA mean difference ≥ 3pp.
+    - "skip" if: all gaps are < 3pp and there is no striking pattern.
+
+    Also note any routing restrictions you can infer from the question texts provided
+    (e.g. "asked only of firms using AI" → routing_note = "among AI-using firms").
+
+    Return JSON only (no markdown):
+    {
+      "interesting": ["a", "c"],
+      "skip": ["b"],
+      "routing_notes": {"a": "all firms", "c": "among AI-using firms", "b": ""}
+    }
+
+    If you cannot determine interestingness (too few rows, ambiguous data), include
+    the sub-item in "interesting" so it is not silently dropped.
+""").strip()
+
+_ADHOC_REVIEW_SYSTEM = textwrap.dedent("""
+    You are a critical editor reviewing a "Special Focus" sidebar for a financial survey
+    report on ECB SAFE data for Slovakia. You will receive the finding, bullets, and
+    the data that was provided to the analyst who wrote them.
+
+    Score on four dimensions, each 1–10:
+    - grounding (1–10): Every number in the bullets appears verbatim in the data table.
+      Score 1 if you see a percentage, net balance, or count not in the data.
+      Score 10 if every cited number is directly traceable to a row in the table.
+    - coverage (1–10): The bullets cover the most striking SK vs EA differences.
+      Score low if a large gap (≥10pp) is ignored while smaller ones are highlighted.
+      Score 10 if the headline finding and bullets address the most important patterns.
+    - readability (1–10): Plain English accessible to a non-expert. Complete sentences.
+      No jargon. Score 1 if the text is robotic, boilerplate, or hard to parse.
+    - chart_alignment (1–10): The listed chart sub-items match the bullets.
+      Score low if the chart shows sub-items not mentioned in bullets, or omits the
+      sub-item driving the headline finding.
+
+    You are a strict reviewer. Score honestly — a 7 is a real failure here.
+    Return JSON only (no markdown):
+    {"grounding": <1-10>, "coverage": <1-10>, "readability": <1-10>,
+     "chart_alignment": <1-10>, "verdict": "pass" or "fail", "reason": "<one sentence>"}
+
+    Set verdict to "fail" if ANY dimension is below 8.
 """).strip()
 
 _ADHOC_CHART_SQL_CONTINUOUS = """
@@ -105,6 +155,38 @@ def _fetch_adhoc_chart_data(df: pd.DataFrame, theme: dict, wave_number: int, sch
     template = _ADHOC_CHART_SQL_CONTINUOUS if _is_continuous(df) else _ADHOC_CHART_SQL_CATEGORICAL
     sql = template.format(schema=schema, wave_number=wave_number, module_id=theme["module_id"])
     return con.execute(sql).df()
+
+
+def _fetch_question_texts(con, schema: str, module_ids: list[str]) -> str:
+    """Return a formatted block of survey question texts for the given module IDs from ref_safe__annex."""
+    try:
+        annex_cols = con.execute(f"""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = '{schema}'
+              AND table_name = 'ref_safe__annex'
+              AND column_name LIKE 'safe_%'
+            ORDER BY column_name DESC
+        """).fetchall()
+        wave_cols = [r[0] for r in annex_cols]
+        if not wave_cols:
+            return ""
+        coalesce_expr = ", ".join(wave_cols)
+        pattern = " OR ".join(f"UPPER(question_item) LIKE UPPER('{m}%')" for m in module_ids)
+        rows = con.execute(f"""
+            SELECT question_item, COALESCE({coalesce_expr}) AS question_text
+            FROM {schema}.ref_safe__annex
+            WHERE element = 'question' AND ({pattern})
+            ORDER BY question_item
+        """).fetchall()
+        if not rows:
+            return ""
+        lines = ["Survey question texts (use for plain-language descriptions only):"]
+        for qitem, qtext in rows:
+            if qtext:
+                lines.append(f"  {qitem.upper()}: {qtext}")
+        return "\n".join(lines)
+    except Exception:
+        return ""
 
 
 def detect_adhoc_theme(wave_number: int, con, schema: str, mistral_client=None, cost_tracker: dict | None = None) -> dict | None:
@@ -183,6 +265,97 @@ def detect_adhoc_theme(wave_number: int, con, schema: str, mistral_client=None, 
     }
 
 
+def _build_full_data_table(df: pd.DataFrame) -> tuple[str, str]:
+    """Build the full data table string for all sub-items. Returns (table, data_note)."""
+    is_cont = _is_continuous(df)
+    if is_cont:
+        df = df[df["response_raw"] <= 100].copy()
+        lines = ["country_code | sub_item | mean_pct | median_pct | n_firms"]
+        for (cc, sub), grp in df.groupby(["country_code", "sub_item"]):
+            grp = grp.sort_values("response_raw")
+            total_w = grp["n_firms_wtd"].sum()
+            if total_w == 0:
+                continue
+            wtd_mean = (grp["response_raw"] * grp["n_firms_wtd"]).sum() / total_w
+            cumw = grp["n_firms_wtd"].cumsum()
+            median_val = int(grp[cumw >= total_w / 2]["response_raw"].iloc[0])
+            lines.append(
+                f"{cc} | {sub} | {wtd_mean:.1f}% | {median_val}% | {int(grp['n_firms'].sum())}"
+            )
+        return "\n".join(lines), (
+            "\n\nNOTE: Each firm gave a numeric % estimate. "
+            "The table shows the weighted mean and approximate median of those estimates."
+        )
+    else:
+        pivot_lines = ["country_code | sub_item | response_raw | pct_wtd | n_firms"]
+        for _, row in df.iterrows():
+            pivot_lines.append(
+                f"{row['country_code']} | {row['sub_item']} | {row['response_raw']} "
+                f"| {row['pct_wtd']:.1f}% | {int(row['n_firms'])}"
+            )
+        return "\n".join(pivot_lines), ""
+
+
+def _select_interesting_sub_items(
+    df: pd.DataFrame,
+    full_table: str,
+    question_texts: dict,
+    theme_label: str,
+    cost_tracker: dict,
+    mistral_client=None,
+) -> tuple[list[str], dict[str, str]]:
+    """Phase 1: ask Mistral Small to classify sub-items as interesting or not.
+
+    Returns (interesting_sub_items, routing_notes). Falls back to all sub-items on failure.
+    """
+    all_subs = sorted(df["sub_item"].unique().tolist())
+    if len(all_subs) <= 1:
+        return all_subs, {s: "" for s in all_subs}
+
+    qt_block = ""
+    if question_texts:
+        qt_block = "\n\nQuestion texts from survey annex:\n" + "\n".join(
+            f"  Sub-item {k}: {v}" for k, v in question_texts.items()
+        )
+
+    user_msg = (
+        f"Topic: {theme_label}\n"
+        f"Sub-items present: {', '.join(all_subs)}{qt_block}\n\n"
+        f"Data (SK vs EA):\n{full_table}\n\n"
+        "Classify each sub-item and return routing notes."
+    )
+
+    if mistral_client is None:
+        return all_subs, {s: "" for s in all_subs}
+
+    try:
+        model = "mistral-small-latest"
+        resp = mistral_client.chat.complete(
+            model=model,
+            max_tokens=300,
+            messages=[
+                {"role": "system", "content": _SELECTION_SYSTEM},
+                {"role": "user", "content": user_msg},
+            ],
+        )
+        raw = resp.choices[0].message.content.strip()
+        if resp.usage:
+            _track_cost(cost_tracker, model,
+                        _Usage(resp.usage.prompt_tokens, resp.usage.completion_tokens))
+        if raw.startswith("```"):
+            raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+        sel = json.loads(repair_json(raw))
+        interesting = sel.get("interesting", all_subs)
+        routing_notes = sel.get("routing_notes", {s: "" for s in all_subs})
+        if not interesting:
+            interesting = all_subs
+        print(f"  Phase 1 selection: interesting={interesting}, skip={sel.get('skip', [])}")
+        return interesting, routing_notes
+    except Exception as e:
+        print(f"  Phase 1 selection failed ({e}) — using all sub-items")
+        return all_subs, {s: "" for s in all_subs}
+
+
 def build_adhoc_spotlight(
     theme: dict,
     wave_number: int,
@@ -190,8 +363,14 @@ def build_adhoc_spotlight(
     schema: str,
     mistral_client,
     cost_tracker: dict,
+    anthropic_client=None,
 ) -> dict | None:
-    """Generate the adhoc spotlight section. Returns a rendered-section dict or None."""
+    """Generate the adhoc spotlight section using a 3-phase agentic design.
+
+    Phase 1 (Mistral Small): classify sub-items as interesting/skip.
+    Phase 2 (Sonnet): write 2-4 bullets for interesting sub-items, return chart_sub_items.
+    Phase 3 (Mistral Large): critical review — scores all dims; warns if any < 8.
+    """
     sql_template = (SQL_DIR / "adhoc_spotlight.sql").read_text()
     sql = sql_template.format(
         wave_number=wave_number,
@@ -210,60 +389,75 @@ def build_adhoc_spotlight(
     if df.empty:
         return None
 
-    if _is_continuous(df):
+    is_cont = _is_continuous(df)
+    if is_cont:
         df = df[df["response_raw"] <= 100].copy()
-        lines = ["country_code | sub_item | mean_pct | median_pct | n_firms"]
-        for (cc, sub), grp in df.groupby(["country_code", "sub_item"]):
-            grp = grp.sort_values("response_raw")
-            total_w = grp["n_firms_wtd"].sum()
-            wtd_mean = (grp["response_raw"] * grp["n_firms_wtd"]).sum() / total_w
-            cumw = grp["n_firms_wtd"].cumsum()
-            median_val = int(grp[cumw >= total_w / 2]["response_raw"].iloc[0])
-            lines.append(
-                f"{cc} | {sub} | {wtd_mean:.1f}% | {median_val}% | {int(grp['n_firms'].sum())}"
-            )
-        data_table = "\n".join(lines)
-        data_note = (
-            "\n\nNOTE: Each firm gave a numeric % estimate. "
-            "The table shows the weighted mean and approximate median of those estimates."
-        )
-    else:
-        pivot_lines = ["country_code | sub_item | response_raw | pct_wtd | n_firms"]
-        for _, row in df.iterrows():
-            pivot_lines.append(
-                f"{row['country_code']} | {row['sub_item']} | {row['response_raw']} "
-                f"| {row['pct_wtd']:.1f}% | {int(row['n_firms'])}"
-            )
-        data_table = "\n".join(pivot_lines)
-        data_note = ""
 
-    question_ctx = ""
-    if theme.get("question_texts"):
-        question_ctx = "\n".join(
-            f"  Sub-item {k}: {v}" for k, v in theme["question_texts"].items()
-        )
-        question_ctx = f"\n\nQuestion text:\n{question_ctx}"
+    full_table, data_note = _build_full_data_table(df)
 
-    user_msg = (
-        f"Topic: {theme['theme_label']}{question_ctx}\n\n"
-        f"Data (wave {wave_number}, SK vs EA):\n{data_table}{data_note}\n\n"
-        "Write the finding and 2 bullets as specified."
+    # ── Phase 1: select interesting sub-items ────────────────────────────────
+    interesting_subs, routing_notes = _select_interesting_sub_items(
+        df, full_table, theme.get("question_texts", {}), theme["theme_label"],
+        cost_tracker, mistral_client=mistral_client,
     )
 
-    model = "mistral-small-latest"
-    try:
-        resp = mistral_client.chat.complete(
-            model=model,
-            max_tokens=200,
-            messages=[
-                {"role": "system", "content": ADHOC_CONTENT_SYSTEM},
-                {"role": "user", "content": user_msg},
-            ],
+    # Filter df to interesting sub-items for the writing prompt
+    df_interesting = df[df["sub_item"].isin(interesting_subs)].copy()
+    if df_interesting.empty:
+        df_interesting = df  # fallback
+
+    interesting_table, _ = _build_full_data_table(df_interesting)
+
+    # Build question context
+    question_ctx = ""
+    if theme.get("question_texts"):
+        question_ctx = "\n\nSurvey question texts (use for plain-language descriptions only):\n" + "\n".join(
+            f"  Sub-item {k}: {v}" for k, v in theme["question_texts"].items()
+            if k in interesting_subs
         )
-        raw = resp.choices[0].message.content.strip()
-        if resp.usage:
-            _track_cost(cost_tracker, model,
-                        _Usage(resp.usage.prompt_tokens, resp.usage.completion_tokens))
+
+    routing_ctx = ""
+    if any(v for v in routing_notes.values()):
+        routing_ctx = "\n\nRouting notes (reflect in bullets):\n" + "\n".join(
+            f"  Sub-item {k}: {v}" for k, v in routing_notes.items()
+            if k in interesting_subs and v
+        )
+
+    # ── Phase 2: write bullets ───────────────────────────────────────────────
+    user_msg = (
+        f"Topic: {theme['theme_label']}{question_ctx}{routing_ctx}\n\n"
+        f"Data (wave {wave_number}, SK vs EA, interesting sub-items only):\n"
+        f"{interesting_table}{data_note}\n\n"
+        "Write the finding, 2-4 bullets, and chart_sub_items as specified."
+    )
+
+    try:
+        if anthropic_client is not None:
+            model = _SONNET_MODEL
+            resp = anthropic_client.messages.create(
+                model=model,
+                max_tokens=800,
+                system=ADHOC_CONTENT_SYSTEM,
+                messages=[{"role": "user", "content": user_msg}],
+            )
+            raw = resp.content[0].text.strip()
+            _track_cost(cost_tracker, model, _Usage(
+                resp.usage.input_tokens, resp.usage.output_tokens,
+            ))
+        else:
+            model = "mistral-small-latest"
+            resp = mistral_client.chat.complete(
+                model=model,
+                max_tokens=800,
+                messages=[
+                    {"role": "system", "content": ADHOC_CONTENT_SYSTEM},
+                    {"role": "user", "content": user_msg},
+                ],
+            )
+            raw = resp.choices[0].message.content.strip()
+            if resp.usage:
+                _track_cost(cost_tracker, model,
+                            _Usage(resp.usage.prompt_tokens, resp.usage.completion_tokens))
         if raw.startswith("```"):
             raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
         result = json.loads(repair_json(raw))
@@ -274,270 +468,79 @@ def build_adhoc_spotlight(
     bullets = result.get("bullets", [])
     if isinstance(bullets, str):
         bullets = [bullets]
+    chart_sub_items = result.get("chart_sub_items", interesting_subs)
+    if not chart_sub_items:
+        chart_sub_items = interesting_subs
+    print(f"  Phase 2: {len(bullets)} bullets, chart_sub_items={chart_sub_items}")
 
-    is_cont = _is_continuous(df)
+    # ── Build chart for selected sub-items ───────────────────────────────────
     chart_png = None
     try:
         chart_df = _fetch_adhoc_chart_data(df, theme, wave_number, schema, con)
-        chart_png = _build_adhoc_chart(chart_df, theme, is_continuous=is_cont)
+        chart_df_filtered = chart_df[chart_df["sub_item"].isin(chart_sub_items)]
+        if chart_df_filtered.empty:
+            chart_df_filtered = chart_df
+        chart_png = _build_adhoc_chart(chart_df_filtered, theme, is_continuous=is_cont)
         if chart_png:
-            print(f"  Adhoc chart built ({len(chart_df)} rows)")
+            print(f"  Adhoc chart built ({len(chart_df_filtered)} rows, subs={list(chart_df_filtered['sub_item'].unique())})")
     except Exception as e:
         print(f"  Adhoc chart skipped: {e}")
 
-    return {
+    # ── Phase 3: critical review (Mistral Large, threshold ≥ 8) ─────────────
+    review_scores: dict = {}
+    review_passed = True
+    if mistral_client is not None:
+        try:
+            review_text = (
+                f"Topic: {theme['theme_label']}\n"
+                f"Finding: {result.get('finding', '')}\n"
+                f"Bullets:\n" + "\n".join(f"  - {b}" for b in bullets) +
+                f"\n\nChart shows sub-items: {chart_sub_items}\n"
+                f"Full data provided to the model:\n{interesting_table}{data_note}"
+            )
+            review_model = "mistral-large-2512"
+            review_resp = mistral_client.chat.complete(
+                model=review_model,
+                max_tokens=200,
+                messages=[
+                    {"role": "system", "content": _ADHOC_REVIEW_SYSTEM},
+                    {"role": "user", "content": review_text},
+                ],
+            )
+            review_raw = review_resp.choices[0].message.content.strip()
+            if review_raw.startswith("```"):
+                review_raw = review_raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+            review_result = json.loads(repair_json(review_raw))
+            if review_resp.usage:
+                _track_cost(cost_tracker, review_model,
+                            _Usage(review_resp.usage.prompt_tokens, review_resp.usage.completion_tokens))
+            review_scores = {
+                k: review_result.get(k, 10)
+                for k in ("grounding", "coverage", "readability", "chart_alignment")
+            }
+            min_score = min(review_scores.values())
+            review_passed = min_score >= 8
+            verdict = "PASS" if review_passed else "WARN"
+            print(
+                f"  Phase 3 review: "
+                + "  ".join(f"{k}={v}/10" for k, v in review_scores.items())
+                + f"  → {verdict}"
+            )
+            if not review_passed:
+                print(f"  Review reason: {review_result.get('reason', '')}")
+        except Exception as e:
+            print(f"  Phase 3 review failed ({e}) — skipping")
+
+    section = {
         "section_id": "adhoc_spotlight",
         "title": f"Special Focus: {theme['theme_label']}",
         "finding": result.get("finding", ""),
         "bullets": bullets,
         "chart_png": chart_png,
         "theme_label": theme["theme_label"],
+        "review_scores": review_scores,
+        "review_passed": review_passed,
     }
+    return section
 
 
-def _ai_continuous_summary(df: pd.DataFrame) -> str:
-    """Summarise a continuous 0-100 distribution to mean + median per country × sub_item."""
-    lines = ["country | sub_item | sub_item_label | mean_pct | median_pct | n_firms"]
-    for (cc, sub), grp in df.groupby(["country_code", "sub_item"]):
-        grp = grp.sort_values("response_raw")
-        total_w = grp["n_firms_wtd"].sum()
-        if total_w == 0:
-            continue
-        wtd_mean = (grp["response_raw"] * grp["n_firms_wtd"]).sum() / total_w
-        cumw = grp["n_firms_wtd"].cumsum()
-        median_val = int(grp[cumw >= total_w / 2]["response_raw"].iloc[0])
-        label = grp["sub_item_label"].iloc[0] if "sub_item_label" in grp.columns else sub
-        lines.append(
-            f"{cc} | {sub} | {label} | {wtd_mean:.1f}% | {median_val}% | {int(grp['n_firms'].sum())}"
-        )
-    return "\n".join(lines)
-
-
-def _ai_categorical_summary(df: pd.DataFrame) -> str:
-    """Summarise a categorical distribution, using decoded response_label where available."""
-    lines = ["country | response_label | pct_wtd | n_firms"]
-    for _, row in df.sort_values(["country_code", "response_raw"]).iterrows():
-        label = row.get("response_label") or str(int(row["response_raw"]))
-        lines.append(
-            f"{row['country_code']} | {label} | {row['pct_wtd']:.1f}% | {int(row['n_firms'])}"
-        )
-    return "\n".join(lines)
-
-
-def _call_mistral_ai_section(topic: str, data_table: str, routing_note: str,
-                              mistral_client, cost_tracker: dict) -> dict:
-    """Call Mistral to generate finding + bullets for one AI sub-section."""
-    routing_line = f"\nRouting: {routing_note}" if routing_note else ""
-    user_msg = f"Topic: {topic}{routing_line}\n\nData (SK vs EA):\n{data_table}\n\nWrite the finding and 2 bullets."
-    model = "mistral-small-latest"
-    resp = mistral_client.chat.complete(
-        model=model,
-        max_tokens=220,
-        messages=[
-            {"role": "system", "content": _AI_SECTION_SYSTEM},
-            {"role": "user", "content": user_msg},
-        ],
-    )
-    raw = resp.choices[0].message.content.strip()
-    if resp.usage:
-        _track_cost(cost_tracker, model, _Usage(resp.usage.prompt_tokens, resp.usage.completion_tokens))
-    if raw.startswith("```"):
-        raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
-    result = json.loads(repair_json(raw))
-    bullets = result.get("bullets", [])
-    if isinstance(bullets, str):
-        bullets = [bullets]
-    return {"finding": result.get("finding", ""), "bullets": bullets}
-
-
-def build_ai_adoption_spotlight(
-    wave_number: int,
-    con,
-    schema: str,
-    mistral_client,
-    cost_tracker: dict,
-) -> dict | None:
-    """Generate the AI Adoption Special Focus section using mart_safe__ai_adoption.
-
-    Covers all 6 modules (QA1-QA4, QB1, QB2) in three sub-sections:
-      A — Current AI use (QA1 + QA4)
-      B — Drivers and Barriers (QA2 + QA3)
-      C — Peer Expectations (QB1 + QB2)
-    """
-    try:
-        check = con.execute(
-            f"SELECT COUNT(*) FROM {schema}.mart_safe__ai_adoption "
-            f"WHERE wave_number = {wave_number}"
-        ).fetchone()[0]
-    except Exception:
-        return None
-
-    if check == 0:
-        return None
-
-    def _fetch(modules: list[str], country_codes: tuple = ("SK", "EA")) -> pd.DataFrame:
-        cc_list = ", ".join(f"'{c}'" for c in country_codes)
-        mod_list = ", ".join(f"'{m}'" for m in modules)
-        return con.execute(f"""
-            SELECT module_id, sub_item, sub_item_label, country_code,
-                   response_raw, response_label, pct_wtd, n_firms, n_firms_wtd,
-                   is_continuous, routing_note, question_text
-            FROM {schema}.mart_safe__ai_adoption
-            WHERE wave_number = {wave_number}
-              AND module_id IN ({mod_list})
-              AND country_code IN ({cc_list})
-            ORDER BY module_id, sub_item, country_code, response_raw
-        """).df()
-
-    sub_sections = []
-
-    # Sub-section A: Current AI use — QA1 (categorical) + QA4 (continuous)
-    df_qa1 = _fetch(["qa1"])
-    df_qa4 = _fetch(["qa4"])
-
-    if not df_qa1.empty:
-        chart_df_a = df_qa1[df_qa1["response_raw"] != 9].copy()
-        chart_png_a = _build_ai_chart(chart_df_a, "AI use in own firm (QA1)", is_continuous=False)
-        if chart_png_a:
-            print(f"  AI chart A built (QA1, {len(chart_df_a)} rows)")
-
-        qa1_table = _ai_categorical_summary(chart_df_a)
-        qa4_note = ""
-        if not df_qa4.empty:
-            df_qa4_valid = df_qa4[(df_qa4["response_raw"] >= 0) & (df_qa4["response_raw"] <= 100)].copy()
-            if not df_qa4_valid.empty:
-                qa4_note = "\n\nQA4 — % of total investment planned for AI (median per country):\n"
-                for cc, grp in df_qa4_valid.groupby("country_code"):
-                    grp = grp.sort_values("response_raw")
-                    total_w = grp["n_firms_wtd"].sum()
-                    if total_w > 0:
-                        cumw = grp["n_firms_wtd"].cumsum()
-                        median_val = int(grp[cumw >= total_w / 2]["response_raw"].iloc[0])
-                        qa4_note += f"  {cc}: median {median_val}% (n={int(grp['n_firms'].sum())})\n"
-
-        try:
-            llm_a = _call_mistral_ai_section(
-                "AI adoption — current use intensity (QA1) and planned AI investment share (QA4)",
-                qa1_table + qa4_note,
-                "QA1 asked of all firms. QA4 asked of all firms — % of total investment expected in AI next 12 months.",
-                mistral_client, cost_tracker,
-            )
-        except Exception as e:
-            print(f"  AI section A Mistral failed: {e}")
-            llm_a = {"finding": "AI adoption levels vary between Slovakia and the Euro Area.", "bullets": []}
-
-        sub_sections.append({
-            "heading": "AI Use in Own Firm",
-            "finding": llm_a["finding"],
-            "bullets": llm_a["bullets"],
-            "chart_png": chart_png_a if not df_qa1.empty else None,
-        })
-
-    # Sub-section B: Drivers and Barriers — QA2 + QA3
-    df_qa2 = _fetch(["qa2"])
-    df_qa3 = _fetch(["qa3"])
-
-    if not df_qa2.empty or not df_qa3.empty:
-        chart_df_b = df_qa3[df_qa3["sub_item"] == "a"].copy() if not df_qa3.empty else pd.DataFrame()
-        chart_png_b = None
-        if not chart_df_b.empty:
-            chart_df_b = chart_df_b[chart_df_b["response_raw"] != 9]
-            chart_png_b = _build_ai_chart(chart_df_b, "Main barriers to AI adoption (QA3, 1st choice)", is_continuous=False)
-            if chart_png_b:
-                print(f"  AI chart B built (QA3, {len(chart_df_b)} rows)")
-
-        qa2_table = ""
-        if not df_qa2.empty:
-            df_qa2a = df_qa2[(df_qa2["sub_item"] == "a") & (df_qa2["response_raw"] != 9)]
-            qa2_table = "QA2 — Reasons for using AI (1st choice, AI users only):\n" + _ai_categorical_summary(df_qa2a)
-        qa3_table = ""
-        if not df_qa3.empty:
-            df_qa3a = df_qa3[(df_qa3["sub_item"] == "a") & (df_qa3["response_raw"] != 9)]
-            qa3_table = "\nQA3 — Barriers to AI adoption (1st choice, non/light users only):\n" + _ai_categorical_summary(df_qa3a)
-
-        try:
-            llm_b = _call_mistral_ai_section(
-                "AI adoption — drivers and barriers",
-                qa2_table + qa3_table,
-                "QA2: asked only to firms with any AI use (QA1 ≥ 2). QA3: asked only to firms not using or using AI infrequently (QA1 = 1 or 2). Percentages are not comparable across QA2 and QA3 as they have different base populations.",
-                mistral_client, cost_tracker,
-            )
-        except Exception as e:
-            print(f"  AI section B Mistral failed: {e}")
-            llm_b = {"finding": "AI drivers and barriers differ between Slovakia and peers.", "bullets": []}
-
-        sub_sections.append({
-            "heading": "Why Firms Use or Avoid AI",
-            "finding": llm_b["finding"],
-            "bullets": llm_b["bullets"],
-            "chart_png": chart_png_b,
-        })
-
-    # Sub-section C: Peer Expectations — QB1 + QB2
-    df_qb1 = _fetch(["qb1"])
-    df_qb2 = _fetch(["qb2"])
-
-    if not df_qb1.empty:
-        df_qb1a = df_qb1[df_qb1["sub_item"] == "a"].copy()
-        chart_png_c = None
-        if not df_qb1a.empty:
-            df_qb1a = df_qb1a[(df_qb1a["response_raw"] >= 0) & (df_qb1a["response_raw"] <= 100)].copy()
-            df_qb1a["bucket"] = (df_qb1a["response_raw"] // 10) * 10
-            bucket_agg = (
-                df_qb1a.groupby(["country_code", "bucket"])
-                .agg(n_firms_wtd=("n_firms_wtd", "sum"), n_firms=("n_firms", "sum"))
-                .reset_index()
-            )
-            totals = bucket_agg.groupby("country_code")["n_firms_wtd"].sum().rename("n_total_wtd")
-            bucket_df = bucket_agg.merge(totals, on="country_code")
-            bucket_df["pct_wtd"] = (bucket_df["n_firms_wtd"] / bucket_df["n_total_wtd"] * 100).round(1)
-            bucket_df = bucket_df.rename(columns={"bucket": "response_raw"})
-            bucket_df["sub_item"] = "a"
-            bucket_df["sub_item_label"] = "In your country"
-            chart_png_c = _build_ai_chart(bucket_df, "Peer AI adoption — own country (QB1a)", is_continuous=True)
-            if chart_png_c:
-                print(f"  AI chart C built (QB1a bucketed, {len(bucket_df)} rows)")
-
-        qb1_sum = _ai_continuous_summary(
-            df_qb1[(df_qb1["response_raw"] >= 0) & (df_qb1["response_raw"] <= 100)]
-        )
-        qb2_sum = ""
-        if not df_qb2.empty:
-            df_qb2v = df_qb2[(df_qb2["response_raw"] >= 0) & (df_qb2["response_raw"] <= 100)]
-            qb2_sum = "\n\nQB2 — Expected peer adoption next 12 months:\n" + _ai_continuous_summary(df_qb2v)
-
-        try:
-            llm_c = _call_mistral_ai_section(
-                "Peer AI adoption expectations (QB1 current, QB2 next 12 months)",
-                "QB1 — % of similar firms estimated to have invested in AI today:\n" + qb1_sum + qb2_sum,
-                "QB1/QB2 asked of all firms. Each firm gave a single numeric % estimate. Table shows weighted mean and approximate median. QB2 g3=SME peers, g4=large firm peers.",
-                mistral_client, cost_tracker,
-            )
-        except Exception as e:
-            print(f"  AI section C Mistral failed: {e}")
-            llm_c = {"finding": "Firms expect AI adoption to roughly double among peers next year.", "bullets": []}
-
-        sub_sections.append({
-            "heading": "Peer AI Adoption Expectations",
-            "finding": llm_c["finding"],
-            "bullets": llm_c["bullets"],
-            "chart_png": chart_png_c,
-        })
-
-    if not sub_sections:
-        return None
-
-    top_finding = sub_sections[0]["finding"] if sub_sections else "AI adoption is nascent across Slovakia and the Euro Area."
-    all_bullets = []
-    for ss in sub_sections:
-        all_bullets.extend(ss.get("bullets", []))
-
-    return {
-        "section_id": "adhoc_spotlight",
-        "title": "Special Focus: AI Adoption in Slovak and Euro Area Firms",
-        "finding": top_finding,
-        "bullets": all_bullets,
-        "chart_png": sub_sections[0].get("chart_png") if sub_sections else None,
-        "theme_label": "AI Adoption",
-        "sub_sections": sub_sections,
-    }

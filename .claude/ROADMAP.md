@@ -13,9 +13,8 @@ Claude: tick items off as they get built; don't add speculative sub-tasks.
 
 ## Next
 
-- [ ] SK translation quality — Mistral Small output is fluent but not analyst-grade; consider prompt refinement or few-shot examples
+- [ ] SK newsletter — adapt `send_newsletter.py` to send the Slovak HTML variant (now: prerequisites met — newsletter workflow gate in place)
 - [ ] Ask for feedback on the exec summary (in-report form or email link)
-- [ ] SK newsletter — adapt `send_newsletter.py` to send the Slovak HTML variant
 - [ ] Mobile viewing — report CSS is desktop-only; add responsive breakpoints
 - [ ] Auto subscription through Vercel + Supabase
 - [ ] Country selector — let the user pick a focal country in config (currently hard-coded to SK)
@@ -78,3 +77,13 @@ Claude: tick items off as they get built; don't add speculative sub-tasks.
 - [x] Non-response sentinel filtering — `-9999` codes excluded from adhoc continuous charts with `response_raw BETWEEN 0 AND 100`
 - [x] Modularise run_report.py — split 3,175-line monolith into 6 focused modules: `cost.py`, `db.py`, `charts.py`, `adhoc.py`, `llm.py`, `html_builder.py`; `run_report.py` reduced to thin orchestrator
 - [x] Unit test framework — pytest + pytest-mock; 39 tests across `test_cost.py`, `test_charts.py`, `test_llm.py`, `test_html.py`; all passing; `_md_to_html()` extracted to `html_builder.py` fixing `**bold**` rendering in section bullets and adhoc sub-section bullets
+- [x] Adhoc model upgrade — `build_ai_adoption_spotlight()` and `build_adhoc_spotlight()` upgraded from Mistral Small (220 tok) to Sonnet 4.6 (500 tok) via `anthropic_client`; Mistral is kept as fallback when no Anthropic client passed
+- [x] Adhoc quality gate — `quality_check.py` extended with `extract_adhoc_text()` + a second Mistral Small supervisor call on the adhoc spotlight; fails CI if any dimension < 6
+- [x] `--adhoc-only` flag — `run_report.py --adhoc-only` skips interest checks, main section generation, ECB fetch, and wave memory write; runs only adhoc spotlight + HTML assembly (cheap iteration mode)
+- [x] Exec summary model upgrades — Mistral Large 2512 for both passes of exec summary; Mistral Medium 2505 for Slovak translation; model used logged in `cost_tracker.json`
+- [x] Per-run cost log — `run_log.json` (append-only array) + `ref_safe__run_log` MotherDuck table; each entry records `run_type`, `run_date`, `run_time`, wave, cost, model names
+- [x] Wave memory in exec summary — `get_exec_summary()` accepts `historical_context` (last 3 waves), injected into pass 2 only with strict "only when meaningful" rule; never invents historical comparisons
+- [x] Annex question texts in AI adoption sub-sections — `_fetch_question_texts()` helper pre-fetches QA/QB survey wording and injects into all 3 `_call_ai_section()` calls; `_AI_SECTION_SYSTEM` tightened to 3 bullets/600 tokens with no-invention rule
+- [x] Adhoc exec summary bullet guarantee — mandatory 🔍 rule in `EXEC_SUMMARY_SYSTEM` + post-parse fallback in `get_exec_summary()` constructs one from `adhoc_section["finding"]` if Mistral omits it
+- [x] Generic adhoc topic readiness — `tests/test_adhoc_generic.py`: 5 tests with electrification mock data verify `detect_adhoc_theme()` + `build_adhoc_spotlight()` produce valid HTML-compatible output for unknown module types
+- [x] Human-in-the-loop newsletter gate — `send_newsletter.yml` split into `check` + `send` jobs; `send` uses `environment: newsletter-gate` (requires manual approval) when `run_type` contains "adhoc"; no-adhoc runs bypass gate automatically

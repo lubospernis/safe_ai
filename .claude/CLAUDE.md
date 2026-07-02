@@ -1,9 +1,38 @@
 ## Roadmap
 
 Feature ideas and implementation status are tracked in `.claude/ROADMAP.md`.
+
+---
+
+## New Adhoc Wave Checklist
+
+When a new wave arrives with previously unseen adhoc modules (e.g., a module not in `_MODULE_THEME_FALLBACK`):
+
+**No code changes required** — the generic pipeline handles unknown modules automatically:
+
+1. **dbt mart update** — run `dbt run --select mart_safe__adhoc_responses` after the new wave lands in the microdata. This table is the single source of truth for all adhoc modules.
+
+2. **Annex entries** — run `fetch_annex.py` (or let CI do it) so the new module's question texts appear in `ref_safe__annex`. The `_fetch_question_texts()` helper in `adhoc.py` queries this table live.
+
+3. **Verify detection** — run `run_report.py --adhoc-only` and confirm `detect_adhoc_theme()` logs the correct module ID. The theme label comes from `_MODULE_THEME_FALLBACK` if the module is known, or from Mistral Small classification otherwise.
+
+4. **Optional: add fallback label** — if the auto-classified label is poor, add the module ID to `_MODULE_THEME_FALLBACK` in `reports/adhoc.py` with the correct label.
+
+5. **Quality gate** — after the full run, `quality_check.py` runs a second supervisor call on the adhoc spotlight. If it scores < 6 on any dimension, CI blocks the deploy and you must investigate the prompt/data.
 When you complete a task that corresponds to a roadmap item, tick it off (change `[ ]` to `[x]`
 and move it to the Done section). Do not add speculative sub-tasks — only mark things done
 when the code is actually shipped.
+
+---
+
+## Python / pytest Commands
+
+Always use the **absolute path** for the venv Python to avoid shell-state failures:
+```bash
+/Users/lubospernis/Documents/safe_ai/env/bin/python3 -m pytest tests/ -q
+```
+`env/bin/python3` (relative) works when the shell cwd is the project root, but fails
+after a `cd` in the same session. Default to absolute path.
 
 ---
 

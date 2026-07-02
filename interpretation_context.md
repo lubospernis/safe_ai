@@ -1,7 +1,7 @@
 # Interpretation context from gap analysis
 
-- Compare SK’s 55.7% working capital financing (vs. EA 39.5%) to highlight liquidity reliance.
-- Contrast SK’s -4.0pp bank loan gap (availability > need) with EA’s +1.7pp to stress local resilience.
-- Frame SK’s 84% labour cost rises against EA’s 63% to underscore margin compression.
-- Note SK’s 59% upside inflation risk (vs. EA 55%) as a signal of persistent local price pressures.
-- Emphasise SK’s 26% turnover decline (vs. EA’s +1%) to spotlight revenue divergence.
+- Compare SK’s credit line gap (+14.8pp) to EA’s +12.6pp to highlight liquidity risk divergence.
+- Contrast SK’s 40% profit decline with EA’s 17% to emphasize margin pressure from labour costs.
+- Frame SK’s 59% upside inflation risk vs. EA’s 55% as persistent cost uncertainty driver.
+- Note SK’s turnover optimism (net 7%) lags EA (net 26%)—signal domestic demand weakness.
+- Highlight SK’s innovation financing (32.8%) vs. EA’s 20.2% as structural growth focus.

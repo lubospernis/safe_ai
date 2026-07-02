@@ -12,7 +12,14 @@
       "Bash(python3 -c \":*)",
       "Bash(env/bin/python -c \":*)",
       "Bash(../env/bin/dbt run --target dev --select int_safe__core_questions_long mart_safe__loan_applications)",
-      "Bash(../env/bin/dbt run --target dev --select mart_safe__financing_conditions mart_safe__q0b_pressingness)"
+      "Bash(../env/bin/dbt run --target dev --select mart_safe__financing_conditions mart_safe__q0b_pressingness)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(env/bin/python3 -c \"import mistralai; print\\(mistralai.__version__\\)\")",
+      "Bash(env/bin/python3 -m py_compile reports/quality_check.py)",
+      "Bash(env/bin/pip show *)",
+      "Bash(env/bin/pip install *)"
     ]
   }
 }

@@ -76,7 +76,7 @@ def _select_panels(sec: dict, df: pd.DataFrame, best_panel) -> list:
     return pinned[: sec["max_panels"]]
 
 
-def build_chart(sec: dict, df: pd.DataFrame, chart_type: str, best_panel) -> bytes:
+def build_chart(sec: dict, df: pd.DataFrame, chart_type: str, best_panel, chart_subtitle: str = "") -> bytes:
     panels = _select_panels(sec, df, best_panel)
     n_panels = len(panels)
     panel_col = sec["panel_col"]
@@ -99,7 +99,8 @@ def build_chart(sec: dict, df: pd.DataFrame, chart_type: str, best_panel) -> byt
     else:
         axes_flat = list(np.array(axes).flatten())
 
-    fig.subplots_adjust(top=0.86, hspace=0.70, wspace=0.30, bottom=0.22)
+    bottom_margin = 0.30 if chart_subtitle else 0.22
+    fig.subplots_adjust(top=0.86, hspace=0.70, wspace=0.30, bottom=bottom_margin)
     fig.patch.set_facecolor("#f4f4f4")
 
     waves = sorted(df["wave_number"].unique())
@@ -174,6 +175,10 @@ def build_chart(sec: dict, df: pd.DataFrame, chart_type: str, best_panel) -> byt
         handlelength=1.0,
         handleheight=0.8,
     )
+
+    if chart_subtitle:
+        fig.text(0.5, 0.005, chart_subtitle, ha="center", va="bottom",
+                 fontsize=7.5, color=NBS_TEXT, style="italic", wrap=True)
 
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="#f4f4f4")

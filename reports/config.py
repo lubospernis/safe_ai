@@ -140,7 +140,10 @@ SECTIONS = [
         "focus": (
             "Focus on bank loans (b) for Slovakia vs EA. "
             "Always include n_respondents and the instrument name (e.g. 'bank loans'). "
-            "If the SK forward expectation diverges from the EA trend, explain what that signals — "
+            "When describing SK vs EA divergence, always state the exact pp gap between them. "
+            "Only use 'notable' if the SK–EA gap ≥ 5 pp. Only use 'sharp' if the wave-over-wave change "
+            "≥ 5 pp. For smaller changes, use 'marginally' or 'slightly'. "
+            "If SK forward expectation diverges from the EA trend, explain what that signals — "
             "e.g. 'Slovak firms expect availability to deteriorate while EA firms expect improvement, "
             "suggesting persistent local supply tightness not yet visible in EA-wide data.'"
         ),
@@ -185,7 +188,11 @@ SECTIONS = [
         "always_include": False,
         "focus": (
             "Lead with Q11f (willingness of banks) for Slovakia vs EA — this is the key credit supply indicator. "
-            "If Q11a (economic outlook) is also deteriorating, note that as a macro-level drag on supply."
+            "If Q11a (economic outlook) is also deteriorating, note that as a macro-level drag on supply. "
+            "STRICT RULE: Only write mechanism language ('signalling', 'suggesting', 'indicating') if the "
+            "mechanism follows directly from the data or is supported by published ECB/NBS methodology. "
+            "Do NOT write phrases like 'tightening in non-bank financing buffers' without a published source. "
+            "Default: describe what the data shows — 'a net X% of firms reported Y deteriorated'."
         ),
     },
     {
@@ -306,8 +313,16 @@ SECTIONS = [
         "max_panels": 2,
         "always_include": False,
         "focus": (
-            "Focus on Slovakia. Highlight where SK 'access to finance' score (problem_id=3) "
-            "diverges from EA. Compare to the most pressing problem overall."
+            "Report the top 3 most pressing problems for Slovakia by avg_pressingness_wtd score. "
+            "CRITICAL: always contextualise the absolute score — the scale is 1–10 where 1 = not pressing "
+            "at all, 10 = extremely pressing. A score of 3.9 = low priority; 6 = moderate; 8 = very pressing. "
+            "Do NOT describe any problem as 'most pressing' in isolation — always say 'the most pressing "
+            "among the seven tested'. Never label a problem 'pressing' if its score is below 5. "
+            "If all scores are below 5, open with: 'Slovak firms rate all seven business problems as "
+            "relatively low priority (all scores below 5/10).' "
+            "Order bullets by descending avg_pressingness_wtd. "
+            "Compare SK vs EA rank order where they diverge — e.g. if access to finance ranks higher "
+            "for SK than EA despite both scoring low in absolute terms."
         ),
     },
 ]

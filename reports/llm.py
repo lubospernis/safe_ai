@@ -48,20 +48,44 @@ INTEREST_SYSTEM = textwrap.dedent("""
     {"interesting": true/false, "chart_type": "line" or "bar", "best_panel": "x" or null, "reason": "one sentence"}
 """).strip()
 
+NBS_STYLE_GUIDE = textwrap.dedent("""
+    Language and tone (modelled on NBS/ECB financial stability reports):
+    - Use precise quantitative language: "rose from X% to Y%", "declined by Z pp", "increased marginally"
+    - Qualitative intensity must match data magnitude:
+      * "marginally" / "slightly" = change ≤ 2 pp (or ≤ 0.3 score units for pressingness)
+      * "moderately" = 2–5 pp (0.3–0.8 units)
+      * "notably" / "significantly" = 5–10 pp (0.8–1.5 units) — only if data supports it
+      * "sharply" / "substantially" = > 10 pp (> 1.5 units) — only if data supports it
+    - NEVER use: "surged", "collapsed", "plummeted", "acute stress", "dramatic", "striking"
+    - Mechanism language ("signalling", "suggesting", "indicating") requires either:
+      (a) direct logical entailment from the data, or
+      (b) support from a published ECB/NBS/BIS source.
+      Otherwise: describe only what the data shows.
+    - Bullet ordering: most important/surprising finding first; routine confirmations last.
+      Never open with a bullet that summarises as "no change".
+""").strip()
+
 SECTION_CONTENT_SYSTEM = textwrap.dedent("""
     You are an ECB analyst writing content for a SAFE survey report focused on Slovakia.
-    Return a JSON object with exactly two fields:
+    Return a JSON object with exactly three fields: "finding", "bullets", "chart_subtitle".
 
     CRITICAL DATA RULE:
     Only cite numbers that appear verbatim in the section data provided to you, or in a
     query_mart tool result you actually ran in this session. Do NOT invent, estimate, or
     paraphrase percentages, net balances, or counts. If a number you want to cite is not
-    in the provided data, either call query_mart (only in the 3 permitted cases below)
+    in the provided data, either call query_mart (only in the 4 permitted cases below)
     or omit the comparison entirely.
+
+    {nbs_style_guide}
 
     "finding": A single declarative headline (max 12 words) summarising the most notable
       finding for Slovakia. Use active voice, name the direction. Do NOT mention question
       codes (Q10, Q5, etc.). Example: "Net tightening in interest rates reported by Slovak firms"
+
+    "chart_subtitle": One sentence (max 9 words) for a chart caption.
+      State the SK finding for the primary (pinned) panel with an actual number.
+      Example: "8% of Slovak firms reported interest rate increases."
+      Do NOT repeat the section title. Do NOT use question codes.
 
     "bullets": A list of 3 strings, each a bullet point (starting with "•") about the latest
       wave. Rules:
@@ -75,6 +99,9 @@ SECTION_CONTENT_SYSTEM = textwrap.dedent("""
         Write "rose from X% to Y%" instead.
       - For ambiguous metrics, briefly define what the question asked in plain language
         (one embedded clause is enough — see the survey question text provided below).
+      - Bullet ordering: put the most analytically significant finding first — largest
+        magnitude change, widest SK–EA divergence, or strongest reversal from prior wave.
+        Routine confirmations go last.
 
     CRITICAL prose rule for net balances:
       A net balance value already encodes direction. Always use the ABSOLUTE value in prose
@@ -103,10 +130,14 @@ SECTION_CONTENT_SYSTEM = textwrap.dedent("""
     Query templates (fill in UPPER_CASE placeholders only):
     {query_templates}
 
-    When to call query_mart — only these 3 cases justify a tool call:
+    When to call query_mart — only these 4 cases justify a tool call:
     1. You need data from before wave 30 (use int_safe__core_questions_long)
     2. You need a sub_item or column NOT present in the section data provided above
     3. You need to verify a historical extreme (e.g. "is this the highest since wave X?")
+    4. You want to use a qualitative intensity word ("notably", "sharply", "the widest gap
+       in N waves") and need to verify the current value is exceptional in recent context —
+       query int_safe__core_questions_long for the last 4 waves (wave_number >= current_wave - 3).
+       If the data does not support the intensity word, use a milder term or drop it.
 
     Do NOT call query_mart to:
     - Discover table or column names (the catalogue above is complete and current)
@@ -114,11 +145,12 @@ SECTION_CONTENT_SYSTEM = textwrap.dedent("""
     - Fetch the same wave/country/sub_item combinations already shown to you
     - Explore what tables exist (they are all listed above)
 
-    If none of the 3 cases apply, write your JSON response immediately.
+    If none of the 4 cases apply, write your JSON response immediately.
     Cite only numbers from the provided data or a tool result you actually ran.
 {historical_context}
     Return valid JSON only — no markdown fences, no commentary.
-""").strip()
+""").strip().format(nbs_style_guide=NBS_STYLE_GUIDE, schema_catalogue="{schema_catalogue}",
+                    query_templates="{query_templates}", historical_context="{historical_context}")
 
 EXEC_CROSS_SECTION_SYSTEM = textwrap.dedent("""
     You are a senior ECB economist. You will receive section-by-section findings from the
@@ -138,11 +170,13 @@ EXEC_CROSS_SECTION_SYSTEM = textwrap.dedent("""
     - These bullets are internal notes for a second analyst — they will NOT appear verbatim in the report.
 """).strip()
 
-EXEC_SUMMARY_SYSTEM = textwrap.dedent("""
+EXEC_SUMMARY_SYSTEM = textwrap.dedent(f"""
     You are an economist writing an executive summary of the latest ECB SAFE survey results
     for Slovakia. You will receive:
     1. Section-by-section findings from the report
     2. Cross-cutting themes identified by a first-pass analyst
+
+    {NBS_STYLE_GUIDE}
 
     Your task: write EXACTLY 3–4 bullets. No more. Cover BOTH financing conditions AND
     the economic situation of firms. Prioritise the most striking or cross-cutting findings
@@ -171,10 +205,16 @@ EXEC_SUMMARY_SYSTEM = textwrap.dedent("""
       in three waves" or "the first improvement since wave X". Do NOT mention prior waves just
       to show awareness of them. If the current wave finding stands on its own, omit the history.
       Never invent a historical comparison that is not explicitly supported by the context given.
+    - Scope discipline: if a bullet makes a broad claim (e.g. "overall liquidity tightening",
+      "financing access deteriorated", "credit conditions worsened"), the supporting evidence
+      must span ALL major instruments (bank loans, credit lines, trade credit). Do NOT make an
+      overall claim while citing only one instrument. Either: (a) aggregate across instruments,
+      or (b) narrow the claim to the specific instrument — e.g. "credit line availability
+      tightened" not "liquidity conditions tightened".
 
     Return a JSON array only — no markdown fences, no commentary:
     [
-      {"bullet": "**Label:** explanation", "section_id": "bank_loan_terms"},
+      {{"bullet": "**Label:** explanation", "section_id": "bank_loan_terms"}},
       ...
     ]
 
@@ -347,7 +387,7 @@ def _sme_divergence_note(df: pd.DataFrame, value_col: str, panel_col: str | None
 
 
 def _parse_section_response(raw: str, sec: dict) -> dict:
-    """Parse Sonnet JSON response into {"finding", "bullets"}."""
+    """Parse Sonnet JSON response into {"finding", "bullets", "chart_subtitle"}."""
     match = re.search(r'\{.*?"finding".*?"bullets".*?\}', raw, re.DOTALL)
     if not match:
         stripped = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
@@ -361,13 +401,15 @@ def _parse_section_response(raw: str, sec: dict) -> dict:
             bullets = [str(b).strip().lstrip("•- ") for b in raw_bullets if str(b).strip()][:3]
         else:
             bullets = [b.strip().lstrip("•- ") for b in str(raw_bullets).splitlines() if b.strip()][:3]
+        chart_subtitle = str(parsed.get("chart_subtitle", "")).strip()
     except (json.JSONDecodeError, AttributeError, TypeError):
         finding = sec["title"]
+        chart_subtitle = ""
         bullets = [
             line.strip().lstrip("•- ") for line in raw.splitlines()
             if line.strip() and not line.strip().startswith(("```", "{", "}", "*", "#"))
         ][:3]
-    return {"finding": finding, "bullets": bullets}
+    return {"finding": finding, "bullets": bullets, "chart_subtitle": chart_subtitle}
 
 
 def _check_one(sec: dict, df: pd.DataFrame) -> dict:
@@ -626,8 +668,11 @@ def get_exec_summary(
         plain = [l.strip().lstrip("•- ") for l in raw.splitlines() if l.strip()]
         result = [{"bullet": b, "section_id": ""} for b in plain[:4]]
 
-    # Guarantee one 🔍 adhoc bullet when adhoc_spotlight was rendered
-    if adhoc_section and not any(r.get("section_id") == "adhoc_spotlight" for r in result):
+    # Guarantee one 🔍 adhoc bullet only when adhoc_spotlight was actually rendered
+    adhoc_was_rendered = adhoc_section is not None and any(
+        s.get("section_id") == "adhoc_spotlight" for s in rendered_sections
+    )
+    if adhoc_was_rendered and not any(r.get("section_id") == "adhoc_spotlight" for r in result):
         theme = adhoc_section.get("theme_label", "Special Focus")
         finding = adhoc_section.get("finding", "")
         fallback_bullet = f"🔍 **{theme}:** {finding}" if finding else f"🔍 **{theme}:** See Special Focus section."

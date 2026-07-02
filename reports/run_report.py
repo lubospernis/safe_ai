@@ -165,14 +165,6 @@ def main() -> None:
             r = interest[sid]
             thread_con = _get_connection(args.dev)
             try:
-                print(f"  Building chart for {sid}...")
-                if sid == "financing_gap":
-                    chart_png = build_financing_gap_chart(sec, data[sid])
-                elif sid == "bank_loan_terms":
-                    chart_png = build_chart(sec, data[sid], "bar", r["best_panel"])
-                else:
-                    chart_png = build_chart(sec, data[sid], r["chart_type"], r["best_panel"])
-
                 local_tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
                 print(f"  Generating finding + bullets for {sid}...")
                 content = get_section_content_agentic(
@@ -197,6 +189,17 @@ def main() -> None:
                 print(f"    [{sid}] finding: {content['finding']}")
                 for b in content["bullets"]:
                     print(f"    [{sid}] {b}")
+
+                chart_subtitle = content.get("chart_subtitle", "")
+                print(f"  Building chart for {sid}...")
+                if sid == "financing_gap":
+                    chart_png = build_financing_gap_chart(sec, data[sid])
+                elif sid == "bank_loan_terms":
+                    chart_png = build_chart(sec, data[sid], "bar", r["best_panel"],
+                                            chart_subtitle=chart_subtitle)
+                else:
+                    chart_png = build_chart(sec, data[sid], r["chart_type"], r["best_panel"],
+                                            chart_subtitle=chart_subtitle)
 
                 return {
                     "section_id": sid,

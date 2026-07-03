@@ -1,6 +1,7 @@
 """Chart rendering functions — NBS brand style."""
 
 import io
+import re
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
@@ -405,6 +406,12 @@ def _build_adhoc_chart_continuous(df: pd.DataFrame, theme: dict) -> bytes | None
     for ax in axes_flat[n_panels:]:
         ax.set_visible(False)
 
+    q_text = (theme.get("question_text") or "").strip()
+    if q_text:
+        q_text = re.sub(r"^[-–•]\s*", "", q_text).strip()
+        fig.suptitle(q_text[:110], fontsize=7, color="#666666", style="italic",
+                     y=1.01, ha="center", wrap=True)
+
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="#f4f4f4")
     plt.close(fig)
@@ -430,7 +437,7 @@ def _build_adhoc_chart_categorical(
     fig.patch.set_facecolor("#f4f4f4")
     fig.subplots_adjust(top=0.86, hspace=0.70, wspace=0.30, bottom=0.22)
 
-    countries = [c for c in ["SK", "EA"] if c in df["country_code"].values]
+    countries = [c for c in ["SK", "EA", "DE"] if c in df["country_code"].values]
     handles, legend_labels_list = [], []
 
     flat_labels: dict[int, str] = {}
@@ -479,6 +486,13 @@ def _build_adhoc_chart_categorical(
     fig.legend(handles, legend_labels_list, loc="lower center",
                bbox_to_anchor=(0.5, 0.01), ncol=len(countries),
                fontsize=9, frameon=False, handlelength=1.0)
+
+    q_text = (theme.get("question_text") or "").strip()
+    if q_text:
+        # Strip leading bullet/dash artefacts from the annex question text
+        q_text = re.sub(r"^[-–•]\s*", "", q_text).strip()
+        fig.suptitle(q_text[:110], fontsize=7, color="#666666", style="italic",
+                     y=1.01, ha="center", wrap=True)
 
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="#f4f4f4")

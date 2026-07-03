@@ -1,6 +1,7 @@
 """Adhoc module spotlight: detect theme, build charts, generate LLM content."""
 
 import json
+import re
 import textwrap
 from pathlib import Path
 
@@ -26,22 +27,29 @@ _MODULE_THEME_FALLBACK: dict[str, str] = {
     "qa1a": "Digital transformation",
     "qa1b": "Digital transformation",
     "qa1c": "Digital transformation",
-    "qa2": "Green transition",
+    "qa2": "AI Adoption",
     "qa2dec": "Green transition",
     "qa2inc": "Green transition",
-    "qa3": "Supply chain resilience",
+    "qa3": "AI Adoption",
     "qa4": "AI Adoption",
     "qa5": "Geopolitical Risk",
     "qa6": "Energy Costs",
-    "qb1": "AI Adoption Expectations",
-    "qb2": "Special Focus",
+    "qb1": "AI Adoption",
+    "qb2": "AI Adoption",
 }
+
+# Questions whose text matches these patterns are forward-looking / peer-perception.
+# Current-state questions (no match) are preferred as the primary chart subject.
+_EXPECTATION_PATTERN = re.compile(
+    r"\b(next|expect|plan|forecast|future|thinking about other|similar firms|do you think)\b",
+    re.IGNORECASE,
+)
 
 _ECB_FOCUS_INDEX = "https://www.ecb.europa.eu/press/economic-bulletin/focus/"
 
 ADHOC_CONTENT_SYSTEM = textwrap.dedent(f"""
     You are a concise economic analyst writing a "Special Focus" sidebar for a Slovakia
-    SAFE survey report. Your task: write 2–4 short bullets (≤ 35 words each) comparing
+    SAFE survey report. Your task: write 2–5 short bullets (≤ 35 words each) comparing
     Slovak firms (SK) to the Euro Area (EA) on the topic indicated.
 
     {NBS_STYLE_GUIDE}
@@ -146,7 +154,7 @@ SELECT
 FROM {schema}.mart_safe__adhoc_responses
 WHERE wave_number = {wave_number}
   AND module_id = '{module_id}'
-  AND country_code IN ('SK', 'EA')
+  AND country_code IN ('SK', 'EA', 'DE')
   AND response_raw >= 0
 ORDER BY sub_item, country_code, response_raw
 """
@@ -225,9 +233,7 @@ def detect_adhoc_theme(wave_number: int, con, schema: str, mistral_client=None, 
     if not rows:
         return None
 
-    primary_module_id = rows[0][0]
     all_module_ids_wave = [r[0] for r in rows]
-    sibling_modules = [m for m in all_module_ids_wave if m != primary_module_id]
 
     # Look up period suffix (e.g. '2025Q4') to scope annex queries to the right wave
     period_suffix: str | None = None
@@ -241,19 +247,65 @@ def detect_adhoc_theme(wave_number: int, con, schema: str, mistral_client=None, 
     except Exception:
         pass
 
-    question_texts: dict[str, str] = {}
+    # Fetch one question text per module to use for primary-module selection heuristic
+    # and for theme classification. Build wave_cols once and reuse.
+    wave_cols: list[str] = []
+    coalesce_expr = ""
     try:
-        annex_cols = con.execute(f"""
+        annex_col_rows = con.execute(f"""
             SELECT column_name FROM information_schema.columns
             WHERE table_schema = '{schema}'
               AND table_name = 'ref_safe__annex'
               AND column_name LIKE 'safe_%'
             ORDER BY column_name DESC
         """).fetchall()
-        wave_cols = [r[0] for r in annex_cols]
+        wave_cols = [r[0] for r in annex_col_rows]
         if wave_cols:
             coalesce_expr = ", ".join(f"NULLIF({c}, '')" for c in wave_cols)
-            # Filter to wave-specific entries when period is known (avoids cross-wave module reuse)
+    except Exception:
+        pass
+
+    module_question_texts: dict[str, str] = {}  # {module_id: question_text}
+    if wave_cols and period_suffix:
+        try:
+            for mid in all_module_ids_wave:
+                q_row = con.execute(f"""
+                    SELECT COALESCE({coalesce_expr}) as qt
+                    FROM {schema}.ref_safe__annex
+                    WHERE element = 'question'
+                      AND UPPER(question_item) = UPPER('{mid}_{period_suffix}')
+                    LIMIT 1
+                """).fetchone()
+                if q_row and q_row[0]:
+                    module_question_texts[mid] = q_row[0]
+        except Exception:
+            pass
+
+    # Re-rank modules: current-state questions before forward-looking/peer-perception ones,
+    # and within current-state prefer non-routed questions (no [IF ...] conditional).
+    # This is wave-agnostic — relies on question text content, not module ID prefixes.
+    _ROUTED_PATTERN = re.compile(r"\[IF\b", re.IGNORECASE)
+    # "Please indicate" questions are multi-select sub-topic lists; prefer open-ended
+    # assessment questions ("How would you assess...", "What percentage...") as primary.
+    _MULTI_SELECT_PATTERN = re.compile(r"^please indicate", re.IGNORECASE)
+
+    def _module_rank(mid: str) -> tuple[int, int, int]:
+        qt = module_question_texts.get(mid, "").lstrip("-• ")
+        is_expectation = 1 if _EXPECTATION_PATTERN.search(qt) else 0
+        is_routed = 1 if _ROUTED_PATTERN.search(qt) else 0
+        is_multi_select = 1 if _MULTI_SELECT_PATTERN.search(qt) else 0
+        return (is_expectation, is_routed, is_multi_select)
+
+    ranked = sorted(all_module_ids_wave, key=_module_rank)
+    primary_module_id = ranked[0]
+    sibling_modules = [m for m in all_module_ids_wave if m != primary_module_id]
+
+    # Build question_texts dict for the primary module (sub_item → question_text mapping)
+    question_texts: dict[str, str] = {}
+    primary_question_text: str | None = module_question_texts.get(primary_module_id)
+    if wave_cols and primary_question_text is None:
+        # Period suffix not available — fall back to prefix match
+        try:
             if period_suffix:
                 period_filter = f"UPPER(question_item) = UPPER('{primary_module_id}_{period_suffix}')"
             else:
@@ -267,35 +319,42 @@ def detect_adhoc_theme(wave_number: int, con, schema: str, mistral_client=None, 
                 if qtext:
                     sub = qitem.lower().replace(primary_module_id.lower(), "").strip() or "a"
                     question_texts[sub] = qtext
-    except Exception:
-        pass
-
-    theme_label = _MODULE_THEME_FALLBACK.get(primary_module_id, primary_module_id.upper())
-    if mistral_client and question_texts:
-        sample_texts = "\n".join(f"- {t}" for t in list(question_texts.values())[:4])
-        model = "mistral-small-latest"
-        try:
-            resp = mistral_client.chat.complete(
-                model=model,
-                max_tokens=20,
-                messages=[{
-                    "role": "user",
-                    "content": (
-                        f"These are ECB SAFE survey questions from module '{primary_module_id}':\n"
-                        f"{sample_texts}\n\n"
-                        "In 2–4 words, what is the single overarching topic of these questions? "
-                        "Reply with the topic only, title case, no punctuation."
-                    ),
-                }],
-            )
-            label = resp.choices[0].message.content.strip().rstrip(".")
-            if label:
-                theme_label = label
-            if resp.usage and cost_tracker is not None:
-                _track_cost(cost_tracker, model,
-                            _Usage(resp.usage.prompt_tokens, resp.usage.completion_tokens))
+            primary_question_text = next((qt for _, qt in ann_rows if qt), None)
         except Exception:
             pass
+
+    # Theme label: use fallback for known modules; only call Mistral for unknown ones.
+    # When Mistral runs, send ALL question texts (not just primary) for full context.
+    theme_label = _MODULE_THEME_FALLBACK.get(primary_module_id, "")
+    if not theme_label:
+        theme_label = primary_module_id.upper()
+        if mistral_client and module_question_texts:
+            all_qt_block = "\n".join(
+                f"- {qt}" for qt in module_question_texts.values() if qt
+            )
+            model = "mistral-small-latest"
+            try:
+                resp = mistral_client.chat.complete(
+                    model=model,
+                    max_tokens=20,
+                    messages=[{
+                        "role": "user",
+                        "content": (
+                            f"These are ECB SAFE survey questions from this wave:\n"
+                            f"{all_qt_block}\n\n"
+                            "In 2–4 words, what is the single overarching topic of these questions? "
+                            "Reply with the topic only, title case, no punctuation."
+                        ),
+                    }],
+                )
+                label = resp.choices[0].message.content.strip().rstrip(".")
+                if label:
+                    theme_label = label
+                if resp.usage and cost_tracker is not None:
+                    _track_cost(cost_tracker, model,
+                                _Usage(resp.usage.prompt_tokens, resp.usage.completion_tokens))
+            except Exception:
+                pass
 
     # Fetch questionnaire PDF to get response code → label mappings and sub-item labels
     questionnaire_url = questionnaire_url_for_wave(wave_number, con, schema)
@@ -318,6 +377,7 @@ def detect_adhoc_theme(wave_number: int, con, schema: str, mistral_client=None, 
         "module_id": primary_module_id,
         "theme_label": theme_label,
         "question_texts": question_texts,
+        "primary_question_text": primary_question_text,
         "questionnaire_url": questionnaire_url,
         "response_labels": response_labels,
         "sub_item_labels": sub_item_labels,
@@ -549,7 +609,13 @@ def build_adhoc_spotlight(
         f"Data (wave {wave_number}, SK vs EA, interesting sub-items only):\n"
         f"{interesting_table}{data_note}"
         f"{sibling_ctx}\n\n"
-        "Write the finding, 2-4 bullets, and chart_sub_items as specified."
+        + (
+            "Write the finding, 4–5 bullets covering the most striking findings across ALL "
+            "questions above (aim for 4 minimum), and chart_sub_items as specified. "
+            "Prioritise current adoption state data but draw freely across all questions."
+            if sibling_ctx else
+            "Write the finding, 2–4 bullets, and chart_sub_items as specified."
+        )
     )
 
     try:
@@ -595,8 +661,12 @@ def build_adhoc_spotlight(
     print(f"  Phase 2: {len(bullets)} bullets, chart_sub_items={chart_sub_items}")
 
     # ── Build chart for selected sub-items ───────────────────────────────────
-    # Merge PDF sub-item labels into theme for chart panel titles
-    chart_theme = {**theme, "question_texts": effective_question_texts}
+    # Merge PDF sub-item labels and primary question text into theme for chart rendering
+    chart_theme = {
+        **theme,
+        "question_texts": effective_question_texts,
+        "question_text": theme.get("primary_question_text") or "",
+    }
     chart_png = None
     chart_df = None
     chart_df_filtered = None

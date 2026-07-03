@@ -167,8 +167,13 @@ def _fetch_adhoc_chart_data(df: pd.DataFrame, theme: dict, wave_number: int, sch
     return con.execute(sql).df()
 
 
-def _fetch_question_texts(con, schema: str, module_ids: list[str]) -> str:
-    """Return a formatted block of survey question texts for the given module IDs from ref_safe__annex."""
+def _fetch_question_texts(con, schema: str, module_ids: list[str], period_suffix: str | None = None) -> str:
+    """Return a formatted block of survey question texts for the given module IDs from ref_safe__annex.
+
+    If period_suffix is given (e.g. '2025Q4'), only rows whose question_item ends with that suffix
+    are returned — preventing historical module reuse from polluting the context (QA1 was about
+    exports in 2022 but AI adoption in 2025Q4).
+    """
     try:
         annex_cols = con.execute(f"""
             SELECT column_name FROM information_schema.columns
@@ -180,8 +185,14 @@ def _fetch_question_texts(con, schema: str, module_ids: list[str]) -> str:
         wave_cols = [r[0] for r in annex_cols]
         if not wave_cols:
             return ""
-        coalesce_expr = ", ".join(wave_cols)
-        pattern = " OR ".join(f"UPPER(question_item) LIKE UPPER('{m}%')" for m in module_ids)
+        # NULLIF strips empty strings so COALESCE falls through to the column with actual content
+        coalesce_expr = ", ".join(f"NULLIF({c}, '')" for c in wave_cols)
+        if period_suffix:
+            pattern = " OR ".join(
+                f"UPPER(question_item) = UPPER('{m}_{period_suffix}')" for m in module_ids
+            )
+        else:
+            pattern = " OR ".join(f"UPPER(question_item) LIKE UPPER('{m}%')" for m in module_ids)
         rows = con.execute(f"""
             SELECT question_item, COALESCE({coalesce_expr}) AS question_text
             FROM {schema}.ref_safe__annex
@@ -218,6 +229,18 @@ def detect_adhoc_theme(wave_number: int, con, schema: str, mistral_client=None, 
     all_module_ids_wave = [r[0] for r in rows]
     sibling_modules = [m for m in all_module_ids_wave if m != primary_module_id]
 
+    # Look up period suffix (e.g. '2025Q4') to scope annex queries to the right wave
+    period_suffix: str | None = None
+    try:
+        row = con.execute(
+            f"SELECT survey_period_label FROM {schema}.mart_safe__slovakia_kpis "
+            f"WHERE wave_number = {wave_number} LIMIT 1"
+        ).fetchone()
+        if row and row[0]:
+            period_suffix = str(row[0])
+    except Exception:
+        pass
+
     question_texts: dict[str, str] = {}
     try:
         annex_cols = con.execute(f"""
@@ -229,12 +252,16 @@ def detect_adhoc_theme(wave_number: int, con, schema: str, mistral_client=None, 
         """).fetchall()
         wave_cols = [r[0] for r in annex_cols]
         if wave_cols:
-            coalesce_expr = ", ".join(wave_cols)
+            coalesce_expr = ", ".join(f"NULLIF({c}, '')" for c in wave_cols)
+            # Filter to wave-specific entries when period is known (avoids cross-wave module reuse)
+            if period_suffix:
+                period_filter = f"UPPER(question_item) = UPPER('{primary_module_id}_{period_suffix}')"
+            else:
+                period_filter = f"UPPER(question_item) LIKE UPPER('{primary_module_id}%')"
             ann_rows = con.execute(f"""
                 SELECT question_item, COALESCE({coalesce_expr}) as question_text
                 FROM {schema}.ref_safe__annex
-                WHERE element = 'question'
-                  AND UPPER(question_item) LIKE UPPER('{primary_module_id}%')
+                WHERE element = 'question' AND ({period_filter})
             """).fetchall()
             for qitem, qtext in ann_rows:
                 if qtext:
@@ -295,6 +322,7 @@ def detect_adhoc_theme(wave_number: int, con, schema: str, mistral_client=None, 
         "response_labels": response_labels,
         "sub_item_labels": sub_item_labels,
         "sibling_modules": sibling_modules,
+        "period_suffix": period_suffix,
     }
 
 
@@ -497,8 +525,8 @@ def build_adhoc_spotlight(
                 if sib_is_cont:
                     sib_df = sib_df[sib_df["response_raw"] <= 100].copy()
                 sib_table, sib_note = _build_full_data_table(sib_df)
-                # Fetch question texts for sibling
-                sib_qt = _fetch_question_texts(con, schema, [sib_id])
+                # Fetch question texts for sibling (scoped to wave period)
+                sib_qt = _fetch_question_texts(con, schema, [sib_id], period_suffix=theme.get("period_suffix"))
                 sib_header = f"\n### Module {sib_id.upper()}"
                 if sib_qt:
                     sib_header += f"\n{sib_qt}"

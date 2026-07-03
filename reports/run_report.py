@@ -338,6 +338,10 @@ def main() -> None:
         "run_type": _run_type,
         "run_date": _now.strftime("%Y-%m-%d"),
         "run_time": _now.strftime("%H:%M:%S"),
+        "sections_summary": [
+            {"section_id": s["section_id"], "finding": s.get("finding", ""), "bullets": s.get("bullets", [])}
+            for s in rendered
+        ],
         "wave_number": latest_wave,
         "total_cost_usd": round(cost_tracker["usd"], 5),
         "input_tokens": cost_tracker["input_tokens"],

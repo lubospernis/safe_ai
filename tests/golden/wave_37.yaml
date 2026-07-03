@@ -1,0 +1,56 @@
+wave: 37
+# Golden assertions for wave 37 (2025Q4). Four failure modes confirmed in production:
+# 1. "recovered" language when net balance still negative (business_situation / profit)
+# 2. "broadly comparable" comparison when gap ≥ 5pp (adhoc_spotlight / QA1)
+# 3. "export" framing in QB1 (QB1 is peer-estimate % of AI adopters, not exports)
+# 4. Numbers cited in bullets must match the data snapshot values
+
+sections:
+  - section_id: business_situation
+    # Wave 37 profit: net -22.4pp (improved from -37.5pp in wave 36, but still negative)
+    data_snapshot:
+      SK_profit_net_balance_w37: -22.4
+      SK_profit_net_balance_w36: -37.5
+    assertions:
+      # The number 22 (the absolute value) must appear somewhere in the bullets
+      - type: contains_number
+        value: "22"
+      # "recovered" on a still-negative net balance is factually wrong
+      - type: not_contains_phrase
+        phrase: "recovered"
+      - type: not_contains_phrase
+        phrase: "recovery"
+      - type: not_contains_phrase
+        phrase: "rebound"
+      - type: not_contains_phrase
+        phrase: "turned around"
+      # Must use improvement language, not recovery language
+      - type: direction_word
+        expected: "improv"   # matches "improved", "improving", "improvement"
+
+  - section_id: adhoc_spotlight
+    # QA1: SK moderate use (code2) = 46.5% vs EA = 32.7% — 13.8pp gap (NOT comparable)
+    # QA1: SK significant use (code3) = 17.1% vs EA = 31.2% — 14.1pp gap (NOT comparable)
+    # QB1: question is "what % of peers do you think invested in AI?" — geographic scope labels,
+    #      NOT about exports.
+    data_snapshot:
+      QA1_SK_code2_moderate_use_pct: 46.5
+      QA1_EA_code2_moderate_use_pct: 32.7
+      QA1_SK_code3_significant_use_pct: 17.1
+      QA1_EA_code3_significant_use_pct: 31.2
+    assertions:
+      # At least one of the 14pp-gap numbers should appear
+      - type: contains_number
+        value: "46.5"
+      # "broadly comparable" is banned when gaps ≥ 5pp
+      - type: not_contains_phrase
+        phrase: "broadly comparable"
+      - type: not_contains_phrase
+        phrase: "broadly similar"
+      # QB1 is about peer-estimate % of AI adopters, not exports
+      - type: not_contains_phrase
+        phrase: "export share"
+      - type: not_contains_phrase
+        phrase: "exports to Germany"
+      - type: not_contains_phrase
+        phrase: "export"

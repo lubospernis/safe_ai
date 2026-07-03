@@ -211,6 +211,10 @@ EXEC_SUMMARY_SYSTEM = textwrap.dedent(f"""
       overall claim while citing only one instrument. Either: (a) aggregate across instruments,
       or (b) narrow the claim to the specific instrument — e.g. "credit line availability
       tightened" not "liquidity conditions tightened".
+    - Number provenance: every number you cite in a bullet must appear verbatim in the bullets
+      of the section you attribute that bullet to (its section_id). Do NOT mix numbers from
+      different sections into one bullet. If you want to mention a number from section X, that
+      bullet's section_id must be X.
 
     Return a JSON array only — no markdown fences, no commentary:
     [
@@ -388,13 +392,13 @@ def _sme_divergence_note(df: pd.DataFrame, value_col: str, panel_col: str | None
 
 def _parse_section_response(raw: str, sec: dict) -> dict:
     """Parse Sonnet JSON response into {"finding", "bullets", "chart_subtitle"}."""
-    match = re.search(r'\{.*?"finding".*?"bullets".*?\}', raw, re.DOTALL)
-    if not match:
-        stripped = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-        match = re.search(r'\{.*\}', stripped, re.DOTALL)
-        raw = stripped
+    # Strip markdown fences and leading thinking/prose before the JSON object
+    stripped = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+    # Find the last JSON object in the response (model may emit thinking text first)
+    matches = list(re.finditer(r'\{[^{}]*"finding"[^{}]*\}|\{.*?"finding".*?\}', stripped, re.DOTALL))
+    candidate = matches[-1].group() if matches else stripped
     try:
-        parsed = json.loads(match.group() if match else raw)
+        parsed = json.loads(repair_json(candidate))
         finding = str(parsed.get("finding", sec["title"]))
         raw_bullets = parsed.get("bullets", [])
         if isinstance(raw_bullets, list):
@@ -402,6 +406,9 @@ def _parse_section_response(raw: str, sec: dict) -> dict:
         else:
             bullets = [b.strip().lstrip("•- ") for b in str(raw_bullets).splitlines() if b.strip()][:3]
         chart_subtitle = str(parsed.get("chart_subtitle", "")).strip()
+        # Validate: if finding is empty or still the default placeholder, it parsed wrong
+        if not finding or finding == "string":
+            finding = sec["title"]
     except (json.JSONDecodeError, AttributeError, TypeError):
         finding = sec["title"]
         chart_subtitle = ""
@@ -548,8 +555,25 @@ def get_section_content_agentic(
 
         if response.stop_reason != "tool_use":
             text_blocks = [b.text for b in response.content if hasattr(b, "text")]
-            raw = text_blocks[-1] if text_blocks else ""
+            raw = " ".join(text_blocks) if text_blocks else ""
             result = _parse_section_response(raw, sec)
+            if result["finding"] != sec["title"]:
+                result["tool_calls"] = tool_calls_made
+                return result
+            # JSON not found — force JSON via assistant prefill
+            messages.append({"role": "assistant", "content": response.content})
+            messages.append({"role": "user", "content": 'Return your JSON now. No prose — start directly with {"'})
+            messages.append({"role": "assistant", "content": '{"'})
+            forced = client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=600,
+                system=cached_system,
+                messages=messages,
+                extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
+            )
+            _track_cost(cost_tracker, "claude-sonnet-4-6", forced.usage)
+            forced_text = " ".join(b.text for b in forced.content if hasattr(b, "text"))
+            result = _parse_section_response('{"' + forced_text, sec)
             result["tool_calls"] = tool_calls_made
             return result
 
@@ -571,8 +595,9 @@ def get_section_content_agentic(
 
     messages.append({
         "role": "user",
-        "content": "Please now return your final JSON response with finding and bullets.",
+        "content": 'Return your JSON now. No prose — start directly with {"',
     })
+    messages.append({"role": "assistant", "content": '{"'})
     final = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=600,
@@ -582,7 +607,7 @@ def get_section_content_agentic(
     )
     _track_cost(cost_tracker, "claude-sonnet-4-6", final.usage)
     text_blocks = [b.text for b in final.content if hasattr(b, "text")]
-    raw = text_blocks[-1] if text_blocks else ""
+    raw = '{"' + (" ".join(text_blocks) if text_blocks else "")
     result = _parse_section_response(raw, sec)
     result["tool_calls"] = tool_calls_made
     return result

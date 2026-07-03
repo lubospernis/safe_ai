@@ -511,12 +511,17 @@ def build_adhoc_spotlight(
 
     # ── Build chart for selected sub-items ───────────────────────────────────
     chart_png = None
+    chart_df = None
+    chart_df_filtered = None
     try:
         chart_df = _fetch_adhoc_chart_data(df, theme, wave_number, schema, con)
         chart_df_filtered = chart_df[chart_df["sub_item"].isin(chart_sub_items)]
         if chart_df_filtered.empty:
             chart_df_filtered = chart_df
-        chart_png = _build_adhoc_chart(chart_df_filtered, theme, is_continuous=is_cont)
+        chart_png = _build_adhoc_chart(
+            chart_df_filtered, theme, is_continuous=is_cont,
+            response_labels=response_labels,
+        )
         if chart_png:
             print(f"  Adhoc chart built ({len(chart_df_filtered)} rows, subs={list(chart_df_filtered['sub_item'].unique())})")
     except Exception as e:
@@ -564,6 +569,19 @@ def build_adhoc_spotlight(
             )
             if not review_passed:
                 print(f"  Review reason: {review_result.get('reason', '')}")
+                # If chart_alignment is the failing dimension, rebuild chart with all interesting subs
+                if review_scores.get("chart_alignment", 10) < 8 and chart_df is not None:
+                    try:
+                        chart_df_all = chart_df[chart_df["sub_item"].isin(interesting_subs)]
+                        if chart_df_all.empty:
+                            chart_df_all = chart_df
+                        chart_png = _build_adhoc_chart(
+                            chart_df_all, theme, is_continuous=is_cont,
+                            response_labels=response_labels,
+                        )
+                        print(f"  Chart rebuilt with all interesting subs {interesting_subs} to fix alignment")
+                    except Exception as rebuild_err:
+                        print(f"  Chart rebuild failed: {rebuild_err}")
         except Exception as e:
             print(f"  Phase 3 review failed ({e}) — skipping")
 

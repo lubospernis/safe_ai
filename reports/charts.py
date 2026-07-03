@@ -326,7 +326,12 @@ def build_financing_gap_chart(sec: dict, df: pd.DataFrame) -> bytes:
     return buf.read()
 
 
-def _build_adhoc_chart(df: pd.DataFrame, theme: dict, is_continuous: bool = False) -> bytes | None:
+def _build_adhoc_chart(
+    df: pd.DataFrame,
+    theme: dict,
+    is_continuous: bool = False,
+    response_labels: dict | None = None,
+) -> bytes | None:
     """Render NBS-styled bar chart from adhoc chart DataFrame. Returns PNG bytes or None."""
     if df is None or df.empty:
         return None
@@ -345,6 +350,12 @@ def _build_adhoc_chart(df: pd.DataFrame, theme: dict, is_continuous: bool = Fals
 
         countries = [c for c in ["SK", "EA"] if c in df["country_code"].values]
         handles, legend_labels_list = [], []
+
+        # Build a flat code→label map from response_labels (module_id → {code: label})
+        flat_labels: dict[int, str] = {}
+        if response_labels:
+            for module_labels in response_labels.values():
+                flat_labels.update(module_labels)
 
         for ax, sub in zip(axes_flat, sub_items):
             sub_df = df[df["sub_item"] == sub]
@@ -372,10 +383,19 @@ def _build_adhoc_chart(df: pd.DataFrame, theme: dict, is_continuous: bool = Fals
                 ax.set_xticklabels([f"{int(v)}–{int(v)+9}%" for v in x_vals],
                                    rotation=35, ha="right", fontsize=7.5)
             else:
-                ax.set_xticklabels([str(v) for v in x_vals], fontsize=8)
+                # Use decoded labels from questionnaire PDF if available, else raw code
+                tick_labels = [flat_labels.get(int(v), str(int(v))) for v in x_vals]
+                ax.set_xticklabels(tick_labels, rotation=35, ha="right", fontsize=7.5)
 
-            title = (theme.get("question_texts") or {}).get(sub, sub or theme["theme_label"])
-            ax.set_title(str(title)[:55], fontsize=8, pad=5)
+            # Panel title: prefer sub_item_label from the dataframe, then question_texts, then sub code
+            label_col_vals = sub_df["sub_item_label"].dropna() if "sub_item_label" in sub_df.columns else None
+            if label_col_vals is not None and not label_col_vals.empty:
+                panel_title = str(label_col_vals.iloc[0])
+            else:
+                panel_title = str(
+                    (theme.get("question_texts") or {}).get(sub, sub or theme["theme_label"])
+                )
+            ax.set_title(panel_title[:55], fontsize=8, pad=5)
             _nbs_style_ax(ax, "bar")
 
         for ax in axes_flat[n_panels:]:

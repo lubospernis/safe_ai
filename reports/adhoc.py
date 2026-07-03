@@ -10,6 +10,7 @@ from json_repair import repair_json
 
 from charts import _build_adhoc_chart
 from cost import _Usage, _track_cost
+from llm import NBS_STYLE_GUIDE
 from questionnaire import (
     build_response_label_context,
     fetch_adhoc_response_labels,
@@ -38,10 +39,12 @@ _MODULE_THEME_FALLBACK: dict[str, str] = {
 
 _ECB_FOCUS_INDEX = "https://www.ecb.europa.eu/press/economic-bulletin/focus/"
 
-ADHOC_CONTENT_SYSTEM = textwrap.dedent("""
+ADHOC_CONTENT_SYSTEM = textwrap.dedent(f"""
     You are a concise economic analyst writing a "Special Focus" sidebar for a Slovakia
     SAFE survey report. Your task: write 2–4 short bullets (≤ 35 words each) comparing
     Slovak firms (SK) to the Euro Area (EA) on the topic indicated.
+
+    {NBS_STYLE_GUIDE}
 
     RULES — READ CAREFULLY:
     1. Only cite numbers that appear verbatim in the data table below. Do NOT invent,
@@ -57,9 +60,9 @@ ADHOC_CONTENT_SYSTEM = textwrap.dedent("""
     7. Also return chart_sub_items: the list of sub-item codes (e.g. ["a", "c"]) that
        should appear in the chart — only sub-items mentioned in your bullets.
     8. Return valid JSON only (no markdown fences):
-       {"finding": "One sentence headline ≤ 20 words",
+       {{"finding": "One sentence headline ≤ 20 words",
         "bullets": ["bullet 1", ..., "bullet N"],
-        "chart_sub_items": ["a", ...]}
+        "chart_sub_items": ["a", ...]}}
     9. The finding must name the theme and the most striking SK vs EA difference.
        If results are broadly similar across sub-items, say so and write 2 bullets.
 """).strip()
@@ -120,11 +123,13 @@ SELECT
     sub_item,
     FLOOR(CAST(response_raw AS INTEGER) / 10) * 10 AS response_raw,
     ROUND(SUM(n_firms_wtd) / MAX(n_total_wtd) * 100, 1) AS pct_wtd,
-    SUM(n_firms) AS n_firms
+    SUM(n_firms) AS n_firms,
+    SUM(n_firms_wtd) AS n_firms_wtd,
+    MAX(n_total_wtd) AS n_total_wtd
 FROM {schema}.mart_safe__adhoc_responses
 WHERE wave_number = {wave_number}
   AND module_id = '{module_id}'
-  AND country_code IN ('SK', 'EA')
+  AND country_code IN ('SK', 'EA', 'DE')
   AND response_raw >= 0
   AND response_raw <= 100
 GROUP BY country_code, sub_item, FLOOR(CAST(response_raw AS INTEGER) / 10) * 10
@@ -210,6 +215,8 @@ def detect_adhoc_theme(wave_number: int, con, schema: str, mistral_client=None, 
         return None
 
     primary_module_id = rows[0][0]
+    all_module_ids_wave = [r[0] for r in rows]
+    sibling_modules = [m for m in all_module_ids_wave if m != primary_module_id]
 
     question_texts: dict[str, str] = {}
     try:
@@ -284,6 +291,7 @@ def detect_adhoc_theme(wave_number: int, con, schema: str, mistral_client=None, 
         "question_texts": question_texts,
         "questionnaire_url": questionnaire_url,
         "response_labels": response_labels,
+        "sibling_modules": sibling_modules,
     }
 
 
@@ -459,11 +467,45 @@ def build_adhoc_spotlight(
     if response_label_ctx:
         label_ctx = f"\n\n{response_label_ctx}"
 
+    # ── Sibling module extended context ──────────────────────────────────────
+    # Fetch summary data from all sibling modules (same wave, different module_ids)
+    # and append as extra context so Phase 2 can write richer cross-module bullets.
+    sibling_ctx = ""
+    sibling_modules = theme.get("sibling_modules", [])
+    if sibling_modules:
+        sibling_lines = ["\n\nAdditional modules from this wave (use for context, pick most striking findings):"]
+        sql_template = (SQL_DIR / "adhoc_spotlight.sql").read_text()
+        for sib_id in sibling_modules:
+            try:
+                sib_sql = sql_template.format(wave_number=wave_number, module_id=sib_id, schema=schema)
+                sib_df = con.execute(sib_sql).df()
+                if sib_df.empty:
+                    continue
+                sib_df = sib_df[sib_df["response_raw"] >= 0].copy()
+                sib_is_cont = _is_continuous(sib_df)
+                if sib_is_cont:
+                    sib_df = sib_df[sib_df["response_raw"] <= 100].copy()
+                sib_table, sib_note = _build_full_data_table(sib_df)
+                # Fetch question texts for sibling
+                sib_qt = _fetch_question_texts(con, schema, [sib_id])
+                sib_header = f"\n### Module {sib_id.upper()}"
+                if sib_qt:
+                    sib_header += f"\n{sib_qt}"
+                sibling_lines.append(sib_header)
+                sibling_lines.append(sib_table)
+                if sib_note:
+                    sibling_lines.append(sib_note.strip())
+            except Exception:
+                pass
+        if len(sibling_lines) > 1:
+            sibling_ctx = "\n".join(sibling_lines)
+
     # ── Phase 2: write bullets ───────────────────────────────────────────────
     user_msg = (
         f"Topic: {theme['theme_label']}{question_ctx}{routing_ctx}{label_ctx}\n\n"
         f"Data (wave {wave_number}, SK vs EA, interesting sub-items only):\n"
-        f"{interesting_table}{data_note}\n\n"
+        f"{interesting_table}{data_note}"
+        f"{sibling_ctx}\n\n"
         "Write the finding, 2-4 bullets, and chart_sub_items as specified."
     )
 

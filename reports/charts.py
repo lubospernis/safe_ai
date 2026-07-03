@@ -336,83 +336,155 @@ def _build_adhoc_chart(
     if df is None or df.empty:
         return None
     try:
-        sub_items = sorted(df["sub_item"].unique())
-        n_panels = len(sub_items)
-        ncols = min(n_panels, 2)
-        nrows = (n_panels + 1) // 2
-        fig_w = 5.0 if n_panels == 1 else 4.5 * ncols
-        fig_h = 3.2 if n_panels == 1 else 3.2 * nrows
-
-        fig, axes = plt.subplots(nrows, ncols, figsize=(fig_w, fig_h))
-        axes_flat = [axes] if n_panels == 1 else list(np.array(axes).flatten())
-        fig.patch.set_facecolor("#f4f4f4")
-        fig.subplots_adjust(top=0.86, hspace=0.70, wspace=0.30, bottom=0.22)
-
-        countries = [c for c in ["SK", "EA"] if c in df["country_code"].values]
-        handles, legend_labels_list = [], []
-
-        # Build a flat code→label map from response_labels (module_id → {code: label})
-        flat_labels: dict[int, str] = {}
-        if response_labels:
-            for module_labels in response_labels.values():
-                flat_labels.update(module_labels)
-
-        for ax, sub in zip(axes_flat, sub_items):
-            sub_df = df[df["sub_item"] == sub]
-            x_vals = sorted(sub_df["response_raw"].unique())
-            x = np.arange(len(x_vals))
-            width = 0.35
-
-            for i, country in enumerate(countries):
-                cdf = sub_df[sub_df["country_code"] == country]
-                vals = [
-                    cdf[cdf["response_raw"] == v]["pct_wtd"].iloc[0]
-                    if not cdf[cdf["response_raw"] == v].empty else 0
-                    for v in x_vals
-                ]
-                offset = (i - len(countries) / 2 + 0.5) * width
-                bar = ax.bar(x + offset, vals, width,
-                             color=COUNTRY_COLORS.get(country, "#888"),
-                             edgecolor="none", zorder=2)
-                if sub == sub_items[0]:
-                    handles.append(bar)
-                    legend_labels_list.append(COUNTRIES.get(country, country))
-
-            ax.set_xticks(x)
-            if is_continuous:
-                ax.set_xticklabels([f"{int(v)}–{int(v)+9}%" for v in x_vals],
-                                   rotation=35, ha="right", fontsize=7.5)
-            else:
-                # Use decoded labels from questionnaire PDF if available, else raw code
-                tick_labels = [flat_labels.get(int(v), str(int(v))) for v in x_vals]
-                ax.set_xticklabels(tick_labels, rotation=35, ha="right", fontsize=7.5)
-
-            # Panel title: prefer sub_item_label from the dataframe, then question_texts, then sub code
-            label_col_vals = sub_df["sub_item_label"].dropna() if "sub_item_label" in sub_df.columns else None
-            if label_col_vals is not None and not label_col_vals.empty:
-                panel_title = str(label_col_vals.iloc[0])
-            else:
-                panel_title = str(
-                    (theme.get("question_texts") or {}).get(sub, sub or theme["theme_label"])
-                )
-            ax.set_title(panel_title[:55], fontsize=8, pad=5)
-            _nbs_style_ax(ax, "bar")
-
-        for ax in axes_flat[n_panels:]:
-            ax.set_visible(False)
-
-        fig.legend(handles, legend_labels_list, loc="lower center",
-                   bbox_to_anchor=(0.5, 0.01), ncol=len(countries),
-                   fontsize=9, frameon=False, handlelength=1.0)
-
-        buf = io.BytesIO()
-        fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="#f4f4f4")
-        plt.close(fig)
-        buf.seek(0)
-        return buf.read()
+        if is_continuous:
+            return _build_adhoc_chart_continuous(df, theme)
+        return _build_adhoc_chart_categorical(df, theme, response_labels)
     except Exception as e:
         print(f"  Adhoc chart render failed: {e}")
         return None
+
+
+def _build_adhoc_chart_continuous(df: pd.DataFrame, theme: dict) -> bytes | None:
+    """For continuous modules: grouped bar chart with countries on x-axis, mean % on y-axis."""
+    sub_items = sorted(df["sub_item"].unique())
+    n_panels = len(sub_items)
+    ncols = min(n_panels, 2)
+    nrows = (n_panels + 1) // 2
+    fig_w = 4.5 if n_panels == 1 else 4.5 * ncols
+    fig_h = 3.4 if n_panels == 1 else 3.4 * nrows
+
+    fig, axes = plt.subplots(nrows, ncols, figsize=(fig_w, fig_h))
+    axes_flat = [axes] if n_panels == 1 else list(np.array(axes).flatten())
+    fig.patch.set_facecolor("#f4f4f4")
+    fig.subplots_adjust(top=0.86, hspace=0.60, wspace=0.35, bottom=0.18)
+
+    countries_in_data = [c for c in COUNTRY_ORDER if c in df["country_code"].values]
+    handles, legend_labels_list = [], []
+
+    for ax, sub in zip(axes_flat, sub_items):
+        sub_df = df[df["sub_item"] == sub].copy()
+        # Compute weighted mean per country
+        means = {}
+        for country in countries_in_data:
+            cdf = sub_df[sub_df["country_code"] == country]
+            if cdf.empty:
+                continue
+            # Use n_firms_wtd if available, else n_firms as proxy
+            w_col = "n_firms_wtd" if "n_firms_wtd" in cdf.columns else "n_firms"
+            total_w = cdf[w_col].sum()
+            if total_w > 0:
+                means[country] = (cdf["response_raw"] * cdf[w_col]).sum() / total_w
+
+        x = np.arange(len(means))
+        country_keys = list(means.keys())
+        vals = [means[c] for c in country_keys]
+        colors = [COUNTRY_COLORS.get(c, "#888") for c in country_keys]
+
+        bars = ax.bar(x, vals, width=0.5, color=colors, edgecolor="none", zorder=2)
+        # Value labels on top of bars
+        for bar, val in zip(bars, vals):
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.3,
+                    f"{val:.1f}%", ha="center", va="bottom", fontsize=7, color=NBS_TEXT)
+
+        if sub == sub_items[0]:
+            for bar, country in zip(bars, country_keys):
+                handles.append(bar)
+                legend_labels_list.append(COUNTRIES.get(country, country))
+
+        ax.set_xticks(x)
+        ax.set_xticklabels([COUNTRIES.get(c, c) for c in country_keys], fontsize=8)
+        ax.set_ylabel("Weighted mean (%)", fontsize=7.5)
+
+        # Panel title from question_texts or theme label
+        panel_title = str(
+            (theme.get("question_texts") or {}).get(sub, sub or theme["theme_label"])
+        )
+        ax.set_title(panel_title[:55], fontsize=8, pad=5)
+        _nbs_style_ax(ax, "bar")
+
+    for ax in axes_flat[n_panels:]:
+        ax.set_visible(False)
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="#f4f4f4")
+    plt.close(fig)
+    buf.seek(0)
+    return buf.read()
+
+
+def _build_adhoc_chart_categorical(
+    df: pd.DataFrame,
+    theme: dict,
+    response_labels: dict | None = None,
+) -> bytes | None:
+    """For categorical modules: grouped bars by response code, SK vs EA per panel."""
+    sub_items = sorted(df["sub_item"].unique())
+    n_panels = len(sub_items)
+    ncols = min(n_panels, 2)
+    nrows = (n_panels + 1) // 2
+    fig_w = 5.0 if n_panels == 1 else 4.5 * ncols
+    fig_h = 3.2 if n_panels == 1 else 3.2 * nrows
+
+    fig, axes = plt.subplots(nrows, ncols, figsize=(fig_w, fig_h))
+    axes_flat = [axes] if n_panels == 1 else list(np.array(axes).flatten())
+    fig.patch.set_facecolor("#f4f4f4")
+    fig.subplots_adjust(top=0.86, hspace=0.70, wspace=0.30, bottom=0.22)
+
+    countries = [c for c in ["SK", "EA"] if c in df["country_code"].values]
+    handles, legend_labels_list = [], []
+
+    flat_labels: dict[int, str] = {}
+    if response_labels:
+        for module_labels in response_labels.values():
+            flat_labels.update(module_labels)
+
+    for ax, sub in zip(axes_flat, sub_items):
+        sub_df = df[df["sub_item"] == sub]
+        x_vals = sorted(sub_df["response_raw"].unique())
+        x = np.arange(len(x_vals))
+        width = 0.35
+
+        for i, country in enumerate(countries):
+            cdf = sub_df[sub_df["country_code"] == country]
+            vals = [
+                cdf[cdf["response_raw"] == v]["pct_wtd"].iloc[0]
+                if not cdf[cdf["response_raw"] == v].empty else 0
+                for v in x_vals
+            ]
+            offset = (i - len(countries) / 2 + 0.5) * width
+            bar = ax.bar(x + offset, vals, width,
+                         color=COUNTRY_COLORS.get(country, "#888"),
+                         edgecolor="none", zorder=2)
+            if sub == sub_items[0]:
+                handles.append(bar)
+                legend_labels_list.append(COUNTRIES.get(country, country))
+
+        ax.set_xticks(x)
+        tick_labels = [flat_labels.get(int(v), str(int(v))) for v in x_vals]
+        ax.set_xticklabels(tick_labels, rotation=35, ha="right", fontsize=7.5)
+
+        label_col_vals = sub_df["sub_item_label"].dropna() if "sub_item_label" in sub_df.columns else None
+        if label_col_vals is not None and not label_col_vals.empty:
+            panel_title = str(label_col_vals.iloc[0])
+        else:
+            panel_title = str(
+                (theme.get("question_texts") or {}).get(sub, sub or theme["theme_label"])
+            )
+        ax.set_title(panel_title[:55], fontsize=8, pad=5)
+        _nbs_style_ax(ax, "bar")
+
+    for ax in axes_flat[n_panels:]:
+        ax.set_visible(False)
+
+    fig.legend(handles, legend_labels_list, loc="lower center",
+               bbox_to_anchor=(0.5, 0.01), ncol=len(countries),
+               fontsize=9, frameon=False, handlelength=1.0)
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="#f4f4f4")
+    plt.close(fig)
+    buf.seek(0)
+    return buf.read()
 
 
 def _build_ai_chart(df: pd.DataFrame, title: str, is_continuous: bool = False,

@@ -17,6 +17,31 @@ from db import (
     _run_query_tool,
 )
 
+EMIT_SECTION_TOOL = {
+    "name": "emit_section_json",
+    "description": "Emit the final finding, bullets, and chart_subtitle as structured output.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "finding": {"type": "string", "description": "Headline ≤ 12 words, active voice"},
+            "bullets": {
+                "type": "array",
+                "items": {"type": "string"},
+                "minItems": 1,
+                "maxItems": 3,
+            },
+            "chart_subtitle": {"type": "string", "description": "≤ 9 words caption"},
+        },
+        "required": ["finding", "bullets", "chart_subtitle"],
+    },
+}
+
+# Patterns that indicate leaked LLM reasoning rather than published bullet content
+_LEAKED_PATTERNS = re.compile(
+    r"^(I |My |We |Let me |I've |I'm |I'll |I need |I will |I can |I should )",
+    re.IGNORECASE,
+)
+
 COUNTRIES = {"SK": "Slovakia", "EA": "Euro Area", "DE": "Germany"}
 COUNTRY_ORDER = ["SK", "EA", "DE"]
 
@@ -81,6 +106,7 @@ SECTION_CONTENT_SYSTEM = textwrap.dedent("""
     "finding": A single declarative headline (max 12 words) summarising the most notable
       finding for Slovakia. Use active voice, name the direction. Do NOT mention question
       codes (Q10, Q5, etc.). Example: "Net tightening in interest rates reported by Slovak firms"
+      NEVER use in the finding: "surged", "collapsed", "plummeted", "dramatic", "striking", "acute"
 
     "chart_subtitle": One sentence (max 9 words) for a chart caption.
       State the SK finding for the primary (pinned) panel with an actual number.
@@ -402,9 +428,9 @@ def _parse_section_response(raw: str, sec: dict) -> dict:
         finding = str(parsed.get("finding", sec["title"]))
         raw_bullets = parsed.get("bullets", [])
         if isinstance(raw_bullets, list):
-            bullets = [str(b).strip().lstrip("•- ") for b in raw_bullets if str(b).strip()][:3]
+            bullets = [str(b).strip().lstrip("•- ") for b in raw_bullets if str(b).strip()]
         else:
-            bullets = [b.strip().lstrip("•- ") for b in str(raw_bullets).splitlines() if b.strip()][:3]
+            bullets = [b.strip().lstrip("•- ") for b in str(raw_bullets).splitlines() if b.strip()]
         chart_subtitle = str(parsed.get("chart_subtitle", "")).strip()
         # Validate: if finding is empty or still the default placeholder, it parsed wrong
         if not finding or finding == "string":
@@ -415,7 +441,9 @@ def _parse_section_response(raw: str, sec: dict) -> dict:
         bullets = [
             line.strip().lstrip("•- ") for line in raw.splitlines()
             if line.strip() and not line.strip().startswith(("```", "{", "}", "*", "#"))
-        ][:3]
+        ]
+    # Strip leaked LLM reasoning lines and cap at 3
+    bullets = [b for b in bullets if not _LEAKED_PATTERNS.match(b)][:3]
     return {"finding": finding, "bullets": bullets, "chart_subtitle": chart_subtitle}
 
 
@@ -554,28 +582,9 @@ def get_section_content_agentic(
         _track_cost(cost_tracker, "claude-sonnet-4-6", response.usage)
 
         if response.stop_reason != "tool_use":
-            text_blocks = [b.text for b in response.content if hasattr(b, "text")]
-            raw = " ".join(text_blocks) if text_blocks else ""
-            result = _parse_section_response(raw, sec)
-            if result["finding"] != sec["title"]:
-                result["tool_calls"] = tool_calls_made
-                return result
-            # JSON not found — force JSON via assistant prefill
+            # Model finished reasoning — now force structured output via dedicated emit tool
             messages.append({"role": "assistant", "content": response.content})
-            messages.append({"role": "user", "content": 'Return your JSON now. No prose — start directly with {"'})
-            messages.append({"role": "assistant", "content": '{"'})
-            forced = client.messages.create(
-                model="claude-sonnet-4-6",
-                max_tokens=600,
-                system=cached_system,
-                messages=messages,
-                extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
-            )
-            _track_cost(cost_tracker, "claude-sonnet-4-6", forced.usage)
-            forced_text = " ".join(b.text for b in forced.content if hasattr(b, "text"))
-            result = _parse_section_response('{"' + forced_text, sec)
-            result["tool_calls"] = tool_calls_made
-            return result
+            break
 
         messages.append({"role": "assistant", "content": response.content})
         tool_results = []
@@ -593,21 +602,39 @@ def get_section_content_agentic(
             })
         messages.append({"role": "user", "content": tool_results})
 
+    # Force structured output: model MUST call emit_section_json — cannot return plain text
     messages.append({
         "role": "user",
-        "content": 'Return your JSON now. No prose — start directly with {"',
+        "content": "Now emit your structured output using the emit_section_json tool.",
     })
-    messages.append({"role": "assistant", "content": '{"'})
-    final = client.messages.create(
+    emit_resp = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=600,
+        max_tokens=500,
         system=cached_system,
+        tools=[EMIT_SECTION_TOOL],
+        tool_choice={"type": "any"},
         messages=messages,
         extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
     )
-    _track_cost(cost_tracker, "claude-sonnet-4-6", final.usage)
-    text_blocks = [b.text for b in final.content if hasattr(b, "text")]
-    raw = '{"' + (" ".join(text_blocks) if text_blocks else "")
+    _track_cost(cost_tracker, "claude-sonnet-4-6", emit_resp.usage)
+
+    for block in emit_resp.content:
+        if getattr(block, "type", None) == "tool_use" and block.name == "emit_section_json":
+            inp = block.input
+            finding = str(inp.get("finding", sec["title"])).strip() or sec["title"]
+            raw_bullets = inp.get("bullets", [])
+            if isinstance(raw_bullets, list):
+                bullets = [str(b).strip().lstrip("•- ") for b in raw_bullets if str(b).strip()]
+            else:
+                bullets = [str(raw_bullets).strip().lstrip("•- ")]
+            bullets = [b for b in bullets if not _LEAKED_PATTERNS.match(b)][:3]
+            chart_subtitle = str(inp.get("chart_subtitle", "")).strip()
+            return {"finding": finding, "bullets": bullets, "chart_subtitle": chart_subtitle,
+                    "tool_calls": tool_calls_made}
+
+    # Last-resort fallback: extract text from emit response and parse
+    text_blocks = [b.text for b in emit_resp.content if hasattr(b, "text")]
+    raw = " ".join(text_blocks) if text_blocks else ""
     result = _parse_section_response(raw, sec)
     result["tool_calls"] = tool_calls_made
     return result

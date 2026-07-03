@@ -491,6 +491,10 @@ def build_adhoc_spotlight(
                 sib_header = f"\n### Module {sib_id.upper()}"
                 if sib_qt:
                     sib_header += f"\n{sib_qt}"
+                # Include questionnaire response labels for this sibling module
+                sib_label_ctx = build_response_label_context(response_labels, [sib_id])
+                if sib_label_ctx:
+                    sib_header += f"\n{sib_label_ctx}"
                 sibling_lines.append(sib_header)
                 sibling_lines.append(sib_table)
                 if sib_note:

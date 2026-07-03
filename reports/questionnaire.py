@@ -158,10 +158,12 @@ def _extract_text(pdf_path: Path) -> str:
 
 def _parse_adhoc_blocks(
     text: str, module_ids: list[str]
-) -> tuple[dict[str, dict[int, str]], dict[str, dict[str, str]]]:
-    """Extract answer code → label mappings and sub-item labels for adhoc module IDs.
+) -> tuple[dict[str, dict[int, str]], dict[str, dict[str, str]], str | None]:
+    """Extract answer code → label mappings, sub-item labels, and the adhoc section title.
 
     The ECB questionnaire PDF renders each element on its own line:
+        [AD HOC QUESTIONS]
+        Artificial intelligence technologies
         QB1_2025Q4. Question text here...
         a) In your country
         b) In Germany, France and Italy
@@ -173,9 +175,12 @@ def _parse_adhoc_blocks(
     Returns:
         response_labels: {module_id_lower: {code_int: label_str}}
         sub_item_labels: {module_id_lower: {"a": "In your country", "b": "In Germany..."}}
+        section_title: The human-readable title of the adhoc block (e.g. "Artificial intelligence
+                       technologies"), or None if not found.
     """
     response_labels: dict[str, dict[int, str]] = {}
     sub_item_labels: dict[str, dict[str, str]] = {}
+    section_title: str | None = None
     module_ids_upper = {m.upper() for m in module_ids}
 
     lines = text.split("\n")
@@ -192,6 +197,10 @@ def _parse_adhoc_blocks(
     current_module: str | None = None
     state = "seek"          # seek | label | code
     pending_label_parts: list[str] = []
+    # Section-title detection state: after "[AD HOC QUESTIONS]" the next non-empty
+    # non-question line is the human-readable section title.
+    _saw_adhoc_header = False
+    _adhoc_header_re = re.compile(r"\[AD\s+HOC\s+QUESTIONS?\]", re.IGNORECASE)
 
     def _flush_label_pending() -> None:
         nonlocal state, pending_label_parts
@@ -201,6 +210,19 @@ def _parse_adhoc_blocks(
     for line in lines:
         stripped = line.strip()
         if not stripped:
+            continue
+
+        # ── Detect [AD HOC QUESTIONS] header ─────────────────────────────────
+        if _adhoc_header_re.search(stripped):
+            _saw_adhoc_header = True
+            continue
+
+        # Line immediately after [AD HOC QUESTIONS] is the section title
+        if _saw_adhoc_header and section_title is None:
+            _saw_adhoc_header = False
+            # Only capture if it looks like a title (not a question code, not a bracket line)
+            if not question_re.match(stripped) and not stripped.startswith("["):
+                section_title = stripped
             continue
 
         # ── Check for a question header ──────────────────────────────────────
@@ -266,27 +288,29 @@ def _parse_adhoc_blocks(
                 pending_label_parts.append(stripped)
             continue
 
-    return response_labels, sub_item_labels
+    return response_labels, sub_item_labels, section_title
 
 
 def fetch_adhoc_response_labels(
     url: str, module_ids: list[str]
-) -> tuple[dict[str, dict[int, str]], dict[str, dict[str, str]]]:
-    """Download questionnaire PDF and extract answer labels and sub-item labels.
+) -> tuple[dict[str, dict[int, str]], dict[str, dict[str, str]], str | None]:
+    """Download questionnaire PDF and extract answer labels, sub-item labels, and section title.
 
     Returns:
-        (response_labels, sub_item_labels)
+        (response_labels, sub_item_labels, section_title)
         response_labels: {module_id_lower: {code_int: label_str}}
         sub_item_labels: {module_id_lower: {"a": "In your country", "b": "In Germany..."}}
-    Both dicts are empty on any failure.
+        section_title: human-readable adhoc block title (e.g. "Artificial intelligence
+                       technologies"), or None if not found in the PDF.
+    All dicts/strings are empty/None on any failure.
     """
     pdf_path = _download_pdf(url)
     if not pdf_path:
-        return {}, {}
+        return {}, {}, None
     try:
         text = _extract_text(pdf_path)
         if not text:
-            return {}, {}
+            return {}, {}, None
         return _parse_adhoc_blocks(text, module_ids)
     finally:
         try:

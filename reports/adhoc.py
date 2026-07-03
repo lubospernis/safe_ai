@@ -23,10 +23,10 @@ _SONNET_MODEL = "claude-sonnet-4-6"
 SQL_DIR = Path(__file__).parent / "sql"
 
 _MODULE_THEME_FALLBACK: dict[str, str] = {
-    "qa1": "Digital transformation",
-    "qa1a": "Digital transformation",
-    "qa1b": "Digital transformation",
-    "qa1c": "Digital transformation",
+    "qa1": "Artificial intelligence technologies",
+    "qa1a": "Artificial intelligence technologies",
+    "qa1b": "Artificial intelligence technologies",
+    "qa1c": "Artificial intelligence technologies",
     "qa2": "AI Adoption",
     "qa2dec": "Green transition",
     "qa2inc": "Green transition",
@@ -300,6 +300,10 @@ def detect_adhoc_theme(wave_number: int, con, schema: str, mistral_client=None, 
     primary_module_id = ranked[0]
     sibling_modules = [m for m in all_module_ids_wave if m != primary_module_id]
 
+    # pdf_section_title is populated later (after PDF fetch); declare here so the
+    # theme-label block below can reference it even if PDF is not yet fetched.
+    pdf_section_title: str | None = None
+
     # Build question_texts dict for the primary module (sub_item → question_text mapping)
     question_texts: dict[str, str] = {}
     primary_question_text: str | None = module_question_texts.get(primary_module_id)
@@ -323,9 +327,32 @@ def detect_adhoc_theme(wave_number: int, con, schema: str, mistral_client=None, 
         except Exception:
             pass
 
-    # Theme label: use fallback for known modules; only call Mistral for unknown ones.
-    # When Mistral runs, send ALL question texts (not just primary) for full context.
-    theme_label = _MODULE_THEME_FALLBACK.get(primary_module_id, "")
+    # Fetch questionnaire PDF FIRST so pdf_section_title is available for theme label selection.
+    # Extracts: response code → label mappings, sub-item labels, and the human-readable
+    # adhoc section title (e.g. "Artificial intelligence technologies" from [AD HOC QUESTIONS]).
+    questionnaire_url = questionnaire_url_for_wave(wave_number, con, schema)
+    response_labels: dict[str, dict[int, str]] = {}
+    sub_item_labels: dict[str, dict[str, str]] = {}
+    if questionnaire_url:
+        all_module_ids = [r[0] for r in rows]
+        print(f"  Fetching questionnaire PDF for response labels: {questionnaire_url}")
+        response_labels, sub_item_labels, pdf_section_title = fetch_adhoc_response_labels(questionnaire_url, all_module_ids)
+        total_codes = sum(len(v) for v in response_labels.values())
+        total_subs = sum(len(v) for v in sub_item_labels.values())
+        if total_codes or total_subs:
+            print(f"  Questionnaire parsed: {total_codes} response codes, {total_subs} sub-item labels across {len(response_labels | sub_item_labels)} modules")
+            if pdf_section_title:
+                print(f"  Adhoc section title from PDF: {pdf_section_title!r}")
+        else:
+            print("  Questionnaire parse returned no labels — proceeding without them")
+    else:
+        print(f"  No questionnaire URL mapped for wave {wave_number} — proceeding without response labels")
+
+    # Theme label priority:
+    # 1. PDF section title (e.g. "Artificial intelligence technologies" from [AD HOC QUESTIONS])
+    # 2. Hardcoded fallback dict (for waves where PDF parsing fails or URL is unknown)
+    # 3. Mistral classifier (for completely unknown modules)
+    theme_label = pdf_section_title or _MODULE_THEME_FALLBACK.get(primary_module_id, "")
     if not theme_label:
         theme_label = primary_module_id.upper()
         if mistral_client and module_question_texts:
@@ -355,23 +382,6 @@ def detect_adhoc_theme(wave_number: int, con, schema: str, mistral_client=None, 
                                 _Usage(resp.usage.prompt_tokens, resp.usage.completion_tokens))
             except Exception:
                 pass
-
-    # Fetch questionnaire PDF to get response code → label mappings and sub-item labels
-    questionnaire_url = questionnaire_url_for_wave(wave_number, con, schema)
-    response_labels: dict[str, dict[int, str]] = {}
-    sub_item_labels: dict[str, dict[str, str]] = {}
-    if questionnaire_url:
-        all_module_ids = [r[0] for r in rows]
-        print(f"  Fetching questionnaire PDF for response labels: {questionnaire_url}")
-        response_labels, sub_item_labels = fetch_adhoc_response_labels(questionnaire_url, all_module_ids)
-        total_codes = sum(len(v) for v in response_labels.values())
-        total_subs = sum(len(v) for v in sub_item_labels.values())
-        if total_codes or total_subs:
-            print(f"  Questionnaire parsed: {total_codes} response codes, {total_subs} sub-item labels across {len(response_labels | sub_item_labels)} modules")
-        else:
-            print("  Questionnaire parse returned no labels — proceeding without them")
-    else:
-        print(f"  No questionnaire URL mapped for wave {wave_number} — proceeding without response labels")
 
     return {
         "module_id": primary_module_id,
@@ -660,7 +670,7 @@ def build_adhoc_spotlight(
         chart_sub_items = interesting_subs
     print(f"  Phase 2: {len(bullets)} bullets, chart_sub_items={chart_sub_items}")
 
-    # ── Build chart for selected sub-items ───────────────────────────────────
+    # ── Build charts: primary module + siblings (max 3 total) ────────────────
     # Merge PDF sub-item labels and primary question text into theme for chart rendering
     chart_theme = {
         **theme,
@@ -670,6 +680,7 @@ def build_adhoc_spotlight(
     chart_png = None
     chart_df = None
     chart_df_filtered = None
+    chart_pngs: list[bytes] = []
     try:
         chart_df = _fetch_adhoc_chart_data(df, theme, wave_number, schema, con)
         chart_df_filtered = chart_df[chart_df["sub_item"].isin(chart_sub_items)]
@@ -680,9 +691,42 @@ def build_adhoc_spotlight(
             response_labels=response_labels,
         )
         if chart_png:
+            chart_pngs.append(chart_png)
             print(f"  Adhoc chart built ({len(chart_df_filtered)} rows, subs={list(chart_df_filtered['sub_item'].unique())})")
     except Exception as e:
         print(f"  Adhoc chart skipped: {e}")
+
+    # Sibling module charts (one per sibling, capped at 3 total)
+    for sib_id in sibling_modules:
+        if len(chart_pngs) >= 3:
+            break
+        try:
+            sib_raw = con.execute(
+                _ADHOC_CHART_SQL_CATEGORICAL.format(
+                    schema=schema, wave_number=wave_number, module_id=sib_id)
+            ).df()
+            sib_raw = sib_raw[sib_raw["response_raw"] >= 0]
+            if sib_raw.empty:
+                continue
+            sib_is_cont = _is_continuous(sib_raw)
+            if sib_is_cont:
+                sib_df = con.execute(
+                    _ADHOC_CHART_SQL_CONTINUOUS.format(
+                        schema=schema, wave_number=wave_number, module_id=sib_id)
+                ).df()
+            else:
+                sib_df = sib_raw
+            sib_qt = module_question_texts.get(sib_id, "")
+            sib_theme = {**chart_theme, "module_id": sib_id, "question_text": sib_qt}
+            sib_png = _build_adhoc_chart(
+                sib_df, sib_theme, is_continuous=sib_is_cont,
+                response_labels=response_labels,
+            )
+            if sib_png:
+                chart_pngs.append(sib_png)
+                print(f"  Sibling chart built: {sib_id} ({len(sib_df)} rows)")
+        except Exception as e:
+            print(f"  Sibling chart {sib_id} skipped: {e}")
 
     # ── Phase 3: critical review (Mistral Large, threshold ≥ 8) ─────────────
     review_scores: dict = {}
@@ -736,6 +780,10 @@ def build_adhoc_spotlight(
                             chart_df_all, chart_theme, is_continuous=is_cont,
                             response_labels=response_labels,
                         )
+                        if chart_png and chart_pngs:
+                            chart_pngs[0] = chart_png
+                        elif chart_png:
+                            chart_pngs = [chart_png]
                         print(f"  Chart rebuilt with all interesting subs {interesting_subs} to fix alignment")
                     except Exception as rebuild_err:
                         print(f"  Chart rebuild failed: {rebuild_err}")
@@ -747,7 +795,8 @@ def build_adhoc_spotlight(
         "title": f"Special Focus: {theme['theme_label']}",
         "finding": result.get("finding", ""),
         "bullets": bullets,
-        "chart_png": chart_png,
+        "chart_png": chart_pngs[0] if chart_pngs else None,
+        "chart_pngs": chart_pngs,
         "theme_label": theme["theme_label"],
         "review_scores": review_scores,
         "review_passed": review_passed,

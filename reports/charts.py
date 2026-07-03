@@ -442,8 +442,12 @@ def _build_adhoc_chart_categorical(
 
     flat_labels: dict[int, str] = {}
     if response_labels:
-        for module_labels in response_labels.values():
-            flat_labels.update(module_labels)
+        mid = (theme.get("module_id") or "").lower()
+        flat_labels = dict(response_labels.get(mid, {}))
+        if not flat_labels:
+            # fallback: merge all modules only when this module's labels aren't found
+            for module_labels in response_labels.values():
+                flat_labels.update(module_labels)
 
     for ax, sub in zip(axes_flat, sub_items):
         sub_df = df[df["sub_item"] == sub]

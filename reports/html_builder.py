@@ -501,11 +501,19 @@ def build_html(
                 for b in adhoc_s.get("bullets", [])
             )
             adhoc_chart_html = ""
-            if adhoc_s.get("chart_png"):
-                chart_b64 = base64.b64encode(adhoc_s["chart_png"]).decode()
+            chart_pngs = adhoc_s.get("chart_pngs") or (
+                [adhoc_s["chart_png"]] if adhoc_s.get("chart_png") else []
+            )
+            if chart_pngs:
+                img_tags = "".join(
+                    f'<img class="chart-img" src="data:image/png;base64,{base64.b64encode(png).decode()}" '
+                    f'alt="{theme_label} chart" style="max-width:calc(34% - 0.5rem);min-width:220px;flex:1 1 220px;">\n'
+                    for png in chart_pngs
+                )
                 adhoc_chart_html = (
-                    f'<img class="chart-img" src="data:image/png;base64,{chart_b64}" '
-                    f'alt="{theme_label} chart" style="margin:10px 0 16px;">\n'
+                    f'<div style="display:flex;flex-wrap:wrap;gap:1rem;margin:10px 0 16px;">\n'
+                    f'{img_tags}'
+                    f'</div>\n'
                 )
             spotlight_html = textwrap.dedent(f"""
                 <details id="adhoc_spotlight" data-theme="{theme_label}" open>

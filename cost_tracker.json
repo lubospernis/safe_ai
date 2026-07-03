@@ -1,1 +1,1 @@
-{"run_type": "main", "run_date": "2026-07-02", "run_time": "10:45:32", "wave_number": 38, "total_cost_usd": 0.21575, "input_tokens": 115167, "output_tokens": 12225, "cache_read_tokens": 41740, "model_sonnet": "claude-sonnet-4-6", "model_mistral": "mistral-small-latest", "n_sections": 10, "duration_seconds": 248.1}
+{"wave_number": 37, "total_cost_usd": 0.15941, "input_tokens": 121991, "output_tokens": 12169, "cache_read_tokens": 65728, "model_sonnet": "claude-sonnet-4-6", "model_mistral": "mistral-small-latest", "n_sections": 12, "duration_seconds": 113.7}

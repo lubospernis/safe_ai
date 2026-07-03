@@ -13,5 +13,26 @@
     "duration_seconds": 248.1,
     "model_sonnet": "claude-sonnet-4-6",
     "model_mistral": "mistral-small-latest"
+  },
+  {
+    "run_type": "main",
+    "run_date": "2026-07-03",
+    "run_time": "17:35:57",
+    "wave_number": 38,
+    "total_cost_usd": 0.2566,
+    "input_tokens": 119783,
+    "output_tokens": 13456,
+    "cache_read_tokens": 42306,
+    "model_sonnet": "claude-sonnet-4-6",
+    "model_mistral": "mistral-small-latest",
+    "n_sections": 10,
+    "duration_seconds": 162.9,
+    "context_sources": {
+      "annex_loaded": true,
+      "adhoc_module": null,
+      "adhoc_topic": null,
+      "questionnaire_url": null,
+      "questionnaire_labels_parsed": false
+    }
   }
 ]

@@ -132,16 +132,26 @@ _DESCRIBE_QUESTION_SYSTEM = textwrap.dedent("""
     You are a statistical analyst summarising one ECB SAFE survey question for a Slovakia report.
     You receive the question text, response code meanings, and a data table (SK vs EA).
 
+    GROUNDING RULES:
+    - Every comparative claim (e.g. "SK higher", "broadly comparable", "SK leads") MUST cite
+      the exact percentage from the data table. Do NOT generalise across codes — if SK code 2
+      is higher but code 3 is lower, say so explicitly; do NOT say "SK leads overall."
+    - Sub-item labels (e.g. "In your country", "In Germany, France and Italy") describe the
+      geographic scope of the question — they do NOT indicate the question is about exports or
+      trade. Always use the full question text to determine what is being measured.
+    - "broadly comparable" is only acceptable when ALL gaps are < 3pp. If any code differs by
+      ≥ 5pp, name the specific code and gap rather than using a summary phrase.
+
     Return JSON only (no markdown):
     {
-      "description": "<1-2 sentence plain-English summary of what the data shows for SK vs EA>",
+      "description": "<1-2 sentence plain-English summary — cite specific codes and percentages>",
       "interest_score": <integer 1-5>,
-      "key_finding": "<the single most striking number or gap, e.g. 'SK 30% vs EA 18%'>",
+      "key_finding": "<the single most striking number or gap, e.g. 'SK 30% vs EA 18% on code 3'>",
       "routing_note": "<who was asked this question, e.g. 'all firms' or 'firms using AI', or '' if unknown>"
     }
 
     interest_score rubric:
-    1 = SK and EA nearly identical (< 3pp gap on all codes)
+    1 = SK and EA nearly identical (< 3pp gap on ALL codes/values)
     2 = minor difference (3–5pp on one code)
     3 = notable difference (5–10pp) or clear majority/minority pattern
     4 = striking difference (10–20pp) or surprising result
@@ -157,21 +167,29 @@ _ADHOC_SPOTLIGHT_SYSTEM = textwrap.dedent(f"""
 
     YOUR TASK:
     1. Select the 1–3 most interesting questions based on the interest scores and descriptions.
-    2. For each selected question, write 1–2 tight bullets (≤ 35 words each).
+    2. For each selected question, write 1–3 tight bullets (≤ 35 words each), grounded only
+       in that question's data.
     3. Write one overall finding sentence (≤ 20 words) naming the theme and most striking gap.
-    4. If a specific breakdown would meaningfully strengthen ONE finding (e.g. by firm size
-       or by country), you may request it — see "dig_deeper" below.
+    4. If a specific breakdown would meaningfully strengthen ONE finding, you may request it.
 
-    RULES:
-    - Only cite numbers that appear verbatim in the data descriptions/key_findings provided.
-      Do NOT invent, estimate, or paraphrase percentages.
-    - Bullets start with a bolded 3–5 word label: **Label:** sentence.
-    - Reflect routing notes in bullets (e.g. "among AI-using firms").
+    GROUNDING RULES — CRITICAL:
+    - Every comparative claim ("SK leads EA", "broadly comparable", "higher/lower than EA")
+      MUST cite the exact number from the key_finding or description for that question.
+    - Do NOT generalise across response codes. If SK code 2 (pilot use) is higher but code 3
+      (moderate use) is lower, state both explicitly. Do NOT say "SK leads in AI use overall."
+    - "broadly comparable" is only acceptable when ALL gaps are < 3pp. If the key_finding
+      shows a gap ≥ 5pp, name the specific code and percentage — never summarise it away.
+    - Sub-item labels like "In your country" / "In Germany, France and Italy" describe
+      geographic scope of the question, not the subject matter. Never infer the question is
+      about exports or trade from these labels alone — use the question text.
 
     Return valid JSON only (no markdown fences):
     {{
       "finding": "<one sentence headline>",
-      "bullets": ["bullet 1", ..., "bullet N"],
+      "bullets": {{
+        "<question_id_1>": ["bullet 1", "bullet 2"],
+        "<question_id_2>": ["bullet 3"]
+      }},
       "selected_question_ids": ["qa1", "qa3"],
       "dig_deeper": {{
         "question_id": "qa1",
@@ -179,6 +197,8 @@ _ADHOC_SPOTLIGHT_SYSTEM = textwrap.dedent(f"""
       }} or null
     }}
 
+    The "bullets" value is a dict keyed by question_id — one key per selected question.
+    Each question gets its own list of 1–3 bullets grounded only in that question's data.
     Use dig_deeper only when a follow-up query would materially change the bullets.
     The SQL must use {{schema}} and {{wave_number}} as literal format placeholders.
     Set dig_deeper to null if no follow-up is needed.
@@ -484,6 +504,7 @@ def detect_adhoc_theme(wave_number: int, con, schema: str, mistral_client=None, 
         "theme_label": theme_label,
         "question_texts": question_texts,
         "primary_question_text": primary_question_text,
+        "module_question_texts": module_question_texts,
         "questionnaire_url": questionnaire_url,
         "response_labels": response_labels,
         "sub_item_labels": sub_item_labels,
@@ -679,11 +700,12 @@ def build_adhoc_spotlight(
 
         data_table, data_note = _build_full_data_table(df)
 
-        # Question text: from annex (via module_question_texts populated in detect_adhoc_theme),
-        # or fall back to the primary question text for the primary module.
-        qt = theme.get("question_texts", {}).get(qid, "")
+        # Question text: prefer module_question_texts (all modules, from annex), then
+        # primary_question_text (primary module only), then empty. Strip leading bullet chars.
+        qt = (theme.get("module_question_texts") or {}).get(qid, "")
         if not qt and qid == theme["module_id"]:
             qt = theme.get("primary_question_text") or ""
+        qt = re.sub(r"^[-–•]\s*", "", qt).strip()
 
         # Merge PDF sub-item labels into question_texts for chart panel titles
         effective_qt: dict[str, str] = {}
@@ -884,11 +906,23 @@ def build_adhoc_spotlight(
         except Exception as e:
             print(f"  Dig deeper SQL failed ({e}) — skipping")
 
-    bullets = result.get("bullets", [])
-    if isinstance(bullets, str):
-        bullets = [bullets]
+    # Handle both old (list) and new (dict keyed by question_id) bullets schemas
+    raw_bullets = result.get("bullets", {})
     selected_qids = result.get("selected_question_ids", [q["question_id"] for q in question_contexts])
-    print(f"  Phase 3: {len(bullets)} bullets, selected={selected_qids}")
+    if isinstance(raw_bullets, dict):
+        bullets_by_question: dict[str, list[str]] = {
+            qid: (v if isinstance(v, list) else [v])
+            for qid, v in raw_bullets.items()
+        }
+        # Flat list for review pass and Slovak translation (backward compat)
+        bullets: list[str] = [b for qid in selected_qids for b in bullets_by_question.get(qid, [])]
+    elif isinstance(raw_bullets, list):
+        bullets = [b for b in raw_bullets if isinstance(b, str)]
+        bullets_by_question = {selected_qids[0]: bullets} if selected_qids and bullets else {}
+    else:
+        bullets = []
+        bullets_by_question = {}
+    print(f"  Phase 3: {len(bullets)} bullets across {len(selected_qids)} questions, selected={selected_qids}")
 
     # ── Assemble chart_pngs from selected + all questions ────────────────────
     # Selected questions first (in order), then remaining ones (up to 3 total)
@@ -973,6 +1007,8 @@ def build_adhoc_spotlight(
         "title": f"Special Focus: {theme['theme_label']}",
         "finding": result.get("finding", ""),
         "bullets": bullets,
+        "bullets_by_question": bullets_by_question,
+        "selected_question_ids": selected_qids,
         "chart_png": chart_pngs[0] if chart_pngs else None,
         "chart_pngs": chart_pngs,
         "theme_label": theme["theme_label"],

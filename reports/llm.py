@@ -102,6 +102,10 @@ NBS_STYLE_GUIDE = textwrap.dedent("""
       Otherwise: describe only what the data shows.
     - Bullet ordering: most important/surprising finding first; routine confirmations last.
       Never open with a bullet that summarises as "no change".
+    - IMPROVEMENT vs RECOVERY: A net balance that became less negative means conditions are
+      IMPROVING — NOT that they have "recovered", "rebounded", or "turned around". Use
+      "improved by X pp" or "eased" or "less negative". Reserve "recovery" / "rebound" /
+      "turned around" exclusively for net balances that are POSITIVE (> 0).
 """).strip()
 
 SECTION_CONTENT_SYSTEM = textwrap.dedent("""

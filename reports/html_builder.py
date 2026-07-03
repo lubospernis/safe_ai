@@ -497,36 +497,85 @@ def build_html(
                 </details>
             """).strip()
         else:
-            spotlight_bullets = "\n".join(
-                f"    <li>{_md_to_html(b.lstrip('• ').strip())}</li>"
-                for b in adhoc_s.get("bullets", [])
-            )
-            adhoc_chart_html = ""
+            # Per-question blocks: one heading + chart + bullets per selected question
+            selected_qids = adhoc_s.get("selected_question_ids", [])
+            bullets_by_q = adhoc_s.get("bullets_by_question", {})
+            q_descs_by_id = {
+                qd["question_id"]: qd
+                for qd in (adhoc_s.get("question_descriptions") or [])
+            }
             chart_pngs = adhoc_s.get("chart_pngs") or (
                 [adhoc_s["chart_png"]] if adhoc_s.get("chart_png") else []
             )
-            if chart_pngs:
-                img_tags = "".join(
-                    f'<img class="chart-img" src="data:image/png;base64,{base64.b64encode(png).decode()}" '
-                    f'alt="{theme_label} chart" style="max-width:calc(34% - 0.5rem);min-width:220px;flex:1 1 220px;">\n'
-                    for png in chart_pngs
+
+            # If no per-question structure, fall back to flat bullets + all charts
+            if not selected_qids or not bullets_by_q:
+                flat_bullets_html = "\n".join(
+                    f"    <li>{_md_to_html(b.lstrip('• ').strip())}</li>"
+                    for b in adhoc_s.get("bullets", [])
                 )
-                adhoc_chart_html = (
-                    f'<div style="display:flex;flex-wrap:wrap;gap:1rem;margin:10px 0 16px;">\n'
-                    f'{img_tags}'
-                    f'</div>\n'
+                all_charts_html = ""
+                if chart_pngs:
+                    img_tags = "".join(
+                        f'<img class="chart-img" src="data:image/png;base64,{base64.b64encode(png).decode()}" '
+                        f'alt="{theme_label} chart" style="max-width:calc(34% - 0.5rem);min-width:220px;flex:1 1 220px;">\n'
+                        for png in chart_pngs
+                    )
+                    all_charts_html = (
+                        f'<div style="display:flex;flex-wrap:wrap;gap:1rem;margin:10px 0 16px;">\n'
+                        f'{img_tags}</div>\n'
+                    )
+                inner_html = (
+                    f'    <h3>{adhoc_s["finding"]}</h3>\n'
+                    f'    <p class="section-subtitle">{adhoc_s["title"]}</p>\n'
+                    f'{all_charts_html}'
+                    f'    <ul>\n{flat_bullets_html}\n    </ul>\n'
                 )
+            else:
+                # Build one block per selected question
+                q_blocks = []
+                for i, qid in enumerate(selected_qids):
+                    qd = q_descs_by_id.get(qid, {})
+                    qt = qd.get("question_text", "") or qid.upper()
+                    qt = re.sub(r"^[-–•]\s*", "", qt).strip()
+                    heading = f"{qid.upper()} — {qt}" if qt else qid.upper()
+
+                    chart_html = ""
+                    if i < len(chart_pngs):
+                        b64 = base64.b64encode(chart_pngs[i]).decode()
+                        chart_html = (
+                            f'<img class="chart-img" src="data:image/png;base64,{b64}" '
+                            f'alt="{qid} chart" style="max-width:100%;margin:8px 0 10px;">\n'
+                        )
+
+                    q_bullets = bullets_by_q.get(qid, [])
+                    bullets_html = "\n".join(
+                        f"      <li>{_md_to_html(b.lstrip('• ').strip())}</li>"
+                        for b in q_bullets
+                    )
+                    bullets_block = f'    <ul>\n{bullets_html}\n    </ul>\n' if bullets_html else ""
+
+                    q_blocks.append(
+                        f'<div class="adhoc-question-block" style="margin-bottom:1.5rem;">\n'
+                        f'  <h3 style="margin-bottom:0.4rem;">{heading}</h3>\n'
+                        f'{chart_html}'
+                        f'{bullets_block}'
+                        f'</div>'
+                    )
+
+                inner_html = (
+                    f'    <p class="section-subtitle" style="margin-bottom:1rem;">'
+                    f'{adhoc_s["finding"]}</p>\n'
+                    + "\n".join(q_blocks) + "\n"
+                )
+
             spotlight_html = textwrap.dedent(f"""
                 <details id="adhoc_spotlight" data-theme="{theme_label}" open>
                   <summary>
                     <h2>{special_focus_label}: {theme_label}</h2>
                   </summary>
                   <section>
-                    <h3>{adhoc_s['finding']}</h3>
-                    <p class="section-subtitle">{adhoc_s['title']}</p>
-                {adhoc_chart_html}    <ul>
-                {spotlight_bullets}
-                    </ul>
+                {inner_html}
                 {ecb_link_html}  </section>
                 </details>
             """).strip()
@@ -540,10 +589,10 @@ def build_html(
                 qtext = qd.get("question_text", "") or qd.get("question_id", "").upper()
                 desc = qd.get("description", "")
                 kf = qd.get("key_finding", "")
-                stars = "★" * int(score) if isinstance(score, int) else ""
+                score_label = f" (interest: {score}/5)" if isinstance(score, int) else ""
                 kf_html = f'<br><em>Key finding: {_md_to_html(kf)}</em>' if kf else ""
                 q_items.append(
-                    f'<li><strong>{qd["question_id"].upper()} {stars}</strong> '
+                    f'<li><strong>{qd["question_id"].upper()}</strong>{score_label} '
                     f'— {qtext}<br>{_md_to_html(desc)}{kf_html}</li>'
                 )
             all_q_label = _ui.get("adhoc_all_questions", "All adhoc questions")

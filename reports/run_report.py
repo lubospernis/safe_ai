@@ -271,7 +271,7 @@ def main() -> None:
         print("  No adhoc module data for this wave.")
 
     print("Generating executive summary (two-pass)...")
-    exec_bullets = get_exec_summary(rendered, cost_tracker, historical_context=historical_context, adhoc_section=adhoc_section) if rendered else []
+    exec_bullets = get_exec_summary(rendered, cost_tracker, historical_context=historical_context, adhoc_section=adhoc_section, anthropic_client=anthropic_client) if rendered else []
     for item in exec_bullets:
         print(f"  [{item.get('section_id', '?')}] {item.get('bullet', '')}")
 

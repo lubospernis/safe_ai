@@ -38,9 +38,23 @@ EMIT_SECTION_TOOL = {
 
 # Patterns that indicate leaked LLM reasoning rather than published bullet content
 _LEAKED_PATTERNS = re.compile(
-    r"^(I |My |We |Let me |I've |I'm |I'll |I need |I will |I can |I should )",
+    r"^("
+    r"I |My |We |Let me |I've |I'm |I'll |I need |I will |I can |I should |"
+    r"Now |Next |Let's |Checking |Looking |Calculating |Computing |"
+    r"Note:|Note that |Note: |Actually,|Actually |Wait,|Wait |"
+    r"So |Therefore |Thus |Hence |This means|Given that|Based on|Using "
+    r")",
     re.IGNORECASE,
 )
+
+
+def _is_reasoning_leak(bullet: str) -> bool:
+    if _LEAKED_PATTERNS.match(bullet):
+        return True
+    # Reasoning narration often ends in ":" (introducing a list or next thought)
+    if bullet.rstrip().endswith(":") and len(bullet) < 120:
+        return True
+    return False
 
 COUNTRIES = {"SK": "Slovakia", "EA": "Euro Area", "DE": "Germany"}
 COUNTRY_ORDER = ["SK", "EA", "DE"]
@@ -174,6 +188,11 @@ SECTION_CONTENT_SYSTEM = textwrap.dedent("""
     If none of the 4 cases apply, write your JSON response immediately.
     Cite only numbers from the provided data or a tool result you actually ran.
 {historical_context}
+    CRITICAL OUTPUT RULE: The emit_section_json tool's "bullets" array must contain ONLY
+    published report bullets — zero internal reasoning, zero computation steps, zero self-checks.
+    Never put "Now checking...", "Let me analyze...", "I have all the data..." or any process
+    narration into a bullet field. Complete all reasoning BEFORE calling the tool.
+
     Return valid JSON only — no markdown fences, no commentary.
 """).strip().format(nbs_style_guide=NBS_STYLE_GUIDE, schema_catalogue="{schema_catalogue}",
                     query_templates="{query_templates}", historical_context="{historical_context}")
@@ -207,6 +226,20 @@ EXEC_SUMMARY_SYSTEM = textwrap.dedent(f"""
     Your task: write EXACTLY 3–4 bullets. No more. Cover BOTH financing conditions AND
     the economic situation of firms. Prioritise the most striking or cross-cutting findings
     and ruthlessly drop the rest.
+
+    SELECTION PRIORITY (apply in this order):
+    1. Cross-cutting tensions that span financing conditions AND economic situation simultaneously
+       (e.g. costs rising while turnover falls while credit tightens — all at once)
+    2. Findings where Slovakia diverges sharply from the EA (≥ 10 pp gap, or opposite direction)
+    3. Findings that reversed direction from the prior wave (a turning point)
+    4. Single-section findings only if the magnitude is exceptional (≥ 15 pp swing, or clearly
+       the highest/lowest in the data provided)
+
+    DROP a bullet if: the finding is directionally consistent with EA and within 5 pp, or if it
+    merely confirms a stable multi-wave trend with no new development this wave.
+
+    The [LEAD] prefix on bullets marks each section's most analytically significant bullet —
+    weight these more heavily than trailing bullets when selecting what to elevate.
 
     FORMAT — every bullet must follow this exact structure:
       **Short label (2–4 words):** One concise sentence of explanation.
@@ -443,7 +476,7 @@ def _parse_section_response(raw: str, sec: dict) -> dict:
             if line.strip() and not line.strip().startswith(("```", "{", "}", "*", "#"))
         ]
     # Strip leaked LLM reasoning lines and cap at 3
-    bullets = [b for b in bullets if not _LEAKED_PATTERNS.match(b)][:3]
+    bullets = [b for b in bullets if not _is_reasoning_leak(b)][:3]
     return {"finding": finding, "bullets": bullets, "chart_subtitle": chart_subtitle}
 
 
@@ -627,7 +660,7 @@ def get_section_content_agentic(
                 bullets = [str(b).strip().lstrip("•- ") for b in raw_bullets if str(b).strip()]
             else:
                 bullets = [str(raw_bullets).strip().lstrip("•- ")]
-            bullets = [b for b in bullets if not _LEAKED_PATTERNS.match(b)][:3]
+            bullets = [b for b in bullets if not _is_reasoning_leak(b)][:3]
             chart_subtitle = str(inp.get("chart_subtitle", "")).strip()
             return {"finding": finding, "bullets": bullets, "chart_subtitle": chart_subtitle,
                     "tool_calls": tool_calls_made}
@@ -645,6 +678,8 @@ def get_exec_summary(
     cost_tracker: dict,
     historical_context: str = "",
     adhoc_section: dict | None = None,
+    anthropic_client=None,
+    mistral_client=None,
 ) -> list[dict]:
     """Two-pass exec summary. Returns list of {bullet, section_id} dicts."""
     section_ids = {s["section_id"] for s in rendered_sections}
@@ -652,29 +687,30 @@ def get_exec_summary(
     lines = ["Section findings:\n"]
     for s in rendered_sections:
         lines.append(f"## {s['title']} [section_id: {s['section_id']}]")
+        if s.get("finding"):
+            lines.append(f"Finding: {s['finding']}")
         if s.get("sign_note"):
             lines.append(f"Sign convention: {s['sign_note']}")
-        for b in s["bullets"]:
-            lines.append(f"  {b}")
+        for i, b in enumerate(s["bullets"]):
+            prefix = "[LEAD] " if i == 0 else "       "
+            lines.append(f"{prefix}{b}")
         lines.append("")
     section_text = "\n".join(lines)
 
-    client = _mistral_client()
-    _EXEC_MODEL = "mistral-large-2512"
+    _EXEC_MODEL = "claude-opus-4-8"
+
+    def _claude_complete(system: str, user: str, max_tokens: int) -> str:
+        resp = anthropic_client.messages.create(
+            model=_EXEC_MODEL,
+            max_tokens=max_tokens,
+            system=system,
+            messages=[{"role": "user", "content": user}],
+        )
+        _track_cost(cost_tracker, _EXEC_MODEL, resp.usage)
+        return resp.content[0].text.strip()
 
     # Pass 1: cross-section analyst — current wave only, no historical context
-    resp1 = client.chat.complete(
-        model=_EXEC_MODEL,
-        max_tokens=200,
-        messages=[
-            {"role": "system", "content": EXEC_CROSS_SECTION_SYSTEM},
-            {"role": "user", "content": section_text},
-        ],
-    )
-    if resp1.usage:
-        _track_cost(cost_tracker, _EXEC_MODEL,
-                    _Usage(resp1.usage.prompt_tokens, resp1.usage.completion_tokens))
-    themes = resp1.choices[0].message.content.strip()
+    themes = _claude_complete(EXEC_CROSS_SECTION_SYSTEM, section_text, 200)
 
     # Pass 2: editor — receives historical context so it can add wave comparisons where warranted
     history_block = (
@@ -687,19 +723,7 @@ def get_exec_summary(
         f"Cross-cutting themes identified by first-pass analyst:\n{themes}"
         f"{history_block}"
     )
-    resp2 = client.chat.complete(
-        model=_EXEC_MODEL,
-        max_tokens=500,
-        messages=[
-            {"role": "system", "content": EXEC_SUMMARY_SYSTEM},
-            {"role": "user", "content": user_msg},
-        ],
-    )
-    if resp2.usage:
-        _track_cost(cost_tracker, _EXEC_MODEL,
-                    _Usage(resp2.usage.prompt_tokens, resp2.usage.completion_tokens))
-
-    raw = resp2.choices[0].message.content.strip()
+    raw = _claude_complete(EXEC_SUMMARY_SYSTEM, user_msg, 600)
     raw = re.sub(r"^```(?:json)?\s*", "", raw)
     raw = re.sub(r"\s*```$", "", raw).strip()
 

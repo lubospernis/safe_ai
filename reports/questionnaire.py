@@ -156,42 +156,44 @@ def _extract_text(pdf_path: Path) -> str:
         return ""
 
 
-def _parse_adhoc_blocks(text: str, module_ids: list[str]) -> dict[str, dict[int, str]]:
-    """Extract answer code → label mappings for the requested adhoc module IDs.
+def _parse_adhoc_blocks(
+    text: str, module_ids: list[str]
+) -> tuple[dict[str, dict[int, str]], dict[str, dict[str, str]]]:
+    """Extract answer code → label mappings and sub-item labels for adhoc module IDs.
 
     The ECB questionnaire PDF renders each element on its own line:
-        QA1_2025Q4. Question text here...
+        QB1_2025Q4. Question text here...
+        a) In your country
+        b) In Germany, France and Italy
         •
         Not currently in use
         1
-        •
-        Very infrequent use or use in pilot projects/experimentally
-        2
         ...
 
-    We use a 3-state machine: SEEK_BULLET → COLLECT_LABEL → EXPECT_CODE.
-    Returns: {module_id_lower: {code_int: label_str, ...}}
-    For numeric open questions (% estimates), no discrete codes → returns {}.
+    Returns:
+        response_labels: {module_id_lower: {code_int: label_str}}
+        sub_item_labels: {module_id_lower: {"a": "In your country", "b": "In Germany..."}}
     """
-    result: dict[str, dict[int, str]] = {}
+    response_labels: dict[str, dict[int, str]] = {}
+    sub_item_labels: dict[str, dict[str, str]] = {}
     module_ids_upper = {m.upper() for m in module_ids}
 
     lines = text.split("\n")
 
-    # Question header: QA1_2025Q4. or QB1_2025Q4. (may have trailing text on same line)
+    # Question header: QA1_2025Q4. or QB1_2025Q4.
     question_re = re.compile(r"^(Q[AB]\d*[A-Z]?\d*)_\d{4}[A-Z0-9]*\.", re.IGNORECASE)
-    # A line that is just an integer (the answer code)
+    # Sub-item label: "a) Some text" or "b) Some text"
+    sub_item_re = re.compile(r"^([a-z])\)\s*(.+)", re.IGNORECASE)
+    # A line that is just an integer
     code_only_re = re.compile(r"^\s*(-?\d+)\s*$")
-    # A line that IS the bullet character
+    # Bullet character
     bullet_re = re.compile(r"^[•·]\s*$")
 
     current_module: str | None = None
-    # 3-state machine per bullet entry
     state = "seek"          # seek | label | code
     pending_label_parts: list[str] = []
 
     def _flush_label_pending() -> None:
-        """If we were collecting a label but hit a non-code line, discard it."""
         nonlocal state, pending_label_parts
         pending_label_parts = []
         state = "seek"
@@ -207,26 +209,38 @@ def _parse_adhoc_blocks(text: str, module_ids: list[str]) -> dict[str, dict[int,
             qid = qm.group(1).upper()
             matched_module = None
             for mid in module_ids_upper:
-                # Match QA1 against "QA1", "QA" etc. — use prefix matching
                 if qid.upper().startswith(mid) or mid.startswith(qid.upper()):
                     matched_module = mid.lower()
                     break
             if matched_module:
                 current_module = matched_module
-                if current_module not in result:
-                    result[current_module] = {}
+                if current_module not in response_labels:
+                    response_labels[current_module] = {}
+                if current_module not in sub_item_labels:
+                    sub_item_labels[current_module] = {}
             else:
                 current_module = None
             _flush_label_pending()
             state = "seek"
             continue
 
-        # Only process answer content when inside a relevant module block
         if current_module is None:
             continue
 
-        # ── State: seek — waiting for a bullet ──────────────────────────────
+        # ── Capture sub-item labels (a) ... b) ...) before any bullets appear ──
         if state == "seek":
+            sim = sub_item_re.match(stripped)
+            if sim:
+                letter = sim.group(1).lower()
+                label_text = sim.group(2).strip()
+                # Strip [READ IF NECESSARY ...] and anything in brackets
+                label_text = re.sub(r"\s*\[.*", "", label_text).strip()
+                label_text = label_text.rstrip(".,;").strip()
+                # Fix PDF extraction artifacts like "I n Germany" → "In Germany"
+                label_text = re.sub(r"\bI n\b", "In", label_text)
+                if label_text:
+                    sub_item_labels[current_module][letter] = label_text
+                continue
             if bullet_re.match(stripped):
                 state = "label"
                 pending_label_parts = []
@@ -236,45 +250,43 @@ def _parse_adhoc_blocks(text: str, module_ids: list[str]) -> dict[str, dict[int,
         if state == "label":
             cm = code_only_re.match(stripped)
             if cm:
-                # This line IS the code — finalise
                 code = int(cm.group(1))
                 label = " ".join(pending_label_parts).strip()
-                # Strip [READ IF NECESSARY: ...] clauses and trailing noise
                 label = re.sub(r"\[READ IF NECESSARY[^\]]*\]", "", label).strip()
                 label = label.rstrip(".,;").strip()
-                # Valid response codes are 1–20; skip DK/NA and out-of-range
                 if label and 1 <= code <= 20 and code not in (7, 9):
-                    result[current_module][code] = label
+                    response_labels[current_module][code] = label
                 state = "seek"
                 pending_label_parts = []
             elif bullet_re.match(stripped):
-                # New bullet before code — previous one had no code (multiline label ran into next)
                 pending_label_parts = []
             elif stripped.startswith("[") or stripped.startswith("<"):
-                # Filter/scripting instruction — skip, don't append to label
                 pass
             else:
                 pending_label_parts.append(stripped)
             continue
 
-    return result
+    return response_labels, sub_item_labels
 
 
 def fetch_adhoc_response_labels(
     url: str, module_ids: list[str]
-) -> dict[str, dict[int, str]]:
-    """Download questionnaire PDF and extract answer labels for the given module IDs.
+) -> tuple[dict[str, dict[int, str]], dict[str, dict[str, str]]]:
+    """Download questionnaire PDF and extract answer labels and sub-item labels.
 
-    Returns a dict mapping lowercased module_id → {response_code: label}.
-    Returns empty dict on any failure (network, parse, no adhoc section).
+    Returns:
+        (response_labels, sub_item_labels)
+        response_labels: {module_id_lower: {code_int: label_str}}
+        sub_item_labels: {module_id_lower: {"a": "In your country", "b": "In Germany..."}}
+    Both dicts are empty on any failure.
     """
     pdf_path = _download_pdf(url)
     if not pdf_path:
-        return {}
+        return {}, {}
     try:
         text = _extract_text(pdf_path)
         if not text:
-            return {}
+            return {}, {}
         return _parse_adhoc_blocks(text, module_ids)
     finally:
         try:
@@ -284,23 +296,27 @@ def fetch_adhoc_response_labels(
 
 
 def build_response_label_context(
-    labels: dict[str, dict[int, str]], module_ids: list[str]
+    labels: dict[str, dict[int, str]],
+    module_ids: list[str],
+    sub_item_labels: dict[str, dict[str, str]] | None = None,
 ) -> str:
-    """Format response labels into a prompt-ready context block.
-
-    Returns empty string if labels dict is empty.
-    """
-    if not labels:
+    """Format response labels and sub-item labels into a prompt-ready context block."""
+    if not labels and not sub_item_labels:
         return ""
 
     lines = ["Response code meanings (from ECB questionnaire):"]
     for mid in module_ids:
         code_map = labels.get(mid.lower(), {})
-        if code_map:
-            lines.append(f"  {mid.upper()}:")
-            for code, label in sorted(code_map.items()):
-                lines.append(f"    {code} = {label}")
+        sil = (sub_item_labels or {}).get(mid.lower(), {})
+        if not code_map and not sil:
+            continue
+        lines.append(f"  {mid.upper()}:")
+        if sil:
+            for letter, label in sorted(sil.items()):
+                lines.append(f"    sub-item {letter} = {label}")
+        for code, label in sorted(code_map.items()):
+            lines.append(f"    code {code} = {label}")
 
     if len(lines) == 1:
-        return ""  # nothing was added
+        return ""
     return "\n".join(lines)

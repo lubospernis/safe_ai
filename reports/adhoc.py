@@ -270,16 +270,18 @@ def detect_adhoc_theme(wave_number: int, con, schema: str, mistral_client=None, 
         except Exception:
             pass
 
-    # Fetch questionnaire PDF to get response code → label mappings
+    # Fetch questionnaire PDF to get response code → label mappings and sub-item labels
     questionnaire_url = questionnaire_url_for_wave(wave_number, con, schema)
     response_labels: dict[str, dict[int, str]] = {}
+    sub_item_labels: dict[str, dict[str, str]] = {}
     if questionnaire_url:
         all_module_ids = [r[0] for r in rows]
         print(f"  Fetching questionnaire PDF for response labels: {questionnaire_url}")
-        response_labels = fetch_adhoc_response_labels(questionnaire_url, all_module_ids)
-        if response_labels:
-            total_codes = sum(len(v) for v in response_labels.values())
-            print(f"  Questionnaire parsed: {total_codes} response codes across {len(response_labels)} modules")
+        response_labels, sub_item_labels = fetch_adhoc_response_labels(questionnaire_url, all_module_ids)
+        total_codes = sum(len(v) for v in response_labels.values())
+        total_subs = sum(len(v) for v in sub_item_labels.values())
+        if total_codes or total_subs:
+            print(f"  Questionnaire parsed: {total_codes} response codes, {total_subs} sub-item labels across {len(response_labels | sub_item_labels)} modules")
         else:
             print("  Questionnaire parse returned no labels — proceeding without them")
     else:
@@ -291,6 +293,7 @@ def detect_adhoc_theme(wave_number: int, con, schema: str, mistral_client=None, 
         "question_texts": question_texts,
         "questionnaire_url": questionnaire_url,
         "response_labels": response_labels,
+        "sub_item_labels": sub_item_labels,
         "sibling_modules": sibling_modules,
     }
 
@@ -430,12 +433,20 @@ def build_adhoc_spotlight(
 
     # Build response label context from questionnaire PDF (may be empty if not mapped)
     response_labels = theme.get("response_labels", {})
-    all_module_ids = list({theme["module_id"]} | set(response_labels.keys()))
-    response_label_ctx = build_response_label_context(response_labels, all_module_ids)
+    sub_item_labels = theme.get("sub_item_labels", {})
+    all_module_ids = list({theme["module_id"]} | set(response_labels.keys()) | set(sub_item_labels.keys()))
+    response_label_ctx = build_response_label_context(response_labels, all_module_ids, sub_item_labels)
+
+    # Use PDF sub-item labels as question_texts when annex is empty (common for adhoc modules)
+    effective_question_texts = dict(theme.get("question_texts") or {})
+    primary_sil = sub_item_labels.get(theme["module_id"].lower(), {})
+    for letter, label in primary_sil.items():
+        if letter not in effective_question_texts:
+            effective_question_texts[letter] = label
 
     # ── Phase 1: select interesting sub-items ────────────────────────────────
     interesting_subs, routing_notes = _select_interesting_sub_items(
-        df, full_table, theme.get("question_texts", {}), theme["theme_label"],
+        df, full_table, effective_question_texts, theme["theme_label"],
         cost_tracker, mistral_client=mistral_client,
         response_label_ctx=response_label_ctx,
     )
@@ -447,11 +458,11 @@ def build_adhoc_spotlight(
 
     interesting_table, _ = _build_full_data_table(df_interesting)
 
-    # Build question context
+    # Build question context (uses PDF sub-item labels when annex is empty)
     question_ctx = ""
-    if theme.get("question_texts"):
+    if effective_question_texts:
         question_ctx = "\n\nSurvey question texts (use for plain-language descriptions only):\n" + "\n".join(
-            f"  Sub-item {k}: {v}" for k, v in theme["question_texts"].items()
+            f"  Sub-item {k}: {v}" for k, v in effective_question_texts.items()
             if k in interesting_subs
         )
 
@@ -491,8 +502,8 @@ def build_adhoc_spotlight(
                 sib_header = f"\n### Module {sib_id.upper()}"
                 if sib_qt:
                     sib_header += f"\n{sib_qt}"
-                # Include questionnaire response labels for this sibling module
-                sib_label_ctx = build_response_label_context(response_labels, [sib_id])
+                # Include questionnaire response labels + sub-item labels for this sibling
+                sib_label_ctx = build_response_label_context(response_labels, [sib_id], sub_item_labels)
                 if sib_label_ctx:
                     sib_header += f"\n{sib_label_ctx}"
                 sibling_lines.append(sib_header)
@@ -556,6 +567,8 @@ def build_adhoc_spotlight(
     print(f"  Phase 2: {len(bullets)} bullets, chart_sub_items={chart_sub_items}")
 
     # ── Build chart for selected sub-items ───────────────────────────────────
+    # Merge PDF sub-item labels into theme for chart panel titles
+    chart_theme = {**theme, "question_texts": effective_question_texts}
     chart_png = None
     chart_df = None
     chart_df_filtered = None
@@ -565,7 +578,7 @@ def build_adhoc_spotlight(
         if chart_df_filtered.empty:
             chart_df_filtered = chart_df
         chart_png = _build_adhoc_chart(
-            chart_df_filtered, theme, is_continuous=is_cont,
+            chart_df_filtered, chart_theme, is_continuous=is_cont,
             response_labels=response_labels,
         )
         if chart_png:
@@ -622,7 +635,7 @@ def build_adhoc_spotlight(
                         if chart_df_all.empty:
                             chart_df_all = chart_df
                         chart_png = _build_adhoc_chart(
-                            chart_df_all, theme, is_continuous=is_cont,
+                            chart_df_all, chart_theme, is_continuous=is_cont,
                             response_labels=response_labels,
                         )
                         print(f"  Chart rebuilt with all interesting subs {interesting_subs} to fix alignment")

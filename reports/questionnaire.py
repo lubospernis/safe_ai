@@ -319,6 +319,49 @@ def fetch_adhoc_response_labels(
             pass
 
 
+def persist_adhoc_labels(
+    wave_number: int,
+    period_suffix: str,
+    questionnaire_url: str,
+    response_labels: dict[str, dict[int, str]],
+    sub_item_labels: dict[str, dict[str, str]],
+    section_title: str | None,
+    con,
+    schema: str,
+) -> int:
+    """Persist parsed questionnaire labels to ref_safe__adhoc_labels. Returns rows upserted."""
+    from datetime import datetime
+    con.execute(f"""
+        CREATE TABLE IF NOT EXISTS {schema}.ref_safe__adhoc_labels (
+            wave_number    INTEGER   NOT NULL,
+            period_suffix  VARCHAR   NOT NULL,
+            question_id    VARCHAR   NOT NULL,
+            label_type     VARCHAR   NOT NULL,
+            code_key       VARCHAR   NOT NULL,
+            label_text     VARCHAR   NOT NULL,
+            questionnaire_url VARCHAR,
+            inserted_at    TIMESTAMP NOT NULL,
+            PRIMARY KEY (wave_number, question_id, label_type, code_key)
+        )
+    """)
+    rows = []
+    now = datetime.utcnow()
+    if section_title:
+        rows.append((wave_number, period_suffix, "*", "section_title", "", section_title, questionnaire_url, now))
+    for qid, code_map in response_labels.items():
+        for code_int, label in code_map.items():
+            rows.append((wave_number, period_suffix, qid, "response_code", str(code_int), label, questionnaire_url, now))
+    for qid, sub_map in sub_item_labels.items():
+        for letter, label in sub_map.items():
+            rows.append((wave_number, period_suffix, qid, "sub_item", letter, label, questionnaire_url, now))
+    if rows:
+        con.executemany(
+            f"INSERT OR REPLACE INTO {schema}.ref_safe__adhoc_labels VALUES (?,?,?,?,?,?,?,?)",
+            rows,
+        )
+    return len(rows)
+
+
 def build_response_label_context(
     labels: dict[str, dict[int, str]],
     module_ids: list[str],

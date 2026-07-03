@@ -1,8 +1,10 @@
 """Adhoc module spotlight: detect theme, build charts, generate LLM content."""
 
+import base64
 import json
 import re
 import textwrap
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import anthropic
@@ -15,6 +17,7 @@ from llm import NBS_STYLE_GUIDE
 from questionnaire import (
     build_response_label_context,
     fetch_adhoc_response_labels,
+    persist_adhoc_labels,
     questionnaire_url_for_wave,
 )
 
@@ -123,6 +126,62 @@ _ADHOC_REVIEW_SYSTEM = textwrap.dedent("""
      "chart_alignment": <1-10>, "verdict": "pass" or "fail", "reason": "<one sentence>"}
 
     Set verdict to "fail" if ANY dimension is below 8.
+""").strip()
+
+_DESCRIBE_QUESTION_SYSTEM = textwrap.dedent("""
+    You are a statistical analyst summarising one ECB SAFE survey question for a Slovakia report.
+    You receive the question text, response code meanings, and a data table (SK vs EA).
+
+    Return JSON only (no markdown):
+    {
+      "description": "<1-2 sentence plain-English summary of what the data shows for SK vs EA>",
+      "interest_score": <integer 1-5>,
+      "key_finding": "<the single most striking number or gap, e.g. 'SK 30% vs EA 18%'>",
+      "routing_note": "<who was asked this question, e.g. 'all firms' or 'firms using AI', or '' if unknown>"
+    }
+
+    interest_score rubric:
+    1 = SK and EA nearly identical (< 3pp gap on all codes)
+    2 = minor difference (3–5pp on one code)
+    3 = notable difference (5–10pp) or clear majority/minority pattern
+    4 = striking difference (10–20pp) or surprising result
+    5 = very large gap (> 20pp) or result that directly contradicts expectations
+""").strip()
+
+_ADHOC_SPOTLIGHT_SYSTEM = textwrap.dedent(f"""
+    You are a concise economic analyst writing a "Special Focus" sidebar for a Slovakia
+    SAFE survey report. You will receive per-question summaries and charts for all adhoc
+    questions in this wave.
+
+    {NBS_STYLE_GUIDE}
+
+    YOUR TASK:
+    1. Select the 1–3 most interesting questions based on the interest scores and descriptions.
+    2. For each selected question, write 1–2 tight bullets (≤ 35 words each).
+    3. Write one overall finding sentence (≤ 20 words) naming the theme and most striking gap.
+    4. If a specific breakdown would meaningfully strengthen ONE finding (e.g. by firm size
+       or by country), you may request it — see "dig_deeper" below.
+
+    RULES:
+    - Only cite numbers that appear verbatim in the data descriptions/key_findings provided.
+      Do NOT invent, estimate, or paraphrase percentages.
+    - Bullets start with a bolded 3–5 word label: **Label:** sentence.
+    - Reflect routing notes in bullets (e.g. "among AI-using firms").
+
+    Return valid JSON only (no markdown fences):
+    {{
+      "finding": "<one sentence headline>",
+      "bullets": ["bullet 1", ..., "bullet N"],
+      "selected_question_ids": ["qa1", "qa3"],
+      "dig_deeper": {{
+        "question_id": "qa1",
+        "sql": "SELECT country_code, sub_item, response_raw, pct_wtd, n_firms FROM {{schema}}.mart_safe__adhoc_responses WHERE wave_number = {{wave_number}} AND module_id = 'qa1' AND country_code IN ('SK','EA') AND response_raw >= 0 ORDER BY sub_item, country_code, response_raw"
+      }} or null
+    }}
+
+    Use dig_deeper only when a follow-up query would materially change the bullets.
+    The SQL must use {{schema}} and {{wave_number}} as literal format placeholders.
+    Set dig_deeper to null if no follow-up is needed.
 """).strip()
 
 _ADHOC_CHART_SQL_CONTINUOUS = """
@@ -348,6 +407,43 @@ def detect_adhoc_theme(wave_number: int, con, schema: str, mistral_client=None, 
     else:
         print(f"  No questionnaire URL mapped for wave {wave_number} — proceeding without response labels")
 
+    # Persist parsed labels to MotherDuck so they're queryable across sessions
+    if (response_labels or sub_item_labels or pdf_section_title) and period_suffix:
+        try:
+            n = persist_adhoc_labels(
+                wave_number=wave_number,
+                period_suffix=period_suffix,
+                questionnaire_url=questionnaire_url or "",
+                response_labels=response_labels,
+                sub_item_labels=sub_item_labels,
+                section_title=pdf_section_title,
+                con=con,
+                schema=schema,
+            )
+            print(f"  Adhoc labels persisted: {n} rows → {schema}.ref_safe__adhoc_labels")
+        except Exception as e:
+            print(f"  Adhoc label persistence failed (non-fatal): {e}")
+
+    # Cache read-back: if PDF was unavailable, try loading labels persisted by a prior run
+    if not response_labels and not sub_item_labels:
+        try:
+            cached = con.execute(f"""
+                SELECT question_id, label_type, code_key, label_text
+                FROM {schema}.ref_safe__adhoc_labels
+                WHERE wave_number = {wave_number}
+            """).fetchall()
+            for qid, ltype, ckey, ltext in cached:
+                if ltype == "response_code":
+                    response_labels.setdefault(qid, {})[int(ckey)] = ltext
+                elif ltype == "sub_item":
+                    sub_item_labels.setdefault(qid, {})[ckey] = ltext
+                elif ltype == "section_title" and not pdf_section_title:
+                    pdf_section_title = ltext
+            if response_labels or sub_item_labels:
+                print(f"  Loaded adhoc labels from ref_safe__adhoc_labels (PDF not fetched)")
+        except Exception:
+            pass
+
     # Theme label priority:
     # 1. PDF section title (e.g. "Artificial intelligence technologies" from [AD HOC QUESTIONS])
     # 2. Hardcoded fallback dict (for waves where PDF parsing fails or URL is unknown)
@@ -490,6 +586,55 @@ def _select_interesting_sub_items(
         return all_subs, {s: "" for s in all_subs}
 
 
+def _describe_question(q: dict, mistral_client, cost_tracker: dict) -> dict:
+    """Phase 1: Mistral Small describes one question's SK vs EA findings.
+
+    Returns the input dict augmented with 'description', 'interest_score',
+    'key_finding', 'routing_note'. Falls back to empty strings on failure.
+    """
+    label_lines = []
+    if q.get("response_labels"):
+        label_lines.append("Response codes:")
+        for code, label in sorted(q["response_labels"].items()):
+            label_lines.append(f"  {code} = {label}")
+    if q.get("sub_item_labels"):
+        label_lines.append("Sub-items:")
+        for letter, label in sorted(q["sub_item_labels"].items()):
+            label_lines.append(f"  {letter} = {label}")
+    label_block = ("\n" + "\n".join(label_lines)) if label_lines else ""
+
+    user_msg = (
+        f"Question: {q.get('question_text') or q['question_id'].upper()}{label_block}\n\n"
+        f"Data (SK vs EA):\n{q['data_table']}"
+    )
+
+    defaults = {"description": "", "interest_score": 3, "key_finding": "", "routing_note": ""}
+    if mistral_client is None:
+        return {**q, **defaults}
+
+    try:
+        model = "mistral-small-latest"
+        resp = mistral_client.chat.complete(
+            model=model,
+            max_tokens=200,
+            messages=[
+                {"role": "system", "content": _DESCRIBE_QUESTION_SYSTEM},
+                {"role": "user", "content": user_msg},
+            ],
+        )
+        raw = resp.choices[0].message.content.strip()
+        if resp.usage:
+            _track_cost(cost_tracker, model,
+                        _Usage(resp.usage.prompt_tokens, resp.usage.completion_tokens))
+        if raw.startswith("```"):
+            raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+        parsed = json.loads(repair_json(raw))
+        return {**q, **{k: parsed.get(k, defaults[k]) for k in defaults}}
+    except Exception as e:
+        print(f"  _describe_question({q['question_id']}) failed: {e}")
+        return {**q, **defaults}
+
+
 def build_adhoc_spotlight(
     theme: dict,
     wave_number: int,
@@ -499,246 +644,285 @@ def build_adhoc_spotlight(
     cost_tracker: dict,
     anthropic_client=None,
 ) -> dict | None:
-    """Generate the adhoc spotlight section using a 3-phase agentic design.
+    """Generate the adhoc spotlight section: question-by-question agentic pipeline.
 
-    Phase 1 (Mistral Small): classify sub-items as interesting/skip.
-    Phase 2 (Sonnet): write 2-4 bullets for interesting sub-items, return chart_sub_items.
-    Phase 3 (Mistral Large): critical review — scores all dims; warns if any < 8.
+    Phase 0: Enumerate all questions, fetch data + build data tables.
+    Phase 1: Mistral Small describes each question (parallel).
+    Phase 2: Build charts for every question.
+    Phase 3: Sonnet (multimodal) selects interesting questions and writes the spotlight;
+             optionally requests one follow-up SQL query per selected question.
+    Phase 4: Mistral Large critical review.
     """
-    sql_template = (SQL_DIR / "adhoc_spotlight.sql").read_text()
-    sql = sql_template.format(
-        wave_number=wave_number,
-        module_id=theme["module_id"],
-        schema=schema,
-    )
-    try:
-        df = con.execute(sql).df()
-    except Exception as e:
-        print(f"  Adhoc spotlight SQL failed: {e}")
-        return None
-    if df.empty:
-        return None
-
-    df = df[df["response_raw"] >= 0].copy()
-    if df.empty:
-        return None
-
-    is_cont = _is_continuous(df)
-    if is_cont:
-        df = df[df["response_raw"] <= 100].copy()
-
-    full_table, data_note = _build_full_data_table(df)
-
-    # Build response label context from questionnaire PDF (may be empty if not mapped)
     response_labels = theme.get("response_labels", {})
     sub_item_labels = theme.get("sub_item_labels", {})
-    all_module_ids = list({theme["module_id"]} | set(response_labels.keys()) | set(sub_item_labels.keys()))
-    response_label_ctx = build_response_label_context(response_labels, all_module_ids, sub_item_labels)
-
-    # Use PDF sub-item labels as question_texts when annex is empty (common for adhoc modules)
-    effective_question_texts = dict(theme.get("question_texts") or {})
-    primary_sil = sub_item_labels.get(theme["module_id"].lower(), {})
-    for letter, label in primary_sil.items():
-        if letter not in effective_question_texts:
-            effective_question_texts[letter] = label
-
-    # ── Phase 1: select interesting sub-items ────────────────────────────────
-    interesting_subs, routing_notes = _select_interesting_sub_items(
-        df, full_table, effective_question_texts, theme["theme_label"],
-        cost_tracker, mistral_client=mistral_client,
-        response_label_ctx=response_label_ctx,
-    )
-
-    # Filter df to interesting sub-items for the writing prompt
-    df_interesting = df[df["sub_item"].isin(interesting_subs)].copy()
-    if df_interesting.empty:
-        df_interesting = df  # fallback
-
-    interesting_table, _ = _build_full_data_table(df_interesting)
-
-    # Build question context (uses PDF sub-item labels when annex is empty)
-    question_ctx = ""
-    if effective_question_texts:
-        question_ctx = "\n\nSurvey question texts (use for plain-language descriptions only):\n" + "\n".join(
-            f"  Sub-item {k}: {v}" for k, v in effective_question_texts.items()
-            if k in interesting_subs
-        )
-
-    routing_ctx = ""
-    if any(v for v in routing_notes.values()):
-        routing_ctx = "\n\nRouting notes (reflect in bullets):\n" + "\n".join(
-            f"  Sub-item {k}: {v}" for k, v in routing_notes.items()
-            if k in interesting_subs and v
-        )
-
-    # Include response labels in the writing prompt if available
-    label_ctx = ""
-    if response_label_ctx:
-        label_ctx = f"\n\n{response_label_ctx}"
-
-    # ── Sibling module extended context ──────────────────────────────────────
-    # Fetch summary data from all sibling modules (same wave, different module_ids)
-    # and append as extra context so Phase 2 can write richer cross-module bullets.
-    sibling_ctx = ""
     sibling_modules = theme.get("sibling_modules", [])
-    if sibling_modules:
-        sibling_lines = ["\n\nAdditional modules from this wave (use for context, pick most striking findings):"]
-        sql_template = (SQL_DIR / "adhoc_spotlight.sql").read_text()
-        for sib_id in sibling_modules:
-            try:
-                sib_sql = sql_template.format(wave_number=wave_number, module_id=sib_id, schema=schema)
-                sib_df = con.execute(sib_sql).df()
-                if sib_df.empty:
-                    continue
-                sib_df = sib_df[sib_df["response_raw"] >= 0].copy()
-                sib_is_cont = _is_continuous(sib_df)
-                if sib_is_cont:
-                    sib_df = sib_df[sib_df["response_raw"] <= 100].copy()
-                sib_table, sib_note = _build_full_data_table(sib_df)
-                # Fetch question texts for sibling (scoped to wave period)
-                sib_qt = _fetch_question_texts(con, schema, [sib_id], period_suffix=theme.get("period_suffix"))
-                sib_header = f"\n### Module {sib_id.upper()}"
-                if sib_qt:
-                    sib_header += f"\n{sib_qt}"
-                # Include questionnaire response labels + sub-item labels for this sibling
-                sib_label_ctx = build_response_label_context(response_labels, [sib_id], sub_item_labels)
-                if sib_label_ctx:
-                    sib_header += f"\n{sib_label_ctx}"
-                sibling_lines.append(sib_header)
-                sibling_lines.append(sib_table)
-                if sib_note:
-                    sibling_lines.append(sib_note.strip())
-            except Exception:
-                pass
-        if len(sibling_lines) > 1:
-            sibling_ctx = "\n".join(sibling_lines)
+    all_question_ids = [theme["module_id"]] + sibling_modules
+    sql_template = (SQL_DIR / "adhoc_spotlight.sql").read_text()
 
-    # ── Phase 2: write bullets ───────────────────────────────────────────────
-    user_msg = (
-        f"Topic: {theme['theme_label']}{question_ctx}{routing_ctx}{label_ctx}\n\n"
-        f"Data (wave {wave_number}, SK vs EA, interesting sub-items only):\n"
-        f"{interesting_table}{data_note}"
-        f"{sibling_ctx}\n\n"
-        + (
-            "Write the finding, 4–5 bullets covering the most striking findings across ALL "
-            "questions above (aim for 4 minimum), and chart_sub_items as specified. "
-            "Prioritise current adoption state data but draw freely across all questions."
-            if sibling_ctx else
-            "Write the finding, 2–4 bullets, and chart_sub_items as specified."
-        )
+    # ── Phase 0: enumerate questions, fetch data ──────────────────────────────
+    question_contexts: list[dict] = []
+    for qid in all_question_ids:
+        try:
+            sql = sql_template.format(wave_number=wave_number, module_id=qid, schema=schema)
+            df = con.execute(sql).df()
+        except Exception as e:
+            print(f"  Phase 0 SQL failed for {qid}: {e}")
+            continue
+        if df.empty:
+            continue
+        df = df[df["response_raw"] >= 0].copy()
+        if df.empty:
+            continue
+        is_cont = _is_continuous(df)
+        if is_cont:
+            df = df[df["response_raw"] <= 100].copy()
+
+        data_table, data_note = _build_full_data_table(df)
+
+        # Question text: from annex (via module_question_texts populated in detect_adhoc_theme),
+        # or fall back to the primary question text for the primary module.
+        qt = theme.get("question_texts", {}).get(qid, "")
+        if not qt and qid == theme["module_id"]:
+            qt = theme.get("primary_question_text") or ""
+
+        # Merge PDF sub-item labels into question_texts for chart panel titles
+        effective_qt: dict[str, str] = {}
+        for letter, label in (sub_item_labels.get(qid.lower(), {})).items():
+            effective_qt[letter] = label
+        # Override with annex texts if available
+        for k, v in (theme.get("question_texts") or {}).items():
+            effective_qt[k] = v
+
+        question_contexts.append({
+            "question_id": qid,
+            "question_text": qt,
+            "is_continuous": is_cont,
+            "df": df,
+            "data_table": data_table + data_note,
+            "response_labels": response_labels.get(qid.lower(), {}),
+            "sub_item_labels": sub_item_labels.get(qid.lower(), {}),
+            "effective_question_texts": effective_qt,
+        })
+
+    if not question_contexts:
+        print("  Phase 0: no question data found — aborting adhoc spotlight")
+        return None
+
+    print(f"  Phase 0: {len(question_contexts)} questions enumerated: {[q['question_id'] for q in question_contexts]}")
+
+    # ── Phase 1: describe each question (Mistral Small, parallel) ────────────
+    cost_lock = __import__("threading").Lock()
+
+    def _describe_with_lock(q: dict) -> dict:
+        local_tracker: dict = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
+        result = _describe_question(q, mistral_client, local_tracker)
+        with cost_lock:
+            for k in ("input_tokens", "output_tokens", "usd", "calls"):
+                cost_tracker[k] = cost_tracker.get(k, 0) + local_tracker[k]
+            for model, m in local_tracker["by_model"].items():
+                bm = cost_tracker["by_model"].setdefault(model, {"calls": 0, "input": 0, "output": 0, "usd": 0.0, "cache_write": 0, "cache_read": 0})
+                for mk in bm:
+                    bm[mk] += m.get(mk, 0)
+        return result
+
+    with ThreadPoolExecutor(max_workers=len(question_contexts)) as pool:
+        futures = {pool.submit(_describe_with_lock, q): q["question_id"] for q in question_contexts}
+        described: dict[str, dict] = {}
+        for future in as_completed(futures):
+            qid = futures[future]
+            described[qid] = future.result()
+
+    question_contexts = [described[q["question_id"]] for q in question_contexts]
+    for q in question_contexts:
+        print(f"  Phase 1 [{q['question_id']}] score={q['interest_score']}: {q.get('key_finding', '')}")
+
+    # ── Phase 2: build charts for all questions ───────────────────────────────
+    for q in question_contexts:
+        try:
+            chart_theme = {
+                **theme,
+                "module_id": q["question_id"],
+                "question_text": q["question_text"],
+                "question_texts": q["effective_question_texts"],
+            }
+            chart_df = _fetch_adhoc_chart_data(q["df"], chart_theme, wave_number, schema, con)
+            q["chart_png"] = _build_adhoc_chart(
+                chart_df, chart_theme,
+                is_continuous=q["is_continuous"],
+                response_labels=response_labels,
+            )
+            q["chart_df"] = chart_df
+            if q["chart_png"]:
+                print(f"  Phase 2 chart built: {q['question_id']}")
+        except Exception as e:
+            q["chart_png"] = None
+            q["chart_df"] = None
+            print(f"  Phase 2 chart skipped {q['question_id']}: {e}")
+
+    # ── Phase 3: Sonnet selects + writes spotlight (multimodal) ──────────────
+    # Build the user message: text summaries + embedded chart images
+    descriptions_block = "\n\n".join(
+        f"[{q['question_id'].upper()}] interest={q['interest_score']}/5\n"
+        f"Question: {q.get('question_text') or q['question_id'].upper()}\n"
+        f"Description: {q.get('description') or '(no description)'}\n"
+        f"Key finding: {q.get('key_finding') or '(none)'}\n"
+        f"Routing: {q.get('routing_note') or 'all firms'}"
+        for q in question_contexts
     )
 
+    user_content: list = [
+        {
+            "type": "text",
+            "text": (
+                f"Topic: {theme['theme_label']}\n"
+                f"Wave: {wave_number}\n\n"
+                f"=== Question summaries ===\n{descriptions_block}\n\n"
+                f"=== Charts (one per question, in order: "
+                f"{', '.join(q['question_id'] for q in question_contexts)}) ==="
+            ),
+        }
+    ]
+
+    # Embed charts as images (Sonnet multimodal)
+    for q in question_contexts:
+        if q.get("chart_png"):
+            user_content.append({
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/png",
+                    "data": base64.b64encode(q["chart_png"]).decode(),
+                },
+            })
+
+    user_content.append({
+        "type": "text",
+        "text": "Write the spotlight as specified. Return valid JSON only.",
+    })
+
+    result: dict = {}
     try:
         if anthropic_client is not None:
             model = _SONNET_MODEL
             resp = anthropic_client.messages.create(
                 model=model,
-                max_tokens=800,
-                system=ADHOC_CONTENT_SYSTEM,
-                messages=[{"role": "user", "content": user_msg}],
+                max_tokens=1000,
+                system=_ADHOC_SPOTLIGHT_SYSTEM,
+                messages=[{"role": "user", "content": user_content}],
             )
             raw = resp.content[0].text.strip()
             _track_cost(cost_tracker, model, _Usage(
                 resp.usage.input_tokens, resp.usage.output_tokens,
             ))
         else:
+            # Fallback: text-only Mistral Small
             model = "mistral-small-latest"
+            text_only_msg = (
+                f"Topic: {theme['theme_label']}\n\n"
+                f"Question summaries:\n{descriptions_block}\n\n"
+                "Write the spotlight as specified. Return valid JSON only."
+            )
             resp = mistral_client.chat.complete(
                 model=model,
-                max_tokens=800,
+                max_tokens=1000,
                 messages=[
-                    {"role": "system", "content": ADHOC_CONTENT_SYSTEM},
-                    {"role": "user", "content": user_msg},
+                    {"role": "system", "content": _ADHOC_SPOTLIGHT_SYSTEM},
+                    {"role": "user", "content": text_only_msg},
                 ],
             )
             raw = resp.choices[0].message.content.strip()
             if resp.usage:
                 _track_cost(cost_tracker, model,
                             _Usage(resp.usage.prompt_tokens, resp.usage.completion_tokens))
+
         if raw.startswith("```"):
             raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
         result = json.loads(repair_json(raw))
     except Exception as e:
-        print(f"  Adhoc spotlight generation failed: {e}")
+        print(f"  Phase 3 Sonnet failed: {e}")
         return None
+
+    # Optional dig-deeper: one follow-up SQL query if Sonnet requested it
+    dig_deeper = result.get("dig_deeper")
+    if dig_deeper and isinstance(dig_deeper, dict) and dig_deeper.get("sql"):
+        try:
+            dd_sql = dig_deeper["sql"].replace("{schema}", schema).replace("{wave_number}", str(wave_number))
+            dd_df = con.execute(dd_sql).df()
+            if not dd_df.empty:
+                dd_table = dd_df.to_string(index=False, max_rows=40)
+                print(f"  Dig deeper for {dig_deeper.get('question_id', '?')}: {len(dd_df)} rows")
+                # Second Sonnet pass with the extra data
+                follow_up_content = [
+                    {"type": "text", "text": (
+                        f"Here is the additional breakdown you requested:\n\n{dd_table}\n\n"
+                        "Revise your JSON response if this changes any bullet or key finding. "
+                        "Return the same JSON schema. Only update if the new data materially changes the story."
+                    )}
+                ]
+                try:
+                    if anthropic_client is not None:
+                        resp2 = anthropic_client.messages.create(
+                            model=_SONNET_MODEL,
+                            max_tokens=1000,
+                            system=_ADHOC_SPOTLIGHT_SYSTEM,
+                            messages=[
+                                {"role": "user", "content": user_content},
+                                {"role": "assistant", "content": raw},
+                                {"role": "user", "content": follow_up_content},
+                            ],
+                        )
+                        raw2 = resp2.content[0].text.strip()
+                        _track_cost(cost_tracker, _SONNET_MODEL, _Usage(
+                            resp2.usage.input_tokens, resp2.usage.output_tokens,
+                        ))
+                        if raw2.startswith("```"):
+                            raw2 = raw2.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+                        result = json.loads(repair_json(raw2))
+                        print("  Dig deeper pass complete — result updated")
+                except Exception as e2:
+                    print(f"  Dig deeper second pass failed ({e2}) — keeping original result")
+        except Exception as e:
+            print(f"  Dig deeper SQL failed ({e}) — skipping")
 
     bullets = result.get("bullets", [])
     if isinstance(bullets, str):
         bullets = [bullets]
-    chart_sub_items = result.get("chart_sub_items", interesting_subs)
-    if not chart_sub_items:
-        chart_sub_items = interesting_subs
-    print(f"  Phase 2: {len(bullets)} bullets, chart_sub_items={chart_sub_items}")
+    selected_qids = result.get("selected_question_ids", [q["question_id"] for q in question_contexts])
+    print(f"  Phase 3: {len(bullets)} bullets, selected={selected_qids}")
 
-    # ── Build charts: primary module + siblings (max 3 total) ────────────────
-    # Merge PDF sub-item labels and primary question text into theme for chart rendering
-    chart_theme = {
-        **theme,
-        "question_texts": effective_question_texts,
-        "question_text": theme.get("primary_question_text") or "",
-    }
-    chart_png = None
-    chart_df = None
-    chart_df_filtered = None
+    # ── Assemble chart_pngs from selected + all questions ────────────────────
+    # Selected questions first (in order), then remaining ones (up to 3 total)
+    q_by_id = {q["question_id"]: q for q in question_contexts}
     chart_pngs: list[bytes] = []
-    try:
-        chart_df = _fetch_adhoc_chart_data(df, theme, wave_number, schema, con)
-        chart_df_filtered = chart_df[chart_df["sub_item"].isin(chart_sub_items)]
-        if chart_df_filtered.empty:
-            chart_df_filtered = chart_df
-        chart_png = _build_adhoc_chart(
-            chart_df_filtered, chart_theme, is_continuous=is_cont,
-            response_labels=response_labels,
-        )
-        if chart_png:
-            chart_pngs.append(chart_png)
-            print(f"  Adhoc chart built ({len(chart_df_filtered)} rows, subs={list(chart_df_filtered['sub_item'].unique())})")
-    except Exception as e:
-        print(f"  Adhoc chart skipped: {e}")
-
-    # Sibling module charts (one per sibling, capped at 3 total)
-    for sib_id in sibling_modules:
+    for qid in selected_qids:
         if len(chart_pngs) >= 3:
             break
-        try:
-            sib_raw = con.execute(
-                _ADHOC_CHART_SQL_CATEGORICAL.format(
-                    schema=schema, wave_number=wave_number, module_id=sib_id)
-            ).df()
-            sib_raw = sib_raw[sib_raw["response_raw"] >= 0]
-            if sib_raw.empty:
-                continue
-            sib_is_cont = _is_continuous(sib_raw)
-            if sib_is_cont:
-                sib_df = con.execute(
-                    _ADHOC_CHART_SQL_CONTINUOUS.format(
-                        schema=schema, wave_number=wave_number, module_id=sib_id)
-                ).df()
-            else:
-                sib_df = sib_raw
-            sib_qt = module_question_texts.get(sib_id, "")
-            sib_theme = {**chart_theme, "module_id": sib_id, "question_text": sib_qt}
-            sib_png = _build_adhoc_chart(
-                sib_df, sib_theme, is_continuous=sib_is_cont,
-                response_labels=response_labels,
-            )
-            if sib_png:
-                chart_pngs.append(sib_png)
-                print(f"  Sibling chart built: {sib_id} ({len(sib_df)} rows)")
-        except Exception as e:
-            print(f"  Sibling chart {sib_id} skipped: {e}")
+        q = q_by_id.get(qid)
+        if q and q.get("chart_png"):
+            chart_pngs.append(q["chart_png"])
+    for q in question_contexts:
+        if len(chart_pngs) >= 3:
+            break
+        if q["question_id"] not in selected_qids and q.get("chart_png"):
+            chart_pngs.append(q["chart_png"])
 
-    # ── Phase 3: critical review (Mistral Large, threshold ≥ 8) ─────────────
+    # ── Phase 4: critical review (Mistral Large, threshold ≥ 8) ─────────────
     review_scores: dict = {}
     review_passed = True
     if mistral_client is not None:
         try:
+            # Full data for review: all question summaries + selected question data tables
+            review_data_block = "\n\n".join(
+                f"[{q['question_id'].upper()}]:\n{q['data_table']}"
+                for q in question_contexts
+                if q["question_id"] in selected_qids
+            )
             review_text = (
                 f"Topic: {theme['theme_label']}\n"
                 f"Finding: {result.get('finding', '')}\n"
-                f"Bullets:\n" + "\n".join(f"  - {b}" for b in bullets) +
-                f"\n\nChart shows sub-items: {chart_sub_items}\n"
-                f"Full data provided to the model:\n{interesting_table}{data_note}"
+                "Bullets:\n" + "\n".join(f"  - {b}" for b in bullets) +
+                f"\n\nCharts shown for: {', '.join(q['question_id'] for q in question_contexts if q.get('chart_png'))}\n"
+                f"Data provided to the model:\n{review_data_block}"
             )
             review_model = "mistral-large-2512"
             review_resp = mistral_client.chat.complete(
@@ -764,33 +948,27 @@ def build_adhoc_spotlight(
             review_passed = min_score >= 8
             verdict = "PASS" if review_passed else "WARN"
             print(
-                f"  Phase 3 review: "
+                f"  Phase 4 review: "
                 + "  ".join(f"{k}={v}/10" for k, v in review_scores.items())
                 + f"  → {verdict}"
             )
             if not review_passed:
                 print(f"  Review reason: {review_result.get('reason', '')}")
-                # If chart_alignment is the failing dimension, rebuild chart with all interesting subs
-                if review_scores.get("chart_alignment", 10) < 8 and chart_df is not None:
-                    try:
-                        chart_df_all = chart_df[chart_df["sub_item"].isin(interesting_subs)]
-                        if chart_df_all.empty:
-                            chart_df_all = chart_df
-                        chart_png = _build_adhoc_chart(
-                            chart_df_all, chart_theme, is_continuous=is_cont,
-                            response_labels=response_labels,
-                        )
-                        if chart_png and chart_pngs:
-                            chart_pngs[0] = chart_png
-                        elif chart_png:
-                            chart_pngs = [chart_png]
-                        print(f"  Chart rebuilt with all interesting subs {interesting_subs} to fix alignment")
-                    except Exception as rebuild_err:
-                        print(f"  Chart rebuild failed: {rebuild_err}")
         except Exception as e:
-            print(f"  Phase 3 review failed ({e}) — skipping")
+            print(f"  Phase 4 review failed ({e}) — skipping")
 
-    section = {
+    question_descriptions = [
+        {
+            "question_id": q["question_id"],
+            "question_text": q.get("question_text", ""),
+            "description": q.get("description", ""),
+            "interest_score": q.get("interest_score", 3),
+            "key_finding": q.get("key_finding", ""),
+        }
+        for q in question_contexts
+    ]
+
+    return {
         "section_id": "adhoc_spotlight",
         "title": f"Special Focus: {theme['theme_label']}",
         "finding": result.get("finding", ""),
@@ -800,7 +978,7 @@ def build_adhoc_spotlight(
         "theme_label": theme["theme_label"],
         "review_scores": review_scores,
         "review_passed": review_passed,
+        "question_descriptions": question_descriptions,
     }
-    return section
 
 

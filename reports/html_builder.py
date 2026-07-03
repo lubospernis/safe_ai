@@ -56,9 +56,10 @@ _SK_UI = {
         "<p class=\"footnote\">🤖 Táto sekcia obsahuje dáta získané AI agentom priamym "
         "dopytovaním databázy SAFE počas generovania správy.</p>\n"
     ),
-    "adhoc_special_focus": "Špeciálna téma",
-    "adhoc_read_more":     "Čítaj viac:",
-    "adhoc_ecb_article":   "Článok ECB Economic Bulletin",
+    "adhoc_special_focus":   "Špeciálna téma",
+    "adhoc_read_more":       "Čítaj viac:",
+    "adhoc_ecb_article":     "Článok ECB Economic Bulletin",
+    "adhoc_all_questions":   "Všetky adhoc otázky",
     "annex_summary":       "Otázky zbierané na 3-mesačnej báze",
     "annex_col_topic":     "Téma",
     "annex_col_id":        "ID",
@@ -529,6 +530,32 @@ def build_html(
                 {ecb_link_html}  </section>
                 </details>
             """).strip()
+
+        # Collapsible "All adhoc questions" block
+        q_descs = adhoc_s.get("question_descriptions") or []
+        if q_descs:
+            q_items = []
+            for qd in q_descs:
+                score = qd.get("interest_score", "")
+                qtext = qd.get("question_text", "") or qd.get("question_id", "").upper()
+                desc = qd.get("description", "")
+                kf = qd.get("key_finding", "")
+                stars = "★" * int(score) if isinstance(score, int) else ""
+                kf_html = f'<br><em>Key finding: {_md_to_html(kf)}</em>' if kf else ""
+                q_items.append(
+                    f'<li><strong>{qd["question_id"].upper()} {stars}</strong> '
+                    f'— {qtext}<br>{_md_to_html(desc)}{kf_html}</li>'
+                )
+            all_q_label = _ui.get("adhoc_all_questions", "All adhoc questions")
+            q_list_html = "<ul>" + "\n".join(q_items) + "</ul>"
+            spotlight_html += (
+                f'\n<details class="adhoc-all-questions" style="margin-top:0.5rem;">'
+                f'<summary style="cursor:pointer;font-size:0.9em;color:#555;">'
+                f'{all_q_label}</summary>'
+                f'<div style="font-size:0.88em;padding:0.5rem 0.5rem 0;">{q_list_html}</div>'
+                f'</details>'
+            )
+
         sections_parts.append(spotlight_html)
 
     exec_h2 = _ui.get("exec_h2", "Executive Summary")

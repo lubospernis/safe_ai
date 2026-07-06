@@ -17,6 +17,18 @@ Each entry defines one report section:
   routed         — if True, a methodology footnote is added explaining that only
                    firms for which the instrument is relevant are asked (Q5/Q9/Q10)
   has_missingness_caveat — if True, a footnote is added about sparse data exclusion
+  must_lead_with — optional sub-item that MUST be the section's "finding" and first
+                   bullet, regardless of which sub-item has the largest wave-over-wave
+                   swing (guards against a noisy secondary metric drowning out the
+                   section's intended lead metric — see financing_factors)
+  exec_tier      — how directly this section's findings predict firm distress/credit
+                   access, used to gate exec-summary elevation: "core" (financial-
+                   stability-relevant — credit supply/demand), "supporting" (context),
+                   or "policy_technical" (administrative/policy artifact, needs a
+                   higher bar to reach the exec summary)
+  subitem_tiers  — optional {sub_item: exec_tier} overrides for sections that mix
+                   tiers (e.g. financing_factors' sub-item 'b' is policy_technical
+                   even though the section default is "supporting")
 """
 
 SECTIONS = [
@@ -39,6 +51,7 @@ SECTIONS = [
         "max_panels": 2,
         "always_include": True,
         "routed": True,
+        "exec_tier": "core",
         "focus": "Lead with Slovakia (SK). Compare to EA and DE primarily.",
     },
     {
@@ -65,6 +78,7 @@ SECTIONS = [
         "max_panels": 1,
         "always_include": False,
         "routed": True,
+        "exec_tier": "core",
         "focus": (
             "Cover bank loans (a), credit lines (f), and trade credit (b) for Slovakia vs EA. "
             "Use one bullet per instrument. For each: state the gap level and direction, then "
@@ -99,6 +113,7 @@ SECTIONS = [
         "max_panels": 1,
         "always_include": False,
         "routed": True,
+        "exec_tier": "core",
         "focus": (
             "WHAT financing_gap_wtd MEANS HERE: this is NOT the need-vs-availability gap from Q5/Q9. "
             "Here, financing_gap_wtd = discouragement_rate_wtd + rejection_share_of_all_respondents. "
@@ -137,6 +152,7 @@ SECTIONS = [
         "always_include": False,
         "routed": True,
         "has_missingness_caveat": True,
+        "exec_tier": "core",
         "focus": (
             "Focus on bank loans (b) for Slovakia vs EA. "
             "Always include n_respondents and the instrument name (e.g. 'bank loans'). "
@@ -165,6 +181,7 @@ SECTIONS = [
         "pinned_panels": ["2"],
         "max_panels": 2,
         "always_include": False,
+        "exec_tier": "core",
         "focus": "Focus on Slovakia vs EA. Highlight where SK financing purpose mix differs from the euro area.",
     },
     {
@@ -186,6 +203,9 @@ SECTIONS = [
         "pinned_panels": ["f"],
         "max_panels": 2,
         "always_include": False,
+        "must_lead_with": "f",
+        "exec_tier": "supporting",
+        "subitem_tiers": {"f": "core", "a": "supporting", "b": "policy_technical"},
         "focus": (
             "Lead with Q11f (willingness of banks) for Slovakia vs EA — this is the key credit supply indicator. "
             "If Q11a (economic outlook) is also deteriorating, note that as a macro-level drag on supply. "
@@ -213,6 +233,7 @@ SECTIONS = [
         "pinned_panels": ["a"],
         "max_panels": 2,
         "always_include": False,
+        "exec_tier": "supporting",
         "focus": "Lead with Slovakia turnover trend. Compare profit and cost indicators to EA.",
     },
     {
@@ -233,6 +254,7 @@ SECTIONS = [
         "pinned_panels": ["a"],
         "max_panels": 2,
         "always_include": False,
+        "exec_tier": "supporting",
         "focus": (
             "Lead with turnover outlook (sub_item='a') for Slovakia vs EA. "
             "If SK expectation diverges significantly from EA — e.g. EA firms optimistic but SK pessimistic — "
@@ -261,6 +283,7 @@ SECTIONS = [
         "max_panels": 2,
         "always_include": False,
         "has_missingness_caveat": True,
+        "exec_tier": "supporting",
         "focus": (
             "Lead with selling price expectations (q34_a) for Slovakia vs EA. "
             "If SK wage expectations (q34_c) are also high — relative to EA — flag the margin compression risk: "
@@ -288,6 +311,7 @@ SECTIONS = [
         "max_panels": 1,
         "always_include": False,
         "has_missingness_caveat": True,
+        "exec_tier": "supporting",
         "focus": (
             "Compare SK vs EA on the inflation risk balance. "
             "If SK firms disproportionately see upside risk vs EA — note that as a signal of local price persistence. "
@@ -312,6 +336,7 @@ SECTIONS = [
         "pinned_panels": ["3"],
         "max_panels": 2,
         "always_include": False,
+        "exec_tier": "policy_technical",
         "focus": (
             "Report the top 3 most pressing problems for Slovakia by avg_pressingness_wtd score. "
             "CRITICAL: always contextualise the absolute score — the scale is 1–10 where 1 = not pressing "

@@ -58,8 +58,8 @@ from html_builder import (
 )
 from llm import (
     _add_so_what, _fetch_ecb_context, _sharpen_with_ecb,
-    _write_wave_memory, check_all_interest, get_exec_summary, get_section_content_agentic,
-    translate_to_slovak,
+    _write_wave_memory, build_section_signals, check_all_interest, classify_ecb_emphasis,
+    get_exec_summary, get_section_content_agentic, get_shortened_questions, translate_to_slovak,
 )
 
 OUTPUT_DIR = Path(__file__).parent / "output"
@@ -75,6 +75,8 @@ def main() -> None:
                         help="Use local dev.duckdb instead of MotherDuck (no MOTHERDUCK_TOKEN needed)")
     parser.add_argument("--wave", type=int, default=None,
                         help="Cap data at this wave number for retrospective reports (e.g. --wave 37)")
+    parser.add_argument("--refresh-chart-titles", action="store_true",
+                        help="Force regeneration of cached chart question captions")
     args = parser.parse_args()
 
     if args.dev:
@@ -153,6 +155,13 @@ def main() -> None:
     question_texts = _load_annex_question_texts(con=tool_con)
     print(f"  Loaded {len(question_texts)} question texts from annex")
 
+    print("Loading/refreshing chart question captions...")
+    chart_question_captions = get_shortened_questions(
+        SECTIONS, question_texts, tool_con, schema, mistral_client, cost_tracker,
+        force_refresh=args.refresh_chart_titles,
+    )
+    print(f"  {len(chart_question_captions)} section captions ready")
+
     interesting_sections = [s for s in SECTIONS if interest[s["id"]]["interesting"]]
     skipped = [s["id"] for s in SECTIONS if not interest[s["id"]]["interesting"]]
     for sid in skipped:
@@ -189,15 +198,20 @@ def main() -> None:
                 print(f"    [{sid}] {b}")
 
             chart_subtitle = content.get("chart_subtitle", "")
+            chart_title = content["finding"]
+            chart_question = chart_question_captions.get(sid, "")
             print(f"  Building chart for {sid}...")
             if sid == "financing_gap":
-                chart_png = build_financing_gap_chart(sec, data[sid])
+                chart_png = build_financing_gap_chart(sec, data[sid],
+                                                      chart_title=chart_title, chart_question=chart_question)
             elif sid == "bank_loan_terms":
                 chart_png = build_chart(sec, data[sid], "bar", r["best_panel"],
-                                        chart_subtitle=chart_subtitle)
+                                        chart_subtitle=chart_subtitle,
+                                        chart_title=chart_title, chart_question=chart_question)
             else:
                 chart_png = build_chart(sec, data[sid], r["chart_type"], r["best_panel"],
-                                        chart_subtitle=chart_subtitle)
+                                        chart_subtitle=chart_subtitle,
+                                        chart_title=chart_title, chart_question=chart_question)
 
             return {
                 "section_id": sid,
@@ -230,8 +244,16 @@ def main() -> None:
 
     _annex_loaded_ok = len(question_texts) > 0
 
+    print("Classifying ECB emphasis + computing exec-summary signals...")
+    sections_by_id = {s["id"]: s for s in SECTIONS}
+    ecb_emphasis = classify_ecb_emphasis(ecb_context, interesting_sections, mistral_client, cost_tracker)
+    section_signals = build_section_signals(rendered, data, sections_by_id, ecb_emphasis)
+
     print("Generating executive summary (two-pass)...")
-    exec_bullets = get_exec_summary(rendered, cost_tracker, historical_context=historical_context, anthropic_client=anthropic_client) if rendered else []
+    exec_bullets = get_exec_summary(
+        rendered, cost_tracker, historical_context=historical_context,
+        section_signals=section_signals, anthropic_client=anthropic_client,
+    ) if rendered else []
     for item in exec_bullets:
         print(f"  [{item.get('section_id', '?')}] {item.get('bullet', '')}")
 

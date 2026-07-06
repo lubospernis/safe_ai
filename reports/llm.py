@@ -1,11 +1,12 @@
 """LLM generation: section bullets, exec summary, so-what pass, wave memory, ECB sharpener."""
 
+import hashlib
 import json
 import os
 import re
 import textwrap
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import date
+from datetime import date, datetime
 
 import anthropic
 import pandas as pd
@@ -296,19 +297,49 @@ EXEC_SUMMARY_SYSTEM = textwrap.dedent(f"""
     the economic situation of firms. Prioritise the most striking or cross-cutting findings
     and ruthlessly drop the rest.
 
-    SELECTION PRIORITY (apply in this order):
-    1. Cross-cutting tensions that span financing conditions AND economic situation simultaneously
-       (e.g. costs rising while turnover falls while credit tightens — all at once)
-    2. Findings where Slovakia diverges sharply from the EA (≥ 10 pp gap, or opposite direction)
-    3. Findings that reversed direction from the prior wave (a turning point)
-    4. Single-section findings only if the magnitude is exceptional (≥ 15 pp swing, or clearly
-       the highest/lowest in the data provided)
+    SELECTION PRIORITY — evidence-gated. Each section carries a [SIGNALS] line with
+    structured, pre-computed fields. Trust these fields — do NOT re-derive divergence,
+    historical extremity, or reversal from the prose yourself; the numbers there are
+    already verified.
 
-    DROP a bullet if: the finding is directionally consistent with EA and within 5 pp, or if it
-    merely confirms a stable multi-wave trend with no new development this wave.
+    A finding QUALIFIES for the exec summary only if at least one of these channels fires:
+    1. Cross-cutting tension spanning financing conditions AND economic situation
+       simultaneously (e.g. costs rising while turnover falls while credit tightens —
+       all at once) — always qualifies regardless of signals.
+    2. "ECB emphasis=yes" — the ECB's own publication foregrounds this theme (a
+       supporting quote is provided).
+    3. "SK-EA gap" ≥ 10pp — Slovakia diverges sharply from the euro area.
+    4. "historical=..." shows a record or near-record reading (highest/lowest on record,
+       or a large z-score), or the widest cross-country spread on record.
+    5. "reversal=yes" — a genuine wave-over-wave turning point.
 
-    The [LEAD] prefix on bullets marks each section's most analytically significant bullet —
-    weight these more heavily than trailing bullets when selecting what to elevate.
+    TIER GATE — every section carries a "tier" field:
+    - tier=core: needs ONE channel above to qualify.
+    - tier=supporting: needs ONE channel above AND "reliable_n=yes".
+    - tier=policy_technical, or any topic named in a "deprioritized:" field: needs
+      TWO channels, or ONE exceptional channel (a record/near-record historical
+      reading combined with "reliable_n=yes"). Do NOT elevate a policy_technical
+      or deprioritized topic on a single large swing alone — this is exactly the
+      failure mode to avoid: e.g. never elevate "access to public financial
+      support" or a business-obstacle ranking purely because it had the biggest
+      wave-over-wave move. When "reliable_n=no" is shown, treat the finding as
+      noisy and do not elevate it regardless of magnitude.
+
+    Prefer core-tier, financial-stability-relevant findings — use of financing,
+    discouragement from applying, loan rejection, financing gaps, availability of
+    external financing — over policy/administrative artifacts whenever both are
+    plausible candidates.
+
+    DROP a bullet if: no channel fires, if "reliable_n=no" on a supporting/policy_technical
+    topic, if the finding is directionally consistent with EA and within 5 pp with no
+    other qualifying channel, or if it merely confirms a stable multi-wave trend with no
+    new development this wave.
+
+    The [LEAD] prefix on bullets marks each section's most analytically significant bullet
+    as determined by that section's own writer — weight [LEAD] bullets more heavily than
+    trailing bullets, but ONLY after the tier/channel gate above is satisfied. A [LEAD]
+    bullet on a topic that fails the gate must still be dropped or replaced by a
+    qualifying bullet from the same section's other bullets.
 
     FORMAT — every bullet must follow this exact structure:
       **Short label (2–4 words):** One concise sentence of explanation.
@@ -660,9 +691,19 @@ def get_section_content_agentic(
                 lines.append(f"{qid}: {txt}")
             q_text_block = "\n".join(lines) + "\n\n"
 
+    lead_override = ""
+    if sec.get("must_lead_with"):
+        lead_override = (
+            f"MANDATORY: the \"finding\" and bullet 1 MUST be about sub-item "
+            f"'{sec['must_lead_with']}', regardless of which sub-item has the largest "
+            f"wave-over-wave swing. Do not lead with any other sub-item even if its "
+            f"change is larger this wave.\n"
+        )
+
     section_header = (
         f"Sign convention: {sec['sign_note']}\n"
-        f"Focus: {sec['focus']}\n\n"
+        f"Focus: {sec['focus']}\n"
+        f"{lead_override}\n"
     )
     initial_msg = q_text_block + section_header + base_data + (f"\n\nSME divergence check:\n{divergence}" if divergence else "")
 
@@ -750,16 +791,275 @@ def get_section_content_agentic(
     return result
 
 
+# ---------------------------------------------------------------------------
+# Exec-summary reasoning-channel signals — code-computed, not LLM-inferred.
+# Each function reads the section's own lead panel (must_lead_with, else the
+# first pinned_panels entry, else the whole section) from the already-loaded
+# multi-wave DataFrame and returns a structured signal, so get_exec_summary can
+# gate on real numbers instead of re-deriving them from prose.
+# ---------------------------------------------------------------------------
+
+_N_CANDIDATE_COLS = ("n_respondents", "n_respondents_need", "n_firms")
+
+
+def _lead_panel(sec: dict) -> str | None:
+    if sec.get("must_lead_with"):
+        return sec["must_lead_with"]
+    if sec.get("pinned_panels"):
+        return sec["pinned_panels"][0]
+    return None
+
+
+def _lead_slice(df: pd.DataFrame, sec: dict) -> pd.DataFrame:
+    """Restrict df to the section's lead panel and its 'main' rows (financing_gap
+    carries both 'main' and 'sk_all' chart_type rows; only 'main' has SK/EA/DE)."""
+    out = df
+    if "chart_type" in out.columns:
+        out = out[out["chart_type"] == "main"]
+    panel_col = sec.get("panel_col")
+    panel = _lead_panel(sec)
+    if panel_col and panel is not None and panel_col in out.columns:
+        out = out[out[panel_col].astype(str) == str(panel)]
+    return out
+
+
+def sk_ea_gap(df: pd.DataFrame, sec: dict) -> float | None:
+    """Latest-wave absolute SK-EA pp gap on the section's lead metric."""
+    sub = _lead_slice(df, sec)
+    if sub.empty:
+        return None
+    value_col = sec["value_col"]
+    latest_wave = sub["wave_number"].max()
+    latest = sub[sub["wave_number"] == latest_wave]
+    sk = latest[latest["country_code"] == "SK"][value_col]
+    ea = latest[latest["country_code"] == "EA"][value_col]
+    if sk.empty or ea.empty or pd.isna(sk.iloc[0]) or pd.isna(ea.iloc[0]):
+        return None
+    return abs(float(sk.iloc[0]) - float(ea.iloc[0]))
+
+
+def historical_extremity(df: pd.DataFrame, sec: dict) -> dict:
+    """Is the latest SK reading a record vs its own history, or the widest
+    cross-country spread on record? Returns a dict with a summary bool plus
+    the supporting scalars, so the caller can render human-readable text."""
+    sub = _lead_slice(df, sec)
+    value_col = sec["value_col"]
+    result = {"is_record": False, "zscore": None, "widest_spread_on_record": False,
+              "waves_covered": 0, "historical_extreme": False}
+    if sub.empty:
+        return result
+
+    sk = sub[sub["country_code"] == "SK"].sort_values("wave_number")
+    sk_vals = sk[value_col].dropna()
+    result["waves_covered"] = int(sk_vals.shape[0])
+    if not sk_vals.empty:
+        latest_val = sk_vals.iloc[-1]
+        result["is_record"] = bool(latest_val == sk_vals.max() or latest_val == sk_vals.min())
+        prior = sk_vals.iloc[:-1]
+        if len(prior) >= 3 and prior.std() > 0:
+            result["zscore"] = float((latest_val - prior.mean()) / prior.std())
+
+    spreads = []
+    for wave, grp in sub.groupby("wave_number"):
+        vals = grp[value_col].dropna()
+        if len(vals) >= 2:
+            spreads.append((wave, float(vals.max() - vals.min())))
+    if spreads:
+        spreads.sort(key=lambda x: x[0])
+        latest_spread = spreads[-1][1]
+        result["widest_spread_on_record"] = bool(latest_spread == max(s for _, s in spreads))
+
+    result["historical_extreme"] = bool(
+        result["is_record"]
+        or (result["zscore"] is not None and abs(result["zscore"]) >= 2)
+        or result["widest_spread_on_record"]
+    )
+    return result
+
+
+def direction_reversal(df: pd.DataFrame, sec: dict, noise_floor: float = 2.0) -> bool:
+    """Did SK's latest wave-over-wave delta flip sign vs the prior delta (a
+    genuine turning point), both moves clearing a noise floor?"""
+    sub = _lead_slice(df, sec)
+    if sub.empty:
+        return False
+    value_col = sec["value_col"]
+    sk_vals = sub[sub["country_code"] == "SK"].sort_values("wave_number")[value_col].dropna()
+    if len(sk_vals) < 3:
+        return False
+    latest, prev, prev2 = sk_vals.iloc[-1], sk_vals.iloc[-2], sk_vals.iloc[-3]
+    delta_latest = latest - prev
+    delta_prev = prev - prev2
+    if abs(delta_latest) < noise_floor or abs(delta_prev) < noise_floor:
+        return False
+    return bool((delta_latest > 0) != (delta_prev > 0))
+
+
+def reliable_n(df: pd.DataFrame, sec: dict, threshold: int = 30) -> bool:
+    """Latest SK n_respondents on the lead metric is >= threshold. Defaults to
+    True (reliable) when no sample-size column is present in this section's
+    data, rather than penalizing sections that simply don't carry an n column."""
+    sub = _lead_slice(df, sec)
+    if sub.empty:
+        return True
+    n_col = next((c for c in _N_CANDIDATE_COLS if c in sub.columns), None)
+    if n_col is None:
+        return True
+    latest_wave = sub["wave_number"].max()
+    latest_sk = sub[(sub["wave_number"] == latest_wave) & (sub["country_code"] == "SK")]
+    if latest_sk.empty or pd.isna(latest_sk[n_col].iloc[0]):
+        return True
+    return bool(float(latest_sk[n_col].iloc[0]) >= threshold)
+
+
+ECB_EMPHASIS_SYSTEM = textwrap.dedent("""
+    You will receive a list of report section themes and the text of the ECB's own
+    published SAFE survey analysis for the same wave.
+
+    For EACH theme, decide whether the ECB publication discusses it prominently
+    (not just a passing mention buried in a data table — an actual point the ECB
+    text makes). If it does, quote the single supporting sentence (<=25 words,
+    verbatim or lightly trimmed from the ECB text — do NOT invent or paraphrase
+    into a claim the text doesn't make).
+
+    Return JSON only — no markdown fences:
+    {"section_id": {"emphasized": true/false, "quote": "<=25-word quote or empty string"}, ...}
+
+    Include an entry for every section_id given, even if emphasized is false
+    (quote "" in that case). Do not invent a quote for a theme the ECB text
+    doesn't actually discuss.
+""").strip()
+
+
+def classify_ecb_emphasis(
+    ecb_context: str,
+    sections: list[dict],
+    mistral_client,
+    cost_tracker: dict,
+) -> dict[str, dict]:
+    """Return {section_id: {"emphasized": bool, "quote": str}} for each section,
+    via one Mistral Small call covering all sections. Mirrors _sharpen_with_ecb's
+    scope guard: returns {} if ecb_context is empty or mentions Slovakia fewer
+    than twice (an EA-level page, not really about Slovakia specifically)."""
+    if not ecb_context or ecb_context.lower().count("slovak") < 2:
+        return {}
+    themes = "\n".join(f"- {s['id']}: {s['title']}" for s in sections)
+    try:
+        resp = mistral_client.chat.complete(
+            model="mistral-small-latest",
+            max_tokens=800,
+            messages=[
+                {"role": "system", "content": ECB_EMPHASIS_SYSTEM},
+                {"role": "user", "content": f"Section themes:\n{themes}\n\nECB publication text:\n{ecb_context}"},
+            ],
+        )
+        if resp.usage:
+            _track_cost(cost_tracker, "mistral-small-latest",
+                        _Usage(resp.usage.prompt_tokens, resp.usage.completion_tokens))
+        raw = resp.choices[0].message.content.strip()
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw).strip()
+        parsed = json.loads(repair_json(raw))
+        return {
+            sid: {"emphasized": bool(v.get("emphasized", False)), "quote": str(v.get("quote", "")).strip()}
+            for sid, v in parsed.items() if isinstance(v, dict)
+        }
+    except Exception:
+        return {}
+
+
+def _tier_and_deprioritized(sec: dict, df: pd.DataFrame) -> tuple[str, list[str]]:
+    """Resolve the section's effective exec_tier (at its lead panel) and build
+    human-readable labels for any policy_technical sub-items to name in the prompt."""
+    subitem_tiers = sec.get("subitem_tiers")
+    if not subitem_tiers:
+        return sec.get("exec_tier", "supporting"), []
+
+    panel_col = sec.get("panel_col")
+    panel_label_col = sec.get("panel_label_col", panel_col)
+    q_code = (sec.get("question_ids") or [""])[0].upper()
+    deprioritized = []
+    for sub_item, tier in subitem_tiers.items():
+        if tier != "policy_technical":
+            continue
+        label = sub_item
+        if panel_col and panel_label_col and panel_col in df.columns:
+            match = df[df[panel_col].astype(str) == str(sub_item)]
+            if not match.empty and panel_label_col in match.columns:
+                label = match[panel_label_col].iloc[0]
+        deprioritized.append(f"{label} ({q_code}{sub_item})")
+
+    lead_panel = _lead_panel(sec)
+    tier = subitem_tiers.get(lead_panel) or sec.get("exec_tier", "supporting")
+    return tier, deprioritized
+
+
+def build_section_signals(
+    rendered: list[dict],
+    data: dict[str, pd.DataFrame],
+    sections_by_id: dict[str, dict],
+    ecb_emphasis: dict[str, dict] | None = None,
+) -> dict[str, dict]:
+    """Assemble the reasoning-channel signals for each rendered standard section.
+    Sections not present in sections_by_id (e.g. adhoc_spotlight, which has its
+    own guarantee mechanism in get_exec_summary) are skipped."""
+    ecb_emphasis = ecb_emphasis or {}
+    signals: dict[str, dict] = {}
+    for r in rendered:
+        sid = r.get("section_id")
+        sec = sections_by_id.get(sid)
+        if sec is None or sid not in data:
+            continue
+        df = data[sid]
+        tier, deprioritized = _tier_and_deprioritized(sec, df)
+        extremity = historical_extremity(df, sec)
+        emphasis = ecb_emphasis.get(sid, {})
+        signals[sid] = {
+            "tier": tier,
+            "deprioritized_topics": deprioritized,
+            "sk_ea_gap_pp": sk_ea_gap(df, sec),
+            "historical_extreme": extremity["historical_extreme"],
+            "waves_covered": extremity["waves_covered"],
+            "direction_reversal": direction_reversal(df, sec),
+            "reliable_n": reliable_n(df, sec),
+            "ecb_emphasis": bool(emphasis.get("emphasized", False)),
+            "ecb_quote": emphasis.get("quote", ""),
+        }
+    return signals
+
+
+def _format_signals_line(sig: dict) -> str:
+    """Render a section's signals dict as the [SIGNALS] prompt line."""
+    parts = [f"tier={sig['tier']}"]
+    if sig["deprioritized_topics"]:
+        parts.append(f"deprioritized: {', '.join(sig['deprioritized_topics'])}")
+    gap = sig["sk_ea_gap_pp"]
+    parts.append(f"SK-EA gap={gap:.1f}pp" if gap is not None else "SK-EA gap=n/a")
+    if sig["historical_extreme"]:
+        parts.append(f"historical=record or near-record (of {sig['waves_covered']} waves)")
+    else:
+        parts.append("historical=no")
+    parts.append(f"reversal={'yes' if sig['direction_reversal'] else 'no'}")
+    parts.append(f"reliable_n={'yes' if sig['reliable_n'] else 'no'}")
+    if sig["ecb_emphasis"]:
+        parts.append(f'ECB emphasis=yes ("{sig["ecb_quote"]}")')
+    else:
+        parts.append("ECB emphasis=no")
+    return "[SIGNALS] " + " | ".join(parts)
+
+
 def get_exec_summary(
     rendered_sections: list[dict],
     cost_tracker: dict,
     historical_context: str = "",
+    section_signals: dict[str, dict] | None = None,
     adhoc_section: dict | None = None,
     anthropic_client=None,
     mistral_client=None,
 ) -> list[dict]:
     """Two-pass exec summary. Returns list of {bullet, section_id} dicts."""
     section_ids = {s["section_id"] for s in rendered_sections}
+    section_signals = section_signals or {}
 
     lines = ["Section findings:\n"]
     for s in rendered_sections:
@@ -768,6 +1068,8 @@ def get_exec_summary(
             lines.append(f"Finding: {s['finding']}")
         if s.get("sign_note"):
             lines.append(f"Sign convention: {s['sign_note']}")
+        if s["section_id"] in section_signals:
+            lines.append(_format_signals_line(section_signals[s["section_id"]]))
         for i, b in enumerate(s["bullets"]):
             prefix = "[LEAD] " if i == 0 else "       "
             lines.append(f"{prefix}{b}")
@@ -873,6 +1175,137 @@ def _add_so_what(content: dict, sec: dict, mistral_client, cost_tracker: dict) -
     except Exception:
         pass
     return content
+
+
+SHORTEN_QUESTION_SYSTEM = textwrap.dedent("""
+    You paraphrase official ECB survey question wording into a short, natural
+    question a curious reader would ask when looking at a chart.
+
+    Rules:
+    - Produce ONE short question, at most 12 words, phrased in second person
+      ("you"/"your firm").
+    - End with a question mark. Do not include question codes (e.g. "Q10",
+      "Q0B") or mention "ECB"/"SAFE".
+    - Simplify the wording — do not copy the official phrasing verbatim.
+    - If multiple question texts are given, separated by " | ", they describe
+      the same theme from different angles — synthesise ONE question that
+      captures the shared theme, do not concatenate them.
+
+    Respond with JSON only, no markdown fences: {"short_question": "..."}
+""").strip()
+
+
+def _shorten_question_llm(source_text: str, mistral_client) -> dict:
+    """Paraphrase annex question text into a short caption via Mistral Small.
+
+    Returns {"short_question": str, "_usage": {...}} — short_question is ""
+    on any failure (malformed response, API error).
+    """
+    result = {"short_question": ""}
+    try:
+        resp = mistral_client.chat.complete(
+            model="mistral-small-latest",
+            max_tokens=60,
+            messages=[
+                {"role": "system", "content": SHORTEN_QUESTION_SYSTEM},
+                {"role": "user", "content": source_text[:2000]},
+            ],
+        )
+        raw = resp.choices[0].message.content.strip()
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw).strip()
+        parsed = json.loads(repair_json(raw))
+        result["short_question"] = str(parsed.get("short_question", "")).strip()
+        if resp.usage:
+            result["_usage"] = {"input": resp.usage.prompt_tokens, "output": resp.usage.completion_tokens}
+    except Exception:
+        pass
+    return result
+
+
+def get_shortened_questions(
+    sections: list[dict],
+    question_texts: dict[str, str],
+    con,
+    schema: str,
+    mistral_client,
+    cost_tracker: dict,
+    force_refresh: bool = False,
+) -> dict[str, str]:
+    """Return {section_id: short_question_caption} for chart "Q: ..." captions.
+
+    Cached in {schema}.ref_safe__chart_question_captions (PK section_id), keyed
+    on a hash of the section's annex question text(s) so a wording change
+    auto-invalidates the cache. Sections with no annex text available are
+    omitted from the result (graceful — chart just gets no "Q: ..." caption).
+    """
+    con.execute(f"""
+        CREATE TABLE IF NOT EXISTS {schema}.ref_safe__chart_question_captions (
+            section_id    VARCHAR NOT NULL,
+            question_ids  VARCHAR NOT NULL,
+            source_hash   VARCHAR NOT NULL,
+            short_caption VARCHAR NOT NULL,
+            model_id      VARCHAR NOT NULL,
+            generated_at  TIMESTAMP NOT NULL,
+            PRIMARY KEY (section_id)
+        )
+    """)
+    cached: dict[str, tuple[str, str]] = {}
+    try:
+        rows = con.execute(
+            f"SELECT section_id, source_hash, short_caption "
+            f"FROM {schema}.ref_safe__chart_question_captions"
+        ).fetchall()
+        cached = {r[0]: (r[1], r[2]) for r in rows}
+    except Exception:
+        pass
+
+    results: dict[str, str] = {}
+    to_generate: list[tuple[str, str, str, str]] = []
+    for sec in sections:
+        q_ids = sec.get("question_ids", [])
+        source_text = " | ".join(
+            question_texts[q.lower()] for q in q_ids if q.lower() in question_texts
+        )
+        if not source_text:
+            continue
+        h = hashlib.sha256(source_text.encode()).hexdigest()[:16]
+        hit = cached.get(sec["id"])
+        if hit and hit[0] == h and not force_refresh:
+            results[sec["id"]] = hit[1]
+        else:
+            to_generate.append((sec["id"], ",".join(q_ids), source_text, h))
+
+    if not to_generate:
+        return results
+
+    new_rows = []
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        futures = {
+            pool.submit(_shorten_question_llm, text, mistral_client): (sid, qids, h)
+            for sid, qids, text, h in to_generate
+        }
+        for future in as_completed(futures):
+            sid, qids, h = futures[future]
+            r = future.result()
+            if "_usage" in r:
+                u = r["_usage"]
+                _track_cost(cost_tracker, "mistral-small-latest", _Usage(u["input"], u["output"]))
+            caption = r.get("short_question", "")
+            if not caption:
+                continue
+            results[sid] = caption
+            new_rows.append((sid, qids, h, caption, "mistral-small-latest", datetime.utcnow()))
+
+    if new_rows:
+        try:
+            con.executemany(
+                f"INSERT OR REPLACE INTO {schema}.ref_safe__chart_question_captions VALUES (?,?,?,?,?,?)",
+                new_rows,
+            )
+        except Exception as e:
+            print(f"  [WARN] Failed to persist chart question captions: {e}")
+    return results
 
 
 def _write_wave_memory(

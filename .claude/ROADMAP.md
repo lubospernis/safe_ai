@@ -28,7 +28,8 @@ Claude: tick items off as they get built; don't add speculative sub-tasks.
 ## Next
 
 - [ ] SK newsletter — adapt `send_newsletter.py` to send the Slovak HTML variant (now: prerequisites met — newsletter workflow gate in place)
-- [ ] Ask for feedback on the exec summary (in-report form or email link)
+- [ ] Report-level feedback link — single "was this useful?" mailto/form at the foot of the report
+- [ ] Per-bullet exec-summary feedback — thumbs up/down icon on each exec bullet linking to a `mailto:` (or lightweight logging webhook writing `ref_safe__exec_feedback`: bullet text, section_id, wave, verdict); use to calibrate the tier/channel gate over time
 - [ ] Mobile viewing — report CSS is desktop-only; add responsive breakpoints
 - [ ] Auto subscription through Vercel + Supabase
 - [ ] Country selector — let the user pick a focal country in config (currently hard-coded to SK)
@@ -100,3 +101,5 @@ Claude: tick items off as they get built; don't add speculative sub-tasks.
 - [x] Adhoc exec summary bullet guarantee — mandatory 🔍 rule in `EXEC_SUMMARY_SYSTEM` + post-parse fallback in `get_exec_summary()` constructs one from `adhoc_section["finding"]` if Mistral omits it
 - [x] Generic adhoc topic readiness — `tests/test_adhoc_generic.py`: 5 tests with electrification mock data verify `detect_adhoc_theme()` + `build_adhoc_spotlight()` produce valid HTML-compatible output for unknown module types
 - [x] Human-in-the-loop newsletter gate — `send_newsletter.yml` split into `check` + `send` jobs; `send` uses `environment: newsletter-gate` (requires manual approval) when `run_type` contains "adhoc"; no-adhoc runs bypass gate automatically
+- [x] Exec-summary reasoning-channel gate — `config.py` adds `exec_tier`/`subitem_tiers`/`must_lead_with` per section; `llm.py` adds code-computed `sk_ea_gap`, `historical_extremity`, `direction_reversal`, `reliable_n` signals plus a Mistral Small `classify_ecb_emphasis()` pass, threaded into `get_exec_summary()` via a `[SIGNALS]` line per section; `EXEC_SUMMARY_SYSTEM` rewritten so `policy_technical`/deprioritized topics (e.g. Q11b public support) need 2 channels to qualify instead of riding a raw wave-over-wave swing into the exec summary
+- [x] Painting-thumbnail fetch retry — `_fetch_painting_inner_html()` retries transient failures (3 attempts) instead of silently omitting the block on a single network hiccup

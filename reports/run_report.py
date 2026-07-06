@@ -58,8 +58,8 @@ from html_builder import (
 )
 from llm import (
     _add_so_what, _fetch_ecb_context, _sharpen_with_ecb,
-    _write_wave_memory, check_all_interest, get_exec_summary, get_section_content_agentic,
-    get_shortened_questions, translate_to_slovak,
+    _write_wave_memory, build_section_signals, check_all_interest, classify_ecb_emphasis,
+    get_exec_summary, get_section_content_agentic, get_shortened_questions, translate_to_slovak,
 )
 
 OUTPUT_DIR = Path(__file__).parent / "output"
@@ -244,8 +244,16 @@ def main() -> None:
 
     _annex_loaded_ok = len(question_texts) > 0
 
+    print("Classifying ECB emphasis + computing exec-summary signals...")
+    sections_by_id = {s["id"]: s for s in SECTIONS}
+    ecb_emphasis = classify_ecb_emphasis(ecb_context, interesting_sections, mistral_client, cost_tracker)
+    section_signals = build_section_signals(rendered, data, sections_by_id, ecb_emphasis)
+
     print("Generating executive summary (two-pass)...")
-    exec_bullets = get_exec_summary(rendered, cost_tracker, historical_context=historical_context, anthropic_client=anthropic_client) if rendered else []
+    exec_bullets = get_exec_summary(
+        rendered, cost_tracker, historical_context=historical_context,
+        section_signals=section_signals, anthropic_client=anthropic_client,
+    ) if rendered else []
     for item in exec_bullets:
         print(f"  [{item.get('section_id', '?')}] {item.get('bullet', '')}")
 

@@ -187,29 +187,42 @@ def _md_to_html(text: str) -> str:
     return re.sub(r'\*\*(.+?)\*\*', lambda m: f'<strong>{m.group(1)}</strong>', text)
 
 
-def _fetch_painting_inner_html() -> str:
-    """Fetch the quarterly artwork; return inner <img>+<span> HTML. Returns "" on failure."""
+def _fetch_painting_inner_html(max_attempts: int = 3, retry_delay: float = 2.0) -> str:
+    """Fetch the quarterly artwork; return inner <img>+<span> HTML. Returns "" on failure.
+
+    Retries on transient failures (network hiccups are the common case on CI
+    runners) before giving up and gracefully omitting the whole block.
+    """
+    import time as _time
+
     import requests as _requests
-    try:
-        resp = _requests.get(ARTWORK["img_url"], timeout=10, headers={"User-Agent": "Mozilla/5.0"})
-        resp.raise_for_status()
-        b64 = base64.b64encode(resp.content).decode()
-        ct = resp.headers.get("Content-Type", "image/jpeg").split(";")[0].strip()
-        title = ARTWORK["title"]
-        page_url = ARTWORK["page_url"]
-        return (
-            f'<a href="{page_url}" target="_blank" title="{title}">'
-            f'<img src="data:{ct};base64,{b64}" alt="{title}" '
-            f'style="width:100%;border-radius:4px;border:1px solid #e0e0e0;display:block;">'
-            f'</a>'
-            f'<span style="font-size:9px;color:#aaa;display:block;margin-top:4px;'
-            f'text-align:right;font-style:italic;line-height:1.3;">'
-            f'<a href="{page_url}" target="_blank" style="color:#aaa;text-decoration:none;">'
-            f'{title}</a></span>'
-        )
-    except Exception as e:
-        print(f"  Warning: could not fetch painting ({e}) — skipping thumbnail")
-        return ""
+
+    last_err = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            resp = _requests.get(ARTWORK["img_url"], timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+            resp.raise_for_status()
+            b64 = base64.b64encode(resp.content).decode()
+            ct = resp.headers.get("Content-Type", "image/jpeg").split(";")[0].strip()
+            title = ARTWORK["title"]
+            page_url = ARTWORK["page_url"]
+            return (
+                f'<a href="{page_url}" target="_blank" title="{title}">'
+                f'<img src="data:{ct};base64,{b64}" alt="{title}" '
+                f'style="width:100%;border-radius:4px;border:1px solid #e0e0e0;display:block;">'
+                f'</a>'
+                f'<span style="font-size:9px;color:#aaa;display:block;margin-top:4px;'
+                f'text-align:right;font-style:italic;line-height:1.3;">'
+                f'<a href="{page_url}" target="_blank" style="color:#aaa;text-decoration:none;">'
+                f'{title}</a></span>'
+            )
+        except Exception as e:
+            last_err = e
+            if attempt < max_attempts:
+                print(f"  Warning: painting fetch attempt {attempt} failed ({e}) — retrying...")
+                _time.sleep(retry_delay)
+    print(f"  Warning: could not fetch painting after {max_attempts} attempts ({last_err}) — skipping thumbnail")
+    return ""
 
 
 def _clean_question_text(text: str) -> str:

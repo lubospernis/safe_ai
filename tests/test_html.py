@@ -1,4 +1,6 @@
-from html_builder import _md_to_html, _clean_question_text, build_toc
+from unittest.mock import MagicMock, patch
+
+from html_builder import _fetch_painting_inner_html, _md_to_html, _clean_question_text, build_toc
 
 
 def test_md_to_html_bold():
@@ -66,3 +68,37 @@ def test_build_toc_adhoc_spotlight_appended():
     toc = build_toc(sections)
     assert "adhoc_spotlight" in toc
     assert "AI Adoption" in toc
+
+
+# ── _fetch_painting_inner_html retry behaviour ──────────────────────────────
+
+def _fake_response():
+    resp = MagicMock()
+    resp.raise_for_status.return_value = None
+    resp.content = b"fake-image-bytes"
+    resp.headers = {"Content-Type": "image/jpeg"}
+    return resp
+
+
+def test_fetch_painting_retries_and_recovers_from_transient_failure():
+    with patch("requests.get", side_effect=[ConnectionError("transient"), _fake_response()]) as mock_get, \
+         patch("time.sleep"):
+        html = _fetch_painting_inner_html()
+    assert mock_get.call_count == 2
+    assert "<img" in html
+    assert "data:image/jpeg;base64," in html
+
+
+def test_fetch_painting_gives_up_after_max_attempts():
+    with patch("requests.get", side_effect=ConnectionError("still down")) as mock_get, \
+         patch("time.sleep"):
+        html = _fetch_painting_inner_html(max_attempts=3)
+    assert mock_get.call_count == 3
+    assert html == ""
+
+
+def test_fetch_painting_succeeds_first_try_no_retry():
+    with patch("requests.get", side_effect=[_fake_response()]) as mock_get:
+        html = _fetch_painting_inner_html()
+    assert mock_get.call_count == 1
+    assert "<img" in html

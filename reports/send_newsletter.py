@@ -140,6 +140,10 @@ def build_email_html(data: dict, pages_url: str) -> str:
       </ul>
     </div>
 
+    <div style="{_CTA_WRAP}">
+      <a href="{pages_url}" style="{_CTA}">View full report with charts →</a>
+    </div>
+
     <div style="{_SECTION}">
       <h2 style="{_H2}">Key Findings</h2>
 {findings_html}

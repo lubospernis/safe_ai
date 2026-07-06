@@ -1,0 +1,15 @@
+{
+  "section_id": "financing_gap",
+  "wave_number": 38,
+  "finding": "Credit line stress widened notably as demand surged, diverging from easy bank loan conditions",
+  "bullets": [
+    "The Slovak credit line financing gap widened notably to +14.8pp (n=278) from +4.8pp in the prior quarter, driven almost entirely by rising need (from +3.1pp to +12.3pp), while availability moved only marginally (from -1.7pp to -2.5pp) — suggesting Slovak firms face heightened short-term liquidity strain compared to the euro area's +12.6pp.",
+    "By contrast, Slovak bank loan conditions remained favourable: the gap held negative at -4.0pp (n=254), with availability steady at +1.4pp — 5.7pp less stressed than the euro area's +1.7pp gap — underscoring a sharp divergence between short-term liquidity instruments and term lending.",
+    "Trade credit stress eased moderately, with the Slovak gap narrowing from +9.8pp to +6.3pp (n=150), as need fell from +10.1pp to +7.1pp and availability edged up from +0.3pp to +0.8pp — indicating Slovak firms are now less exposed to trade credit constraints than the euro area's +8.2pp."
+  ],
+  "chart_subtitle": "Slovak credit line gap widened to +14.8pp, exceeding the euro area.",
+  "grounding_warnings": [
+    "'150' not found in source data"
+  ],
+  "tool_calls": 0
+}

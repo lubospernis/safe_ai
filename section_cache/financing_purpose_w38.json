@@ -1,0 +1,13 @@
+{
+  "section_id": "financing_purpose",
+  "wave_number": 38,
+  "finding": "Slovak firms relied heavily on working capital financing, diverging from euro area peers",
+  "bullets": [
+    "Inventory and working capital remained the dominant financing purpose for Slovak firms, cited by 55.7% (n=229) — 16.2 pp above the euro area's 39.5% — with the share virtually unchanged from wave 37 (Δ=−0.1 pp), indicating a persistent short-term liquidity focus.",
+    "Financing for hiring and training rose from 26.9% to 31.1% (Δ=+4.2 pp, n=227) among Slovak firms, while the euro area share fell from 27.4% to 24.3%; financing for new product development also outpaced the EA at 32.8% vs 20.2%, widening the gap by 2.9 pp.",
+    "Fixed investment dropped from 40.3% to 34.2% (Δ=−6.1 pp, n=229) among Slovak firms, falling below the euro area's 36.8% — reversing the position from wave 37, when SK marginally exceeded EA on this purpose, signalling a shift away from long-term growth investments."
+  ],
+  "chart_subtitle": "55.7% of Slovak firms cited working capital financing.",
+  "grounding_warnings": [],
+  "tool_calls": 0
+}

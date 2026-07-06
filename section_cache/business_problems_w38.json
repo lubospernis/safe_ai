@@ -1,0 +1,23 @@
+{
+  "section_id": "business_problems",
+  "wave_number": 38,
+  "finding": "Regulation and production costs jointly top Slovak firms' concerns in wave 38",
+  "bullets": [
+    "Costs of production or labour and regulation were virtually tied as the most pressing problems among the seven tested for Slovak firms, scoring 6.19/10 (n=228) and 6.18/10 (n=225) respectively — both moderate on the 1–10 scale — while skilled staff availability, at 6.07/10, ranked third, suggesting firms face dual cost pressures that may constrain investment or hiring.",
+    "Regulation rose marginally by 0.12 points from wave 37 for Slovak firms (n=225), diverging from the EA trend where regulation eased from 6.04 to 5.89/10; Slovak firms thus rated regulation more pressingly than the EA average in wave 38, indicating a growing compliance burden relative to peers.",
+    "Availability of skilled staff or experienced managers recorded the largest single-problem decline for Slovakia, easing by 0.50 points from 6.57 to 6.07/10 (n=228), though it remained above the EA's own easing from 6.64 to 6.51/10, reflecting a persistent labour market challenge despite some improvement."
+  ],
+  "chart_subtitle": "Slovak firms rate costs and regulation at 6.19 and 6.18 out of 10.",
+  "grounding_warnings": [
+    "'10' not found in source data",
+    "'10' not found in source data",
+    "'10' not found in source data",
+    "'10' not found in source data",
+    "'37' not found in source data",
+    "'10' not found in source data",
+    "'38' not found in source data",
+    "'10' not found in source data",
+    "'10' not found in source data"
+  ],
+  "tool_calls": 0
+}

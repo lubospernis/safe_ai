@@ -1,0 +1,17 @@
+{
+  "section_id": "expectations_quantitative",
+  "wave_number": 38,
+  "finding": "Slovak firms face margin compression as input costs dwarf selling price expectations",
+  "bullets": [
+    "Slovak firms (n=417) anticipated non-labour input price rises of 8.31% over the next 12 months — nearly double the EA's 5.84% — while expected selling prices rose only 4.27% (n=418), leaving a margin gap of over 4 pp — squeezing profitability as cost increases outpace pricing power.",
+    "Wage growth expectations among Slovak firms eased moderately to 4.21% (n=441, down 1.28 pp from the prior quarter's 5.49%), yet remained 1.41 pp above the EA average of 2.80%, maintaining pressure on labour cost margins — limiting room for investment or hiring.",
+    "Slovak firms' five-year inflation expectations rose to 8.57% (n=163, up 1.51 pp vs wave 37), exceeding the EA's 6.28% by the widest margin across all forecast horizons surveyed — signaling persistent cost concerns that may deter long-term planning."
+  ],
+  "chart_subtitle": "Slovak input price expectations of 8.31% far exceed selling prices of 4.27%.",
+  "grounding_warnings": [
+    "'12' not found in source data",
+    "'163' not found in source data",
+    "'37' not found in source data"
+  ],
+  "tool_calls": 0
+}

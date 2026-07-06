@@ -1,0 +1,13 @@
+{
+  "section_id": "outlook",
+  "wave_number": 38,
+  "finding": "Slovak turnover outlook fell sharply while EA firms grew more optimistic",
+  "bullets": [
+    "A net 7% of Slovak firms (n=228) expected turnover to increase over coming quarters, falling sharply by 14.15 pp from the net 21% in the previous wave, while the euro area's net balance rose 2.72 pp to net 26% — a divergence of nearly 19 pp, suggesting weaker domestic demand conditions for Slovak firms.",
+    "Slovak fixed investment expectations improved moderately, rising from a net 11% to a net 15% (Δ +3.88 pp), outpacing the euro area which eased from a net 13% to a net 9%, reversing relative positions between the two, indicating potential confidence in local business conditions despite regional headwinds.",
+    "German firms reported a net negative fixed investment balance of 2% (Δ −4.50 pp), contrasting with Slovakia's positive net 15%, underscoring divergent capital expenditure outlooks across the region — highlighting Slovakia's relatively stronger investment sentiment."
+  ],
+  "chart_subtitle": "Slovak turnover outlook dropped to net 7%, EA at net 26%.",
+  "grounding_warnings": [],
+  "tool_calls": 0
+}

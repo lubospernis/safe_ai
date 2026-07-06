@@ -1,7 +1,7 @@
 # Interpretation context from gap analysis
 
-- Compare SK’s **labour cost surge (84% net)** vs. EA’s **wage expectation moderation (2.8%)** to highlight margin squeeze.
-- Contrast SK’s **turnover contraction (-26% net)** with EA’s **marginal growth (+1%)** to frame demand divergence.
-- Emphasise SK’s **5-year inflation expectations (8.57%)** vs. EA (6.28%) as a long-term risk outlier.
-- Note SK’s **credit line gap (+14.8pp)** vs. EA (+12.6pp) to stress liquidity strain.
-- Link SK’s **regulation pressingness (6.18/10)** to EA’s lower average (5.89) for policy context.
+- Compare SK’s 8.57% 5-year inflation expectation (highest in EA) against EA median to highlight persistent local cost pressures.
+- Contrast SK’s negative bank loan financing gap (-4.0pp) with EA’s positive gap (+1.7pp) to emphasize relative loan accessibility.
+- Frame SK’s 55.7% working capital financing focus vs. EA’s 39.5% as a liquidity resilience vs. growth trade-off.
+- Note SK’s 39.8% profit decline (vs. EA’s 17%) alongside 84% labour cost rises to stress margin compression.
+- Highlight SK’s 59% upside inflation risk balance as a signal of heightened uncertainty vs. EA’s 55%.

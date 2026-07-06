@@ -1,9 +1,10 @@
 """
-SAFE Survey Newsletter — digest email via Resend.
+SAFE Survey Newsletter — standard report digest email via Resend.
 
-Parses the generated report HTML, extracts the executive summary bullets and
-section findings, and sends a lightweight digest email to all subscribers in
-newsletter/subscribers.json.
+Parses the standard report HTML (report_latest.html), extracts executive summary
+bullets and section findings, and sends a digest email to all subscribers.
+
+Adhoc special-focus emails are sent separately by send_adhoc_newsletter.py.
 
 Usage:
   RESEND_API_KEY=re_... python reports/send_newsletter.py
@@ -72,26 +73,11 @@ def parse_report(html: str) -> dict:
                 "subtitle": subtitle.get_text(strip=True) if subtitle else "",
             })
 
-    # Adhoc spotlight — collapsible <details id="adhoc_spotlight">
-    adhoc = None
-    details_el = soup.select_one("details#adhoc_spotlight")
-    if details_el:
-        theme_label = details_el.get("data-theme", "Special Focus")
-        inner_sec = details_el.select_one("section")
-        h3 = inner_sec.select_one("h3") if inner_sec else None
-        ecb_a = details_el.select_one("a[href]")
-        adhoc = {
-            "theme_label": theme_label,
-            "finding": h3.get_text(strip=True) if h3 else "",
-            "ecb_article_url": ecb_a["href"] if ecb_a else None,
-        }
-
     return {
         "meta": meta_text,
         "h1": h1_text,
         "exec_bullets": exec_bullets,
         "findings": findings,
-        "adhoc": adhoc,
     }
 
 
@@ -132,27 +118,6 @@ def build_email_html(data: dict, pages_url: str) -> str:
             f'<p style="{_SUBTITLE}">{f["subtitle"]}</p>'
         )
 
-    # Adhoc spotlight block — inserted above Key Findings when present
-    spotlight_html = ""
-    adhoc = data.get("adhoc")
-    if adhoc and adhoc.get("finding"):
-        theme_label = adhoc["theme_label"]
-        ecb_link = ""
-        if adhoc.get("ecb_article_url"):
-            ecb_link = (
-                f' <a href="{adhoc["ecb_article_url"]}" '
-                f'style="color:#0777b3;font-size:11px;" target="_blank" rel="noopener">'
-                f'Read ECB analysis →</a>'
-            )
-        spotlight_html = (
-            f'<div style="background:#f0f4f8;border-left:4px solid #bd4e35;'
-            f'padding:12px 16px;margin:16px 32px;">'
-            f'<strong style="font-size:13px;color:#bd4e35;">Special Focus — {theme_label}:</strong>'
-            f'<span style="font-size:13px;color:#231f20;"> {adhoc["finding"]}</span>'
-            f'{ecb_link}'
-            f'</div>'
-        )
-
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -169,7 +134,6 @@ def build_email_html(data: dict, pages_url: str) -> str:
       </ul>
     </div>
 
-{spotlight_html}
     <div style="{_SECTION}">
       <h2 style="{_H2}">Key Findings</h2>
 {findings_html}
@@ -217,12 +181,8 @@ def send_newsletter() -> None:
         print("No subscribers — nothing to send.")
         sys.exit(0)
 
-    # Build subject from meta line, e.g. "Slovakia · Euro Area · Germany  |  Generated 30 Jun 2026"
     meta = data["meta"]
-    adhoc_suffix = ""
-    if data.get("adhoc") and data["adhoc"].get("theme_label"):
-        adhoc_suffix = f" + {data['adhoc']['theme_label']}"
-    subject = f"{data['h1']} — Slovakia{adhoc_suffix} | {meta.split('|')[-1].strip()}"
+    subject = f"{data['h1']} — Slovakia | {meta.split('|')[-1].strip()}"
 
     email_html = build_email_html(data, PAGES_URL)
 

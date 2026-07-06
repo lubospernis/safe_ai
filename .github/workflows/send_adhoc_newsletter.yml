@@ -1,0 +1,65 @@
+name: SAFE — Send Adhoc Newsletter
+
+on:
+  # Triggers automatically when the adhoc report generation workflow finishes successfully.
+  workflow_run:
+    workflows: ["SAFE — Generate Adhoc Report"]
+    types:
+      - completed
+
+  # Manual trigger — useful for resends.
+  workflow_dispatch:
+
+jobs:
+  send:
+    name: Send adhoc special focus newsletter
+    runs-on: ubuntu-latest
+    # Require manual approval via the newsletter-gate environment before sending.
+    # This gate applies to every adhoc send — adhoc content is higher-stakes than the
+    # regular digest and warrants a human check before going out.
+    environment: newsletter-gate
+
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Checkout repository (main branch — for script and subscribers)
+        uses: actions/checkout@v4
+
+      - name: Checkout gh-pages for adhoc report HTML
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+
+      - name: Check adhoc report exists on gh-pages
+        id: check
+        run: |
+          if [ -f gh-pages/adhoc.html ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "No adhoc.html on gh-pages — skipping send."
+          fi
+
+      - name: Copy adhoc report HTML into expected path
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          mkdir -p reports/output
+          cp gh-pages/adhoc.html reports/output/report_adhoc_latest.html
+
+      - name: Set up Python 3.11
+        if: steps.check.outputs.exists == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        if: steps.check.outputs.exists == 'true'
+        run: pip install -r requirements.txt
+
+      - name: Send adhoc newsletter
+        if: steps.check.outputs.exists == 'true'
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: python reports/send_adhoc_newsletter.py

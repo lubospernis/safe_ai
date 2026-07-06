@@ -22,7 +22,7 @@ from mistralai import Mistral
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-REPORT_HTML = Path(__file__).parent / "output" / "report_latest.html"
+_DEFAULT_REPORT_HTML = Path(__file__).parent / "output" / "report_latest.html"
 PASS_THRESHOLD = 6        # main report: any dimension below this = fail
 ADHOC_PASS_THRESHOLD = 8  # adhoc spotlight: stricter gate (Mistral Large reviewer)
 
@@ -178,8 +178,16 @@ def extract_adhoc_text(html: str) -> str:
 
 
 def main() -> None:
+    import argparse as _ap
+    _parser = _ap.ArgumentParser()
+    _parser.add_argument("--html", type=Path, default=None,
+                         help="Path to report HTML to check (default: reports/output/report_latest.html)")
+    _args = _parser.parse_args()
+    REPORT_HTML = _args.html if _args.html else _DEFAULT_REPORT_HTML
+    OUTPUT_DIR = REPORT_HTML.parent
+
     if not REPORT_HTML.exists():
-        print(f"ERROR: {REPORT_HTML} not found — run run_report.py first")
+        print(f"ERROR: {REPORT_HTML} not found — run the report generator first")
         sys.exit(1)
 
     html = REPORT_HTML.read_text(encoding="utf-8")
@@ -200,7 +208,7 @@ def main() -> None:
         print(f"  CHART FAIL: {chart_reason}")
         scores = {"readability": 1, "substance": 1, "coherence": 1, "sign_convention": 1,
                   "verdict": "fail", "reason": f"Chart rendering error: {chart_reason}"}
-        (Path(__file__).parent / "output" / "quality_scores.json").write_text(json.dumps(scores))
+        (OUTPUT_DIR / "quality_scores.json").write_text(json.dumps(scores))
         print("Quality gate FAILED — chart rendering issues detected")
         sys.exit(1)
     print(f"  Charts OK")
@@ -275,7 +283,7 @@ def main() -> None:
         except Exception as e:
             print(f"  Adhoc quality check error: {e} — assuming pass")
 
-    (Path(__file__).parent / "output" / "quality_scores.json").write_text(json.dumps(scores))
+    (OUTPUT_DIR / "quality_scores.json").write_text(json.dumps(scores))
 
     if verdict == "fail" or min(r, s, c, sc) < PASS_THRESHOLD:
         print("Quality gate FAILED — blocking deploy")

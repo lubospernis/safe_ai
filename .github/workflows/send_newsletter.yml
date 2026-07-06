@@ -1,7 +1,7 @@
 name: SAFE — Send Newsletter
 
 on:
-  # Triggers automatically when the report generation workflow finishes successfully
+  # Triggers automatically when the standard report generation workflow finishes successfully
   workflow_run:
     workflows: ["SAFE — Generate Report"]
     types:
@@ -11,44 +11,10 @@ on:
   workflow_dispatch:
 
 jobs:
-  check:
-    name: Check for adhoc content
-    runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
-    outputs:
-      has_adhoc: ${{ steps.detect.outputs.has_adhoc }}
-
-    steps:
-      - name: Checkout gh-pages for run log
-        uses: actions/checkout@v4
-        with:
-          ref: gh-pages
-          path: gh-pages
-
-      - name: Detect adhoc run type
-        id: detect
-        run: |
-          if [ -f gh-pages/run_log.json ]; then
-            run_type=$(python3 -c "import json; d=json.load(open('gh-pages/run_log.json')); last=d[-1] if isinstance(d, list) and d else d; print(last.get('run_type',''))")
-            if echo "$run_type" | grep -q "adhoc"; then
-              echo "has_adhoc=true" >> "$GITHUB_OUTPUT"
-              echo "Adhoc content detected (run_type=$run_type) — manual approval required before send"
-            else
-              echo "has_adhoc=false" >> "$GITHUB_OUTPUT"
-              echo "No adhoc content (run_type=$run_type) — newsletter will send automatically"
-            fi
-          else
-            echo "has_adhoc=false" >> "$GITHUB_OUTPUT"
-            echo "No run_log.json found — assuming no adhoc"
-          fi
-
   send:
     name: Send newsletter digest
     runs-on: ubuntu-latest
-    needs: check
-    # When adhoc content is present, require manual approval via the newsletter-gate environment.
-    # No-adhoc runs bypass the gate and send automatically.
-    environment: ${{ needs.check.outputs.has_adhoc == 'true' && 'newsletter-gate' || '' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
 
     steps:
       - name: Checkout repository (main branch — for script and subscribers)

@@ -17,6 +17,9 @@ env/
 # Section LLM output cache — local only, not committed
 reports/output/section_cache/
 
+# Next.js web app local secrets
+web/.env.local
+
 # dbt
 dbt_project/target/
 dbt_project/logs/

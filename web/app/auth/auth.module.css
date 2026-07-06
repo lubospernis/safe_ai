@@ -1,0 +1,141 @@
+.main {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f7fa;
+  padding: 24px;
+}
+
+.card {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.08);
+  padding: 48px 40px 40px;
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+}
+
+.logo {
+  font-size: 40px;
+  margin-bottom: 12px;
+}
+
+.title {
+  margin: 0 0 4px;
+  font-size: 22px;
+  font-weight: 700;
+  color: #0777b3;
+}
+
+.subtitle {
+  margin: 0 0 32px;
+  font-size: 13px;
+  color: #888;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: left;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #444;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1.5px solid #dde1e7;
+  border-radius: 6px;
+  font-size: 15px;
+  color: #1a1a1a;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+}
+
+.input:focus {
+  outline: none;
+  border-color: #0777b3;
+}
+
+.btn {
+  padding: 12px;
+  background: #0777b3;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-top: 4px;
+}
+
+.btn:hover:not(:disabled) {
+  background: #055f91;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.hint {
+  font-size: 13px;
+  color: #555;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.error {
+  font-size: 13px;
+  color: #c0392b;
+  margin: 0;
+  background: #fdf0ee;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border-left: 3px solid #c0392b;
+}
+
+.link {
+  background: none;
+  border: none;
+  color: #0777b3;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+  text-align: center;
+  text-decoration: underline;
+}
+
+@media (prefers-color-scheme: dark) {
+  .main {
+    background: #1a1d23;
+  }
+  .card {
+    background: #22262e;
+    box-shadow: 0 2px 16px rgba(0, 0, 0, 0.3);
+  }
+  .label {
+    color: #aaa;
+  }
+  .input {
+    background: #2a2f3a;
+    border-color: #3a3f4a;
+    color: #e8e8e8;
+  }
+  .input:focus {
+    border-color: #0777b3;
+  }
+  .hint {
+    color: #999;
+  }
+}

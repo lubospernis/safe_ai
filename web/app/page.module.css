@@ -1,0 +1,198 @@
+.main {
+  min-height: 100vh;
+  background: #f5f7fa;
+  font-family: Arial, sans-serif;
+}
+
+.header {
+  background: #0777b3;
+  color: #fff;
+  padding: 20px 32px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.headerLogo {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.headerText {
+  flex: 1;
+}
+
+.headerTitle {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.headerSub {
+  margin: 2px 0 0;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.signout {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: #fff;
+  padding: 7px 14px;
+  border-radius: 5px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.signout:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.list {
+  max-width: 680px;
+  margin: 40px auto;
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.card {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.07);
+  padding: 24px;
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.cardIcon {
+  font-size: 32px;
+  flex-shrink: 0;
+  line-height: 1;
+  padding-top: 2px;
+}
+
+.cardBody {
+  flex: 1;
+}
+
+.cardTitle {
+  margin: 0 0 6px;
+  font-size: 17px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.cardDesc {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: #555;
+  line-height: 1.55;
+}
+
+.badge {
+  display: inline-block;
+  background: #e8f4fd;
+  color: #0777b3;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.btnWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.btnSubscribe {
+  padding: 9px 18px;
+  background: #0777b3;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.btnSubscribe:hover:not(:disabled) {
+  background: #055f91;
+}
+
+.btnUnsubscribe {
+  padding: 9px 18px;
+  background: #fff;
+  color: #c0392b;
+  border: 1.5px solid #c0392b;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+
+.btnUnsubscribe:hover:not(:disabled) {
+  background: #fdf0ee;
+}
+
+.btnSubscribe:disabled,
+.btnUnsubscribe:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btnError {
+  font-size: 12px;
+  color: #c0392b;
+  margin: 0;
+  max-width: 160px;
+  text-align: right;
+}
+
+@media (max-width: 500px) {
+  .card {
+    flex-wrap: wrap;
+  }
+  .btnWrap {
+    width: 100%;
+    align-items: stretch;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .main {
+    background: #1a1d23;
+  }
+  .card {
+    background: #22262e;
+    box-shadow: 0 1px 8px rgba(0, 0, 0, 0.3);
+  }
+  .cardTitle {
+    color: #e8e8e8;
+  }
+  .cardDesc {
+    color: #999;
+  }
+  .badge {
+    background: #1a3a50;
+    color: #5ab0d8;
+  }
+  .btnUnsubscribe {
+    background: #22262e;
+  }
+  .btnUnsubscribe:hover:not(:disabled) {
+    background: #2e2020;
+  }
+}

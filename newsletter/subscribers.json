@@ -1,5 +1,12 @@
 {
   "subscribers": [
-    {"email": "lubos.pernis@gmail.com", "name": "Lubos"}
+    {
+      "email": "lubos.pernis@gmail.com",
+      "name": "Lubos"
+    },
+    {
+      "email": "lubos.pernis@nbs.sk",
+      "subscribed_at": "2026-07-06T20:04:38.553Z"
+    }
   ]
 }

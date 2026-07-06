@@ -50,12 +50,10 @@ def main() -> None:
             git_sha           TEXT,
             model_sonnet      TEXT,
             model_mistral     TEXT,
-            models_used       TEXT,
             total_cost_usd    FLOAT,
             input_tokens      INTEGER,
             output_tokens     INTEGER,
             cache_read_tokens INTEGER,
-            cost_by_model_json TEXT,
             quality_readability     FLOAT,
             quality_substance       FLOAT,
             quality_coherence       FLOAT,
@@ -63,14 +61,26 @@ def main() -> None:
             quality_verdict   TEXT,
             quality_reason    TEXT,
             n_sections        INTEGER,
-            duration_seconds  FLOAT,
-            adhoc_grounding         FLOAT,
-            adhoc_coverage          FLOAT,
-            adhoc_readability       FLOAT,
-            adhoc_chart_alignment   FLOAT,
-            adhoc_verdict           TEXT
+            duration_seconds  FLOAT
         )
     """)
+
+    # Migrate: add columns introduced after initial table creation.
+    # ALTER TABLE ... ADD COLUMN IF NOT EXISTS is idempotent.
+    for col_ddl in [
+        "adhoc_grounding         FLOAT",
+        "adhoc_coverage          FLOAT",
+        "adhoc_readability       FLOAT",
+        "adhoc_chart_alignment   FLOAT",
+        "adhoc_verdict           TEXT",
+        "models_used             TEXT",
+        "cost_by_model_json      TEXT",
+    ]:
+        col_name = col_ddl.split()[0]
+        try:
+            con.execute(f"ALTER TABLE main_safe.ref_safe__run_log ADD COLUMN {col_ddl}")
+        except Exception:
+            pass  # column already exists
 
     models_used = ",".join(sorted(cost.get("cost_by_model", {}).keys()))
     cost_by_model_json = json.dumps(cost.get("cost_by_model", {}))

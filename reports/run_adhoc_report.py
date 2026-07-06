@@ -157,19 +157,33 @@ def main() -> None:
     print("Assembling HTML (EN)...")
     html = build_html(rendered, annex_html, exec_bullets, toc_html, painting_inner_html, latest_wave)
 
-    retro = args.wave is not None
-    out_path = OUTPUT_DIR / (f"report_adhoc_q{latest_wave}.html" if retro else "report_adhoc_latest.html")
-    out_path.write_text(html, encoding="utf-8")
-    print(f"Saved → {out_path}")
+    wave_en = f"report_adhoc_q{latest_wave}.html"
+    wave_sk = f"report_adhoc_q{latest_wave}_sk.html"
+    (OUTPUT_DIR / wave_en).write_text(html, encoding="utf-8")
+    (OUTPUT_DIR / "report_adhoc_latest.html").write_text(html, encoding="utf-8")
+    print(f"Saved → {OUTPUT_DIR / wave_en}")
+    print(f"WAVE_ADHOC_EN={wave_en}")
 
     print("Translating to Slovak...")
     sk_rendered, sk_exec_bullets = translate_to_slovak(rendered, exec_bullets, cost_tracker)
     sk_toc_html = build_toc(sk_rendered, ui=_SK_UI)
     sk_html = build_html(sk_rendered, sk_annex_html, sk_exec_bullets, sk_toc_html,
                          painting_inner_html, latest_wave, ui=_SK_UI)
-    sk_path = OUTPUT_DIR / (f"report_adhoc_q{latest_wave}_sk.html" if retro else "report_adhoc_latest_sk.html")
-    sk_path.write_text(sk_html, encoding="utf-8")
-    print(f"Saved → {sk_path}")
+    (OUTPUT_DIR / wave_sk).write_text(sk_html, encoding="utf-8")
+    (OUTPUT_DIR / "report_adhoc_latest_sk.html").write_text(sk_html, encoding="utf-8")
+    print(f"Saved → {OUTPUT_DIR / wave_sk}")
+    print(f"WAVE_ADHOC_SK={wave_sk}")
+
+    _pages_base = "https://lubospernis.github.io/safe_ai"
+    _links = {
+        "wave": latest_wave,
+        "en": f"{_pages_base}/{wave_en}",
+        "sk": f"{_pages_base}/{wave_sk}",
+    }
+    (OUTPUT_DIR / "latest_adhoc_links.json").write_text(
+        json.dumps(_links, indent=2), encoding="utf-8"
+    )
+    print(f"Links → {_links['en']}")
 
     # ── Cost summary ─────────────────────────────────────────────────────────
     w = 54

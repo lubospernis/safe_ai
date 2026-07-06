@@ -76,13 +76,13 @@ jobs:
           path: reports/output/quality_scores.json
           retention-days: 30
 
-      - name: Update adhoc run log
+      - name: Update adhoc run log and links
         if: steps.run_adhoc.outputs.produced == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add reports/output/run_adhoc_log.json
-          git diff --cached --quiet || git commit -m "chore: update adhoc run log [skip ci]"
+          git add reports/output/run_adhoc_log.json reports/output/latest_adhoc_links.json
+          git diff --cached --quiet || git commit -m "chore: update adhoc run log and links [skip ci]"
           git push
 
       - name: Rename adhoc reports for Pages

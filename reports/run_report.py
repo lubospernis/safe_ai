@@ -77,7 +77,12 @@ def main() -> None:
                         help="Cap data at this wave number for retrospective reports (e.g. --wave 37)")
     parser.add_argument("--refresh-chart-titles", action="store_true",
                         help="Force regeneration of cached chart question captions")
+    parser.add_argument("--no-cache", action="store_true",
+                        help="Ignore section cache — regenerate all sections from scratch")
+    parser.add_argument("--rerun-sections", type=str, default=None,
+                        help="Comma-separated section IDs to regenerate (ignore cache for these only)")
     args = parser.parse_args()
+    _force_rerun = set(s.strip() for s in args.rerun_sections.split(",")) if args.rerun_sections else set()
 
     if args.dev:
         print(f"[DEV] Using local DuckDB")
@@ -167,9 +172,52 @@ def main() -> None:
     for sid in skipped:
         print(f"  Skipping {sid} (not interesting)")
 
+    _cache_dir = OUTPUT_DIR / "section_cache"
+    _cache_dir.mkdir(exist_ok=True)
+
     def _build_section(sec: dict) -> dict:
         sid = sec["id"]
         r = interest[sid]
+
+        # ── Cache read ────────────────────────────────────────────────────────
+        cache_path = _cache_dir / f"{sid}_w{latest_wave}.json"
+        use_cache = (
+            not args.no_cache
+            and sid not in _force_rerun
+            and cache_path.exists()
+        )
+        if use_cache:
+            cached = json.loads(cache_path.read_text())
+            if cached.get("wave_number") == latest_wave:
+                print(f"  [CACHE HIT] {sid} — rebuilding chart only")
+                chart_title = cached["finding"]
+                chart_question = chart_question_captions.get(sid, "")
+                chart_subtitle = cached.get("chart_subtitle", "")
+                if sid == "financing_gap":
+                    chart_png = build_financing_gap_chart(sec, data[sid],
+                                                          chart_title=chart_title, chart_question=chart_question)
+                elif sid == "bank_loan_terms":
+                    chart_png = build_chart(sec, data[sid], "bar", r["best_panel"],
+                                            chart_subtitle=chart_subtitle,
+                                            chart_title=chart_title, chart_question=chart_question)
+                else:
+                    chart_png = build_chart(sec, data[sid], r["chart_type"], r["best_panel"],
+                                            chart_subtitle=chart_subtitle,
+                                            chart_title=chart_title, chart_question=chart_question)
+                return {
+                    "section_id": sid,
+                    "title": sec["title"],
+                    "group": sec.get("group", "Other"),
+                    "finding": cached["finding"],
+                    "bullets": cached["bullets"],
+                    "chart_png": chart_png,
+                    "sign_note": sec["sign_note"],
+                    "routed": sec.get("routed", False),
+                    "has_missingness_caveat": sec.get("has_missingness_caveat", False),
+                    "tool_calls": cached.get("tool_calls", 0),
+                    "grounding_warnings": cached.get("grounding_warnings", []),
+                }
+
         thread_con = _get_connection(args.dev)
         try:
             local_tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
@@ -213,7 +261,7 @@ def main() -> None:
                                         chart_subtitle=chart_subtitle,
                                         chart_title=chart_title, chart_question=chart_question)
 
-            return {
+            result = {
                 "section_id": sid,
                 "title": sec["title"],
                 "group": sec.get("group", "Other"),
@@ -224,7 +272,21 @@ def main() -> None:
                 "routed": sec.get("routed", False),
                 "has_missingness_caveat": sec.get("has_missingness_caveat", False),
                 "tool_calls": content.get("tool_calls", 0),
+                "grounding_warnings": content.get("grounding_warnings", []),
             }
+
+            # ── Cache write ───────────────────────────────────────────────────
+            cache_path.write_text(json.dumps({
+                "section_id": sid,
+                "wave_number": latest_wave,
+                "finding": content["finding"],
+                "bullets": content["bullets"],
+                "chart_subtitle": content.get("chart_subtitle", ""),
+                "grounding_warnings": content.get("grounding_warnings", []),
+                "tool_calls": content.get("tool_calls", 0),
+            }, indent=2, ensure_ascii=False))
+
+            return result
         finally:
             thread_con.close()
 
@@ -276,19 +338,34 @@ def main() -> None:
     print("Assembling HTML (EN)...")
     html = build_html(rendered, annex_html, exec_bullets, toc_html, painting_inner_html, latest_wave)
 
-    retro = args.wave is not None
-    out_path = OUTPUT_DIR / (f"report_q{latest_wave}.html" if retro else "report_latest.html")
-    out_path.write_text(html, encoding="utf-8")
-    print(f"Saved → {out_path}")
+    # Always write both the wave-numbered archive copy and the _latest alias.
+    wave_en = f"report_q{latest_wave}.html"
+    wave_sk = f"report_q{latest_wave}_sk.html"
+    (OUTPUT_DIR / wave_en).write_text(html, encoding="utf-8")
+    (OUTPUT_DIR / "report_latest.html").write_text(html, encoding="utf-8")
+    print(f"Saved → {OUTPUT_DIR / wave_en}")
+    print(f"WAVE_REPORT_EN={wave_en}")
 
     print("Translating to Slovak...")
     sk_rendered, sk_exec_bullets = translate_to_slovak(rendered, exec_bullets, cost_tracker)
     sk_toc_html = build_toc(sk_rendered, ui=_SK_UI)
     sk_html = build_html(sk_rendered, sk_annex_html, sk_exec_bullets, sk_toc_html,
                          painting_inner_html, latest_wave, ui=_SK_UI)
-    sk_path = OUTPUT_DIR / (f"report_q{latest_wave}_sk.html" if retro else "report_latest_sk.html")
-    sk_path.write_text(sk_html, encoding="utf-8")
-    print(f"Saved → {sk_path}")
+    (OUTPUT_DIR / wave_sk).write_text(sk_html, encoding="utf-8")
+    (OUTPUT_DIR / "report_latest_sk.html").write_text(sk_html, encoding="utf-8")
+    print(f"Saved → {OUTPUT_DIR / wave_sk}")
+    print(f"WAVE_REPORT_SK={wave_sk}")
+
+    _pages_base = "https://lubospernis.github.io/safe_ai"
+    _links = {
+        "wave": latest_wave,
+        "en": f"{_pages_base}/{wave_en}",
+        "sk": f"{_pages_base}/{wave_sk}",
+    }
+    (OUTPUT_DIR / "latest_links.json").write_text(
+        json.dumps(_links, indent=2), encoding="utf-8"
+    )
+    print(f"Links → {_links['en']}")
 
     w = 54
     print(f"\n{'─' * w}\nRun cost estimate")

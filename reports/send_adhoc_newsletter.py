@@ -29,7 +29,13 @@ ROOT = Path(__file__).parent.parent
 REPORT_HTML = Path(__file__).parent / "output" / "report_adhoc_latest.html"
 SUBSCRIBERS_JSON = ROOT / "newsletter" / "subscribers.json"
 
-PAGES_URL = os.environ.get("PAGES_URL", "https://lubospernis.github.io/safe_ai/adhoc.html")
+_PAGES_BASE = "https://lubospernis.github.io/safe_ai"
+_links_path = Path(__file__).parent / "output" / "latest_adhoc_links.json"
+if _links_path.exists():
+    _links = json.loads(_links_path.read_text())
+    PAGES_URL = os.environ.get("PAGES_URL", _links.get("en", f"{_PAGES_BASE}/adhoc.html"))
+else:
+    PAGES_URL = os.environ.get("PAGES_URL", f"{_PAGES_BASE}/adhoc.html")
 FROM_ADDRESS = os.environ.get("NEWSLETTER_FROM", "onboarding@resend.dev")
 
 # Inline CSS — email-safe

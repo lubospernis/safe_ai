@@ -14,6 +14,9 @@ __pycache__/
 .venv/
 env/
 
+# Section LLM output cache — local only, not committed
+reports/output/section_cache/
+
 # dbt
 dbt_project/target/
 dbt_project/logs/

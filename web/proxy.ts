@@ -31,8 +31,8 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // Allow auth routes through always
-  if (pathname.startsWith("/auth")) {
+  // Allow auth routes and public API routes through always
+  if (pathname.startsWith("/auth") || pathname.startsWith("/api/")) {
     return supabaseResponse;
   }
 

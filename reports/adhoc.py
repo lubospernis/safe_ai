@@ -14,7 +14,7 @@ from json_repair import repair_json
 from charts import _build_adhoc_chart
 from cost import _Usage, _track_cost
 from db import ALLOWED_MART_TABLES, _WRITE_RE
-from llm import NBS_STYLE_GUIDE
+from llm import NBS_STYLE_GUIDE, _check_numeric_grounding
 from questionnaire import (
     build_response_label_context,
     fetch_adhoc_response_labels,
@@ -821,9 +821,31 @@ def build_adhoc_spotlight(
                 },
             })
 
+    # Compute a sign convention note from the data types present
+    has_continuous = any(q["is_continuous"] for q in question_contexts)
+    has_categorical = any(not q["is_continuous"] for q in question_contexts)
+    if has_continuous and has_categorical:
+        sign_note = (
+            "Sign convention: continuous questions report weighted mean % (0–100 scale). "
+            "Categorical questions report pct_wtd = % of firms selecting each response code. "
+            "Do NOT write 'net X%' for these questions — use '% of firms' instead."
+        )
+    elif has_continuous:
+        sign_note = (
+            "Sign convention: response_raw is a numeric % estimate (0–100 scale). "
+            "The data table shows weighted mean and median. "
+            "Do NOT write 'net X%' — use '% of firms estimated' or 'average estimate of X%'."
+        )
+    else:
+        sign_note = (
+            "Sign convention: pct_wtd is the weighted % of firms selecting each response code. "
+            "Response codes are integers (e.g. 1=yes, 2=no, or a Likert scale). "
+            "Do NOT write 'net X%' — cite the specific code and its share."
+        )
+
     user_content.append({
         "type": "text",
-        "text": "Write the spotlight as specified. Return valid JSON only.",
+        "text": f"{sign_note}\n\nWrite the spotlight as specified. Return valid JSON only.",
     })
 
     result: dict = {}
@@ -943,6 +965,23 @@ def build_adhoc_spotlight(
         bullets_by_question = {}
     print(f"  Phase 3: {len(bullets)} bullets across {len(selected_qids)} questions, selected={selected_qids}")
 
+    # ── Programmatic grounding check (monitoring-only, mirrors llm.py) ────────
+    grounding_warnings: list[str] = []
+    for q in question_contexts:
+        if q["question_id"] not in selected_qids:
+            continue
+        q_bullets = bullets_by_question.get(q["question_id"], [])
+        if not q_bullets:
+            continue
+        value_cols = ["pct_wtd"] if not q["is_continuous"] else ["response_raw"]
+        warns = _check_numeric_grounding(q_bullets, q["df"], value_cols)
+        for w in warns:
+            grounding_warnings.append(f"[{q['question_id']}] {w}")
+    if grounding_warnings:
+        print(f"  [GROUNDING WARN] {len(grounding_warnings)} warning(s):")
+        for w in grounding_warnings:
+            print(f"    {w}")
+
     # ── Assemble chart_pngs from selected + all questions ────────────────────
     # Selected questions first (in order), then remaining ones (up to 3 total)
     q_by_id = {q["question_id"]: q for q in question_contexts}
@@ -1033,6 +1072,7 @@ def build_adhoc_spotlight(
         "theme_label": theme["theme_label"],
         "review_scores": review_scores,
         "review_passed": review_passed,
+        "grounding_warnings": grounding_warnings,
         "question_descriptions": question_descriptions,
     }
 

@@ -68,7 +68,12 @@ def main() -> None:
                         help="Use local dev.duckdb instead of MotherDuck (no MOTHERDUCK_TOKEN needed)")
     parser.add_argument("--wave", type=int, default=None,
                         help="Cap data at this wave number for retrospective reports (e.g. --wave 37)")
+    parser.add_argument("--no-cache", action="store_true",
+                        help="Ignore cached adhoc spotlight and regenerate from scratch")
+    parser.add_argument("--rerun-sections", type=str, default=None,
+                        help="Comma-separated section IDs to force-rerun (e.g. adhoc_spotlight)")
     args = parser.parse_args()
+    _force_rerun = set(s.strip() for s in args.rerun_sections.split(",")) if args.rerun_sections else set()
 
     if args.dev:
         print("[DEV] Using local DuckDB")
@@ -110,11 +115,48 @@ def main() -> None:
     elif not _questionnaire_labels_ok:
         print(f"  WARN: Questionnaire fetched ({_questionnaire_url}) but no answer labels parsed")
 
-    # ── Build adhoc spotlight ─────────────────────────────────────────────────
-    adhoc_section = build_adhoc_spotlight(
-        adhoc_theme, latest_wave, tool_con, schema, mistral_client, cost_tracker,
-        anthropic_client=anthropic_client,
+    # ── Build adhoc spotlight (with section cache) ───────────────────────────
+    _cache_dir = OUTPUT_DIR / "section_cache"
+    _cache_dir.mkdir(exist_ok=True)
+    _cache_path = _cache_dir / f"adhoc_spotlight_w{latest_wave}.json"
+    _sid = "adhoc_spotlight"
+    _use_cache = (
+        not args.no_cache
+        and _sid not in _force_rerun
+        and _cache_path.exists()
     )
+    if _use_cache:
+        import base64 as _b64
+        _cached = json.loads(_cache_path.read_text())
+        if _cached.get("wave_number") == latest_wave:
+            print(f"  [CACHE HIT] {_sid} — skipping LLM phases")
+            # Restore chart bytes from base64
+            if "chart_pngs_b64" in _cached:
+                _cached["chart_pngs"] = [_b64.b64decode(s) for s in _cached.pop("chart_pngs_b64")]
+                _cached["chart_png"] = _cached["chart_pngs"][0] if _cached["chart_pngs"] else None
+            adhoc_section = _cached
+        else:
+            _use_cache = False
+
+    if not _use_cache:
+        adhoc_section = build_adhoc_spotlight(
+            adhoc_theme, latest_wave, tool_con, schema, mistral_client, cost_tracker,
+            anthropic_client=anthropic_client,
+        )
+        if adhoc_section:
+            import base64 as _b64
+            _cache_entry = {
+                k: v for k, v in adhoc_section.items()
+                if k not in ("chart_png", "chart_pngs")
+            }
+            # Serialize chart bytes as base64 so cache is self-contained
+            if adhoc_section.get("chart_pngs"):
+                _cache_entry["chart_pngs_b64"] = [
+                    _b64.b64encode(p).decode() for p in adhoc_section["chart_pngs"]
+                ]
+            _cache_entry["wave_number"] = latest_wave
+            _cache_path.write_text(json.dumps(_cache_entry, indent=2, ensure_ascii=False))
+
     if not adhoc_section:
         print("Adhoc spotlight build failed — no output produced.")
         tool_con.close()
@@ -239,6 +281,9 @@ def main() -> None:
             "questionnaire_url": _questionnaire_url,
             "questionnaire_labels_parsed": _questionnaire_labels_ok,
         },
+        "grounding_warning_count": len(adhoc_section.get("grounding_warnings", [])),
+        "review_scores": adhoc_section.get("review_scores", {}),
+        "review_passed": adhoc_section.get("review_passed", True),
     }
     _run_log_path = OUTPUT_DIR / "run_adhoc_log.json"
     _existing_log: list = json.loads(_run_log_path.read_text()) if _run_log_path.exists() else []

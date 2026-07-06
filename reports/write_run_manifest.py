@@ -50,10 +50,12 @@ def main() -> None:
             git_sha           TEXT,
             model_sonnet      TEXT,
             model_mistral     TEXT,
+            models_used       TEXT,
             total_cost_usd    FLOAT,
             input_tokens      INTEGER,
             output_tokens     INTEGER,
             cache_read_tokens INTEGER,
+            cost_by_model_json TEXT,
             quality_readability     FLOAT,
             quality_substance       FLOAT,
             quality_coherence       FLOAT,
@@ -70,8 +72,11 @@ def main() -> None:
         )
     """)
 
+    models_used = ",".join(sorted(cost.get("cost_by_model", {}).keys()))
+    cost_by_model_json = json.dumps(cost.get("cost_by_model", {}))
+
     con.execute("""
-        INSERT OR REPLACE INTO main_safe.ref_safe__run_log VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        INSERT OR REPLACE INTO main_safe.ref_safe__run_log VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     """, [
         run_id,
         wave,
@@ -79,10 +84,12 @@ def main() -> None:
         sha,
         cost["model_sonnet"],
         cost["model_mistral"],
+        models_used,
         cost["total_cost_usd"],
         cost["input_tokens"],
         cost["output_tokens"],
         cost["cache_read_tokens"],
+        cost_by_model_json,
         quality["readability"],
         quality["substance"],
         quality["coherence"],

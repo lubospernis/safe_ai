@@ -189,8 +189,10 @@ def main() -> None:
     # ── Write run log ─────────────────────────────────────────────────────────
     cache_read_total = sum(m.get("cache_read", 0) for m in cost_tracker["by_model"].values())
     _now = _dt.utcnow()
-    _mistral_models = [m for m in cost_tracker["by_model"] if "mistral" in m]
-    _mistral_model_used = _mistral_models[0] if _mistral_models else "mistral-small-latest"
+    _anthropic_models = sorted(m for m in cost_tracker["by_model"] if "claude" in m)
+    _mistral_models = sorted(m for m in cost_tracker["by_model"] if "mistral" in m)
+    _model_sonnet = _anthropic_models[0] if _anthropic_models else "claude-sonnet-4-6"
+    _model_mistral = _mistral_models[0] if _mistral_models else "mistral-small-latest"
     _run_snapshot = {
         "run_type": "adhoc",
         "run_date": _now.strftime("%Y-%m-%d"),
@@ -204,8 +206,17 @@ def main() -> None:
         "input_tokens": cost_tracker["input_tokens"],
         "output_tokens": cost_tracker["output_tokens"],
         "cache_read_tokens": cache_read_total,
-        "model_sonnet": "claude-sonnet-4-6",
-        "model_mistral": _mistral_model_used,
+        "model_sonnet": _model_sonnet,
+        "model_mistral": _model_mistral,
+        "cost_by_model": {
+            model: {
+                "calls": m["calls"],
+                "input_tokens": m["input"],
+                "output_tokens": m["output"],
+                "usd": round(m["usd"], 5),
+            }
+            for model, m in sorted(cost_tracker["by_model"].items())
+        },
         "n_sections": 1,
         "duration_seconds": round((_dt.now() - _run_start).total_seconds(), 1),
         "context_sources": {

@@ -13,6 +13,7 @@ from json_repair import repair_json
 
 from charts import _build_adhoc_chart
 from cost import _Usage, _track_cost
+from db import ALLOWED_MART_TABLES, _WRITE_RE
 from llm import NBS_STYLE_GUIDE
 from questionnaire import (
     build_response_label_context,
@@ -250,7 +251,9 @@ def _is_continuous(df: pd.DataFrame) -> bool:
 def _fetch_adhoc_chart_data(df: pd.DataFrame, theme: dict, wave_number: int, schema: str, con) -> pd.DataFrame:
     """Fetch chart-ready data using a fixed SQL template based on question type."""
     template = _ADHOC_CHART_SQL_CONTINUOUS if _is_continuous(df) else _ADHOC_CHART_SQL_CATEGORICAL
-    sql = template.format(schema=schema, wave_number=wave_number, module_id=theme["module_id"])
+    # Sanitize module_id: allow only word characters to prevent SQL injection
+    safe_module_id = re.sub(r"[^\w]", "", theme["module_id"])
+    sql = template.format(schema=schema, wave_number=wave_number, module_id=safe_module_id)
     return con.execute(sql).df()
 
 
@@ -684,7 +687,8 @@ def build_adhoc_spotlight(
     question_contexts: list[dict] = []
     for qid in all_question_ids:
         try:
-            sql = sql_template.format(wave_number=wave_number, module_id=qid, schema=schema)
+            safe_qid = re.sub(r"[^\w]", "", qid)
+            sql = sql_template.format(wave_number=wave_number, module_id=safe_qid, schema=schema)
             df = con.execute(sql).df()
         except Exception as e:
             print(f"  Phase 0 SQL failed for {qid}: {e}")
@@ -866,6 +870,21 @@ def build_adhoc_spotlight(
 
     # Optional dig-deeper: one follow-up SQL query if Sonnet requested it
     dig_deeper = result.get("dig_deeper")
+    if dig_deeper and isinstance(dig_deeper, dict) and dig_deeper.get("sql"):
+        try:
+            dd_sql = dig_deeper["sql"].replace("{schema}", schema).replace("{wave_number}", str(wave_number))
+            # Security: apply same write-keyword and table-whitelist checks as _run_query_tool()
+            if _WRITE_RE.search(dd_sql):
+                print("  [SECURITY] dig_deeper SQL contains write keywords — skipped")
+                dig_deeper = None
+            else:
+                tables_used = set(re.findall(r'FROM\s+(?:\w+\.)?(\w+)', dd_sql, re.IGNORECASE))
+                disallowed = tables_used - ALLOWED_MART_TABLES - {""}
+                if disallowed:
+                    print(f"  [SECURITY] dig_deeper SQL references non-whitelisted tables {disallowed} — skipped")
+                    dig_deeper = None
+        except Exception:
+            dig_deeper = None
     if dig_deeper and isinstance(dig_deeper, dict) and dig_deeper.get("sql"):
         try:
             dd_sql = dig_deeper["sql"].replace("{schema}", schema).replace("{wave_number}", str(wave_number))

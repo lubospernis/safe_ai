@@ -11,6 +11,20 @@ Claude: tick items off as they get built; don't add speculative sub-tasks.
 
 ---
 
+## Analytical Quality
+
+### Grounding & Hallucination Prevention
+- [x] A1: Programmatic numeric grounding check — extract numbers from bullets, verify against source DataFrame; log warnings to run_log.json (monitoring pass; not yet blocking)
+- [x] A2: Exec summary number provenance check — verify exec bullet numbers appear verbatim in the section bullets they cite
+- [x] A3: Wave memory number validation — block write to `ref_safe__wave_memory` if any cited number is absent from rendered bullets
+- [x] A4: ECB sharpener scope guard — skip sharpener if ECB text has <2 Slovakia mentions (EA-level page)
+- [x] A5: Adhoc dig-deeper SQL table whitelist + sanitized `module_id`/`qid` (SQL injection prevention)
+- [x] A6: Raise main `quality_check.py` threshold from 6 → 7
+- [x] A7: Persist adhoc quality scores (`adhoc_grounding`, `adhoc_coverage`, `adhoc_readability`, `adhoc_chart_alignment`, `adhoc_verdict`) to `ref_safe__run_log` in MotherDuck
+- [ ] A8: Promote grounding check from monitoring to blocking — after 2 waves of calibration, if false-positive rate < 5%, add `if grounding_warns: raise` to block deploys
+
+---
+
 ## Next
 
 - [ ] SK newsletter — adapt `send_newsletter.py` to send the Slovak HTML variant (now: prerequisites met — newsletter workflow gate in place)
@@ -21,7 +35,6 @@ Claude: tick items off as they get built; don't add speculative sub-tasks.
 - [ ] Wave comparison toggle — show current wave vs previous wave side-by-side in charts
 - [ ] EA breakdown by country — allow drilling into EA aggregate to see member-state spread
 - [ ] Surface open structural gaps from `ref_safe__gap_log` on a status page or in the gap report HTML
-- [ ] Add more data validation
 - [ ] Make sure that ref periods are really 3m
 
 ---

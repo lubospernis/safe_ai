@@ -4,6 +4,76 @@ Feature ideas and implementation status are tracked in `.claude/ROADMAP.md`.
 
 ---
 
+## Project Self-Assessment
+
+When asked to "assess the project" or "evaluate the project", score it on these five dimensions. Produce a written assessment with a 1–10 score per dimension, a one-sentence verdict, and the top 2 action items per dimension. Finish with an overall weighted score and a single comparison sentence.
+
+### Dimension 1 — Analytical Quality (weight ×2)
+- Are numbers in generated bullets verified against source data? (programmatic grounding check exists and is monitored?)
+- Is sign language (recovery/improvement/deterioration) consistently correct via code-enforced sign notes?
+- Are magnitude words calibrated to pp thresholds?
+- Is the quality gate threshold ≥ 7? Is it code-enforced or LLM-only?
+- Is exec summary provenance checked?
+- Does the ECB sharpener have scope guards?
+- Is wave memory validated before write?
+
+Benchmark: Bloomberg/Reuters auto-generated summaries have rule-based numeric verification on every field. Palantir AIP has human-in-the-loop review at sub-8 scores. Score 8+ only if grounding checks are code-enforced (not prompt-only) and threshold ≥ 7.
+
+### Dimension 2 — Pipeline Quality Engineering (weight ×1.5)
+- Is the pipeline idempotent (safe to re-run)?
+- Are all external API calls retried with exponential backoff?
+- Are secrets managed via environment variables (not hardcoded)?
+- Is there a CI/CD chain with blocking quality gates?
+- Are dbt models tested (schema tests, source freshness)?
+- Is `run_log.json` also persisted to MotherDuck as `ref_safe__run_log`?
+- Are costs tracked per model per run?
+
+Benchmark: Production data pipelines at tier-1 institutions have retry logic on every external call, immutable artifact storage, and full lineage tracking. Deduct 1 point if retry logic is absent on API calls.
+
+### Dimension 3 — Weak Links (weight ×1)
+Identify the top 3 single points of failure and their blast radius:
+- What breaks if MotherDuck is unavailable? (no fallback to dev.duckdb in prod)
+- What breaks if Mistral API is down? (quality gate, sharpener, interest checks all fail)
+- What breaks if ECB changes their website structure? (URL parsing in gap_agent.py)
+- Is there a wave detection failure mode? (detect_adhoc_theme fails silently on mart absence)
+- Is there cost runaway protection? (no max-cost abort in the pipeline)
+Score based on number of addressed vs unaddressed SPOFs.
+
+### Dimension 4 — AI Use vs Cutting-Edge Deployments (weight ×1)
+Compare against: Bloomberg Intelligence AI summaries, ECB/Fed research automation, Palantir AIP, JP Morgan Document Intelligence, BlackRock Aladdin Insights.
+
+Check each — present (+1) or absent (0):
+- Agentic tool use with SQL query generation
+- Multimodal (chart + text) analysis
+- Multi-model routing (cheap model for interest checks, expensive for synthesis)
+- Structured output enforcement (tool_choice forcing)
+- Prompt caching
+- Human-in-the-loop gates (newsletter-gate environment)
+- Feedback loop (wave memory, gap agent)
+- Eval harness with golden set
+- Vector search / RAG over historical reports
+- Fine-tuned / domain-adapted model
+
+Score 7+ = matches typical institutional deployment. 8+ = frontier. Deduct for absent programmatic grounding and absent RAG.
+
+### Dimension 5 — Report Usefulness to End User (weight ×1)
+- Does the report answer "what does this mean for Slovakia?"
+- Is the exec summary cross-cutting (not just section-by-section)?
+- Are charts interpretable without reading bullets?
+- Is the Slovak translation faithful?
+- Is there a mobile-responsive version?
+- Can a reader drill down (annex, raw data link)?
+- Has the report been shown to actual users (NBS analysts)?
+Score based on ROADMAP.md "User interviews" item status and structure review.
+
+### Assessment Output Format
+1. Score table: dimension → score/10 → one-sentence verdict
+2. Overall score: weighted average (Analytical Quality ×2, Pipeline Engineering ×1.5, others ×1)
+3. Top 5 action items ranked by impact/effort ratio
+4. Comparison sentence: "This project is at approximately the level of [X] in terms of AI sophistication and production readiness."
+
+---
+
 ## New Adhoc Wave Checklist
 
 When a new wave arrives with previously unseen adhoc modules (e.g., a module not in `_MODULE_THEME_FALLBACK`):

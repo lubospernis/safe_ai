@@ -23,7 +23,7 @@ from mistralai import Mistral
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 _DEFAULT_REPORT_HTML = Path(__file__).parent / "output" / "report_latest.html"
-PASS_THRESHOLD = 6        # main report: any dimension below this = fail
+PASS_THRESHOLD = 7        # main report: any dimension below this = fail
 ADHOC_PASS_THRESHOLD = 8  # adhoc spotlight: stricter gate (Mistral Large reviewer)
 
 SUPERVISOR_SYSTEM = """

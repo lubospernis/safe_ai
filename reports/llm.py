@@ -48,6 +48,71 @@ _LEAKED_PATTERNS = re.compile(
 )
 
 
+_NUMBER_RE = re.compile(r'(?<!\d)(\d+(?:\.\d+)?)(?!\d)')
+
+
+def _check_numeric_grounding(bullets: list[str], df: pd.DataFrame, value_cols: list[str]) -> list[str]:
+    """Return list of numbers in bullets that don't appear in any value column of df.
+
+    Monitoring-only: callers log warnings but do not block on these errors.
+    Numbers ≤ single digit or > 200 are skipped (wave numbers, counts, not cited values).
+    """
+    data_numbers: set[str] = set()
+    for col in value_cols:
+        if col in df.columns:
+            for v in df[col].dropna():
+                try:
+                    fv = float(v)
+                    data_numbers.add(f"{fv:.1f}")
+                    data_numbers.add(str(int(round(fv))))
+                except (ValueError, TypeError):
+                    pass
+    errors = []
+    for bullet in bullets:
+        for m in _NUMBER_RE.finditer(bullet):
+            num_str = m.group(1)
+            try:
+                iv = int(num_str.split(".")[0])
+            except ValueError:
+                continue
+            if iv <= 9 or iv > 200:
+                continue
+            try:
+                rounded = f"{float(num_str):.1f}"
+                int_form = str(int(round(float(num_str))))
+            except ValueError:
+                continue
+            if num_str not in data_numbers and rounded not in data_numbers and int_form not in data_numbers:
+                errors.append(f"'{num_str}' not found in source data")
+    return errors
+
+
+def _check_exec_provenance(exec_bullets: list[dict], rendered: list[dict]) -> list[str]:
+    """Return list of numbers in exec bullets that don't appear verbatim in the section bullets they cite."""
+    section_bullet_text: dict[str, str] = {
+        s["section_id"]: " ".join(s.get("bullets", []))
+        for s in rendered
+    }
+    errors = []
+    for item in exec_bullets:
+        sid = item.get("section_id", "")
+        bullet = item.get("bullet", "")
+        source_text = section_bullet_text.get(sid, "")
+        if not source_text:
+            continue
+        for m in _NUMBER_RE.finditer(bullet):
+            num = m.group(1)
+            try:
+                iv = int(num.split(".")[0])
+            except ValueError:
+                continue
+            if iv <= 9 or iv > 200:
+                continue
+            if num not in source_text:
+                errors.append(f"[{sid}] '{num}' in exec bullet not found in section bullets")
+    return errors
+
+
 def _is_reasoning_leak(bullet: str) -> bool:
     if _LEAKED_PATTERNS.match(bullet):
         return True
@@ -666,8 +731,16 @@ def get_section_content_agentic(
                 bullets = [str(raw_bullets).strip().lstrip("•- ")]
             bullets = [b for b in bullets if not _is_reasoning_leak(b)][:3]
             chart_subtitle = str(inp.get("chart_subtitle", "")).strip()
+            value_cols = [sec.get("value_col", "net_balance_wtd"),
+                          "pct_cited_wtd", "avg_pressingness_wtd"]
+            grounding_warns = _check_numeric_grounding(bullets, df, value_cols)
+            if grounding_warns:
+                sid_label = sec.get("id", "?")
+                for w in grounding_warns:
+                    print(f"  [GROUNDING WARN] [{sid_label}] {w}")
             return {"finding": finding, "bullets": bullets, "chart_subtitle": chart_subtitle,
-                    "tool_calls": tool_calls_made}
+                    "tool_calls": tool_calls_made,
+                    "grounding_warnings": grounding_warns if grounding_warns else []}
 
     # Last-resort fallback: extract text from emit response and parse
     text_blocks = [b.text for b in emit_resp.content if hasattr(b, "text")]
@@ -760,6 +833,12 @@ def get_exec_summary(
             result = result[:3]  # drop weakest (last) to stay at 4
         result.append({"bullet": fallback_bullet, "section_id": "adhoc_spotlight"})
 
+    # Exec provenance check — log warnings if exec bullets cite numbers not in section bullets
+    prov_errors = _check_exec_provenance(result, rendered_sections)
+    if prov_errors:
+        for err in prov_errors:
+            print(f"  [EXEC PROVENANCE WARN] {err}")
+
     return result
 
 
@@ -826,6 +905,16 @@ def _write_wave_memory(
         if resp.usage:
             _track_cost(cost_tracker, model,
                         _Usage(resp.usage.prompt_tokens, resp.usage.completion_tokens))
+        # Validate: numbers in the summary should appear in the rendered bullet text
+        all_bullets_text = " ".join(
+            b for r in rendered for b in r.get("bullets", [])
+        )
+        summary_numbers = [m.group(1) for m in _NUMBER_RE.finditer(summary)
+                           if len(m.group(1)) > 1 and int(m.group(1).split(".")[0]) <= 200]
+        bad_nums = [n for n in summary_numbers if n not in all_bullets_text]
+        if bad_nums:
+            print(f"  [MEMORY WARN] Wave memory cites numbers not in bullets: {bad_nums} — skipping write")
+            return
         con.execute("""
             CREATE TABLE IF NOT EXISTS main_safe.ref_safe__wave_memory (
                 wave_number INTEGER PRIMARY KEY,
@@ -979,6 +1068,10 @@ def _sharpen_with_ecb(
 ) -> list[dict]:
     """Post-generation pass: sharpen bullets against ECB publication."""
     if not ecb_text or not rendered:
+        return rendered
+    sk_mentions = len(re.findall(r'\bSlovak(?:ia)?\b', ecb_text, re.IGNORECASE))
+    if sk_mentions < 2:
+        print(f"  ECB sharpener: only {sk_mentions} Slovakia mention(s) in ECB text — skipping to avoid EA/SK mismatch")
         return rendered
     sections_text = "\n\n".join(
         f"### {r['section_id']}\nFinding: {r['finding']}\n"

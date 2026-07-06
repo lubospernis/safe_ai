@@ -292,7 +292,12 @@ def main() -> None:
         "run_date": _now.strftime("%Y-%m-%d"),
         "run_time": _now.strftime("%H:%M:%S"),
         "sections_summary": [
-            {"section_id": s["section_id"], "finding": s.get("finding", ""), "bullets": s.get("bullets", [])}
+            {
+                "section_id": s["section_id"],
+                "finding": s.get("finding", ""),
+                "bullets": s.get("bullets", []),
+                "grounding_warnings": s.get("grounding_warnings", []),
+            }
             for s in rendered
         ],
         "wave_number": latest_wave,
@@ -303,6 +308,7 @@ def main() -> None:
         "model_sonnet": "claude-sonnet-4-6",
         "model_mistral": _mistral_model_used,
         "n_sections": len(rendered),
+        "grounding_warning_count": sum(len(s.get("grounding_warnings", [])) for s in rendered),
         "duration_seconds": round((_dt.now() - _run_start).total_seconds(), 1),
         "context_sources": {
             "annex_loaded": _annex_loaded_ok,

@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from llm import _parse_section_response, _sme_divergence_note, _fmt_data_for_prompt
+from llm import _parse_section_response, _sme_divergence_note, _fmt_data_for_prompt, _check_numeric_grounding
 
 
 # ── _parse_section_response ──────────────────────────────────────────────────
@@ -97,3 +97,39 @@ def test_fmt_data_for_prompt_delta_present(section_stub, net_balance_df):
     # Should include Δ= lines showing wave-over-wave change
     text = _fmt_data_for_prompt(section_stub, net_balance_df)
     assert "Δ=" in text
+
+
+# ── _check_numeric_grounding ─────────────────────────────────────────────────
+
+def test_grounding_check_passes_real_number():
+    df = pd.DataFrame([{"net_balance_wtd": 12.3, "wave_number": 38}])
+    warnings = _check_numeric_grounding(["Net balance improved to 12.3pp"], df, ["net_balance_wtd"])
+    assert warnings == []
+
+
+def test_grounding_check_flags_invented_number():
+    df = pd.DataFrame([{"net_balance_wtd": 12.3, "wave_number": 38}])
+    warnings = _check_numeric_grounding(["Net balance improved to 99.7pp"], df, ["net_balance_wtd"])
+    assert len(warnings) == 1
+    assert "99.7" in warnings[0]
+
+
+def test_grounding_check_skips_small_numbers():
+    df = pd.DataFrame([{"net_balance_wtd": 5.0, "wave_number": 38}])
+    # Single-digit numbers (≤9) should be skipped — wave references, counts, etc.
+    warnings = _check_numeric_grounding(["In wave 5 of the survey"], df, ["net_balance_wtd"])
+    assert warnings == []
+
+
+def test_grounding_check_skips_large_numbers():
+    df = pd.DataFrame([{"net_balance_wtd": 5.0, "wave_number": 38}])
+    # Numbers > 200 should be skipped — year references etc.
+    warnings = _check_numeric_grounding(["In 2024 the net balance was 5.0pp"], df, ["net_balance_wtd"])
+    assert warnings == []
+
+
+def test_grounding_check_accepts_rounded_integer():
+    df = pd.DataFrame([{"net_balance_wtd": 15.0, "wave_number": 38}])
+    # "15" should match 15.0 in the data
+    warnings = _check_numeric_grounding(["Net balance was 15pp"], df, ["net_balance_wtd"])
+    assert warnings == []

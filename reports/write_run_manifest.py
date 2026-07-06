@@ -33,6 +33,7 @@ def main() -> None:
         else {"readability": None, "substance": None, "coherence": None,
               "sign_convention": None, "verdict": "unknown", "reason": "quality_scores.json missing"}
     )
+    adhoc_q = quality.get("adhoc", {})
 
     wave = cost["wave_number"]
     sha = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"]).decode().strip()
@@ -60,12 +61,17 @@ def main() -> None:
             quality_verdict   TEXT,
             quality_reason    TEXT,
             n_sections        INTEGER,
-            duration_seconds  FLOAT
+            duration_seconds  FLOAT,
+            adhoc_grounding         FLOAT,
+            adhoc_coverage          FLOAT,
+            adhoc_readability       FLOAT,
+            adhoc_chart_alignment   FLOAT,
+            adhoc_verdict           TEXT
         )
     """)
 
     con.execute("""
-        INSERT OR REPLACE INTO main_safe.ref_safe__run_log VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        INSERT OR REPLACE INTO main_safe.ref_safe__run_log VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     """, [
         run_id,
         wave,
@@ -85,6 +91,11 @@ def main() -> None:
         quality.get("reason", ""),
         cost["n_sections"],
         cost["duration_seconds"],
+        adhoc_q.get("grounding"),
+        adhoc_q.get("coverage"),
+        adhoc_q.get("readability"),
+        adhoc_q.get("chart_alignment"),
+        adhoc_q.get("verdict"),
     ])
 
     print(

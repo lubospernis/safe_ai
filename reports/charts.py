@@ -77,7 +77,40 @@ def _select_panels(sec: dict, df: pd.DataFrame, best_panel) -> list:
     return pinned[: sec["max_panels"]]
 
 
-def build_chart(sec: dict, df: pd.DataFrame, chart_type: str, best_panel, chart_subtitle: str = "") -> bytes:
+_TITLE_FONTSIZE = 12.5
+_QUESTION_FONTSIZE = 8.5
+
+
+def _wrap_line_count(text: str, fontsize_pt: float, fig_w_in: float) -> int:
+    """Rough estimate of how many lines matplotlib's `wrap=True` will produce for a
+    centered string, so the figure can reserve enough vertical space up front."""
+    if not text:
+        return 0
+    avg_char_in = fontsize_pt / 72.0 * 0.55
+    usable_in = fig_w_in * 0.90
+    chars_per_line = max(10, int(usable_in / avg_char_in))
+    return max(1, -(-len(text) // chars_per_line))
+
+
+def _title_block_layout(fig_w: float, fig_h: float, base_top: float,
+                         chart_title: str, chart_question: str) -> tuple:
+    """Return (top_margin, title_y, question_y) so a big chart_title + italic
+    'Q: ...' chart_question caption fit above the axes without overlapping each
+    other or the top row of panel titles — accounting for word-wrap on narrow
+    (single-panel) figures, where a long title commonly spans 2 lines."""
+    title_line_h = _TITLE_FONTSIZE / 72.0 * 1.3
+    question_line_h = _QUESTION_FONTSIZE / 72.0 * 1.3
+    title_in = _wrap_line_count(chart_title, _TITLE_FONTSIZE, fig_w) * title_line_h
+    question_in = _wrap_line_count(chart_question, _QUESTION_FONTSIZE, fig_w) * question_line_h
+    top_reserved_in = title_in + question_in + (0.05 if (chart_title or chart_question) else 0.0)
+    top_margin = max(0.55, base_top - top_reserved_in / fig_h) if top_reserved_in else base_top
+    title_y = 0.995
+    question_y = 0.995 - title_in / fig_h - (0.015 if chart_title else 0.0)
+    return top_margin, title_y, question_y
+
+
+def build_chart(sec: dict, df: pd.DataFrame, chart_type: str, best_panel, chart_subtitle: str = "",
+                 chart_title: str = "", chart_question: str = "") -> bytes:
     panels = _select_panels(sec, df, best_panel)
     n_panels = len(panels)
     panel_col = sec["panel_col"]
@@ -101,7 +134,8 @@ def build_chart(sec: dict, df: pd.DataFrame, chart_type: str, best_panel, chart_
         axes_flat = list(np.array(axes).flatten())
 
     bottom_margin = 0.30 if chart_subtitle else 0.22
-    fig.subplots_adjust(top=0.86, hspace=0.70, wspace=0.30, bottom=bottom_margin)
+    top_margin, title_y, question_y = _title_block_layout(fig_w, fig_h, 0.86, chart_title, chart_question)
+    fig.subplots_adjust(top=top_margin, hspace=0.70, wspace=0.30, bottom=bottom_margin)
     fig.patch.set_facecolor("#f4f4f4")
 
     waves = sorted(df["wave_number"].unique())
@@ -177,6 +211,13 @@ def build_chart(sec: dict, df: pd.DataFrame, chart_type: str, best_panel, chart_
         handleheight=0.8,
     )
 
+    if chart_title:
+        fig.suptitle(chart_title, fontsize=_TITLE_FONTSIZE, fontweight="bold", color=NBS_TEXT,
+                     y=title_y, wrap=True)
+    if chart_question:
+        fig.text(0.5, question_y, f"Q: {chart_question}", ha="center", va="top",
+                 fontsize=_QUESTION_FONTSIZE, style="italic", color="#5a5a5a", wrap=True)
+
     if chart_subtitle:
         fig.text(0.5, 0.005, chart_subtitle, ha="center", va="bottom",
                  fontsize=7.5, color=NBS_TEXT, style="italic", wrap=True)
@@ -188,7 +229,7 @@ def build_chart(sec: dict, df: pd.DataFrame, chart_type: str, best_panel, chart_
     return buf.read()
 
 
-def _financing_gap_bars(df: pd.DataFrame) -> bytes:
+def _financing_gap_bars(df: pd.DataFrame, chart_title: str = "", chart_question: str = "") -> bytes:
     """Grouped bars (need/availability) + gap line for bank loans (sub_item='a')."""
     import matplotlib.colors as mcolors
 
@@ -202,9 +243,11 @@ def _financing_gap_bars(df: pd.DataFrame) -> bytes:
         .set_index("wave_number")["survey_period_label"]
     )
 
-    fig, ax = plt.subplots(1, 1, figsize=(7.5, 3.8))
+    fig_w, fig_h = 7.5, 3.8
+    fig, ax = plt.subplots(1, 1, figsize=(fig_w, fig_h))
     fig.patch.set_facecolor("#f4f4f4")
-    fig.subplots_adjust(top=0.82, bottom=0.26, left=0.09, right=0.97)
+    top_margin, title_y, question_y = _title_block_layout(fig_w, fig_h, 0.82, chart_title, chart_question)
+    fig.subplots_adjust(top=top_margin, bottom=0.26, left=0.09, right=0.97)
 
     n_countries = len(COUNTRY_ORDER)
     group_gap = 1.0
@@ -257,6 +300,13 @@ def _financing_gap_bars(df: pd.DataFrame) -> bytes:
     fig.legend(bar_handles + line_handles, bar_labels_leg + line_labels_leg,
                loc="lower center", bbox_to_anchor=(0.5, 0.0), ncol=3, fontsize=7.5, frameon=False)
 
+    if chart_title:
+        fig.suptitle(chart_title, fontsize=_TITLE_FONTSIZE, fontweight="bold", color=NBS_TEXT,
+                     y=title_y, wrap=True)
+    if chart_question:
+        fig.text(0.5, question_y, f"Q: {chart_question}", ha="center", va="top",
+                 fontsize=_QUESTION_FONTSIZE, style="italic", color="#5a5a5a", wrap=True)
+
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="#f4f4f4")
     plt.close(fig)
@@ -307,12 +357,13 @@ def _financing_gap_sk_instruments(df_sk: pd.DataFrame) -> bytes:
     return buf.read()
 
 
-def build_financing_gap_chart(sec: dict, df: pd.DataFrame) -> bytes:
+def build_financing_gap_chart(sec: dict, df: pd.DataFrame, chart_title: str = "",
+                               chart_question: str = "") -> bytes:
     """Returns a single PNG stacking the need/availability chart and SK instrument chart."""
     df_main = df[df["chart_type"] == "main"]
     df_sk = df[df["chart_type"] == "sk_all"]
 
-    png1 = _financing_gap_bars(df_main)
+    png1 = _financing_gap_bars(df_main, chart_title=chart_title, chart_question=chart_question)
     png2 = _financing_gap_sk_instruments(df_sk)
 
     from PIL import Image

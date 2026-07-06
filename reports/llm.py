@@ -1,11 +1,12 @@
 """LLM generation: section bullets, exec summary, so-what pass, wave memory, ECB sharpener."""
 
+import hashlib
 import json
 import os
 import re
 import textwrap
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import date
+from datetime import date, datetime
 
 import anthropic
 import pandas as pd
@@ -873,6 +874,137 @@ def _add_so_what(content: dict, sec: dict, mistral_client, cost_tracker: dict) -
     except Exception:
         pass
     return content
+
+
+SHORTEN_QUESTION_SYSTEM = textwrap.dedent("""
+    You paraphrase official ECB survey question wording into a short, natural
+    question a curious reader would ask when looking at a chart.
+
+    Rules:
+    - Produce ONE short question, at most 12 words, phrased in second person
+      ("you"/"your firm").
+    - End with a question mark. Do not include question codes (e.g. "Q10",
+      "Q0B") or mention "ECB"/"SAFE".
+    - Simplify the wording — do not copy the official phrasing verbatim.
+    - If multiple question texts are given, separated by " | ", they describe
+      the same theme from different angles — synthesise ONE question that
+      captures the shared theme, do not concatenate them.
+
+    Respond with JSON only, no markdown fences: {"short_question": "..."}
+""").strip()
+
+
+def _shorten_question_llm(source_text: str, mistral_client) -> dict:
+    """Paraphrase annex question text into a short caption via Mistral Small.
+
+    Returns {"short_question": str, "_usage": {...}} — short_question is ""
+    on any failure (malformed response, API error).
+    """
+    result = {"short_question": ""}
+    try:
+        resp = mistral_client.chat.complete(
+            model="mistral-small-latest",
+            max_tokens=60,
+            messages=[
+                {"role": "system", "content": SHORTEN_QUESTION_SYSTEM},
+                {"role": "user", "content": source_text[:2000]},
+            ],
+        )
+        raw = resp.choices[0].message.content.strip()
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw).strip()
+        parsed = json.loads(repair_json(raw))
+        result["short_question"] = str(parsed.get("short_question", "")).strip()
+        if resp.usage:
+            result["_usage"] = {"input": resp.usage.prompt_tokens, "output": resp.usage.completion_tokens}
+    except Exception:
+        pass
+    return result
+
+
+def get_shortened_questions(
+    sections: list[dict],
+    question_texts: dict[str, str],
+    con,
+    schema: str,
+    mistral_client,
+    cost_tracker: dict,
+    force_refresh: bool = False,
+) -> dict[str, str]:
+    """Return {section_id: short_question_caption} for chart "Q: ..." captions.
+
+    Cached in {schema}.ref_safe__chart_question_captions (PK section_id), keyed
+    on a hash of the section's annex question text(s) so a wording change
+    auto-invalidates the cache. Sections with no annex text available are
+    omitted from the result (graceful — chart just gets no "Q: ..." caption).
+    """
+    con.execute(f"""
+        CREATE TABLE IF NOT EXISTS {schema}.ref_safe__chart_question_captions (
+            section_id    VARCHAR NOT NULL,
+            question_ids  VARCHAR NOT NULL,
+            source_hash   VARCHAR NOT NULL,
+            short_caption VARCHAR NOT NULL,
+            model_id      VARCHAR NOT NULL,
+            generated_at  TIMESTAMP NOT NULL,
+            PRIMARY KEY (section_id)
+        )
+    """)
+    cached: dict[str, tuple[str, str]] = {}
+    try:
+        rows = con.execute(
+            f"SELECT section_id, source_hash, short_caption "
+            f"FROM {schema}.ref_safe__chart_question_captions"
+        ).fetchall()
+        cached = {r[0]: (r[1], r[2]) for r in rows}
+    except Exception:
+        pass
+
+    results: dict[str, str] = {}
+    to_generate: list[tuple[str, str, str, str]] = []
+    for sec in sections:
+        q_ids = sec.get("question_ids", [])
+        source_text = " | ".join(
+            question_texts[q.lower()] for q in q_ids if q.lower() in question_texts
+        )
+        if not source_text:
+            continue
+        h = hashlib.sha256(source_text.encode()).hexdigest()[:16]
+        hit = cached.get(sec["id"])
+        if hit and hit[0] == h and not force_refresh:
+            results[sec["id"]] = hit[1]
+        else:
+            to_generate.append((sec["id"], ",".join(q_ids), source_text, h))
+
+    if not to_generate:
+        return results
+
+    new_rows = []
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        futures = {
+            pool.submit(_shorten_question_llm, text, mistral_client): (sid, qids, h)
+            for sid, qids, text, h in to_generate
+        }
+        for future in as_completed(futures):
+            sid, qids, h = futures[future]
+            r = future.result()
+            if "_usage" in r:
+                u = r["_usage"]
+                _track_cost(cost_tracker, "mistral-small-latest", _Usage(u["input"], u["output"]))
+            caption = r.get("short_question", "")
+            if not caption:
+                continue
+            results[sid] = caption
+            new_rows.append((sid, qids, h, caption, "mistral-small-latest", datetime.utcnow()))
+
+    if new_rows:
+        try:
+            con.executemany(
+                f"INSERT OR REPLACE INTO {schema}.ref_safe__chart_question_captions VALUES (?,?,?,?,?,?)",
+                new_rows,
+            )
+        except Exception as e:
+            print(f"  [WARN] Failed to persist chart question captions: {e}")
+    return results
 
 
 def _write_wave_memory(

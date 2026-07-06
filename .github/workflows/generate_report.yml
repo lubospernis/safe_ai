@@ -59,6 +59,14 @@ jobs:
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
         run: python reports/quality_check.py --html reports/output/report_latest.html
 
+      - name: Upload quality scores
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-scores
+          path: reports/output/quality_scores.json
+          retention-days: 30
+
       - name: Run gap analysis
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

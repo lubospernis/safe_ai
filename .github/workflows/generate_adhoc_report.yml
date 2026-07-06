@@ -68,6 +68,14 @@ jobs:
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
         run: python reports/quality_check.py --html reports/output/report_adhoc_latest.html
 
+      - name: Upload quality scores
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-scores-adhoc
+          path: reports/output/quality_scores.json
+          retention-days: 30
+
       - name: Update adhoc run log
         if: steps.run_adhoc.outputs.produced == 'true'
         run: |

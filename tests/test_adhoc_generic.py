@@ -18,6 +18,7 @@ import pytest
 
 from adhoc import (
     _is_continuous,
+    _module_sort_key,
     _resolve_item_labels,
     _select_interesting_sub_items,
     build_adhoc_spotlight,
@@ -261,6 +262,21 @@ def test_resolve_item_labels_no_fallback_for_non_pick_order_sub_items():
     sub-items rather than incorrectly guessing pick-order semantics."""
     labels = _resolve_item_labels("qe1", ["a", "b", "c"], {})
     assert labels == {}
+
+
+def test_module_sort_key_orders_questions_naturally():
+    """Regression guard: adhoc questions must render in natural reading order
+    (QA1, QA2, ..., QB1, QB2, ...) rather than whatever order mart_safe__adhoc_responses
+    happened to return them in (sorted by firm count, not module id) — a prior bug
+    rendered wave 37 as qa1, qb1, qb2, qa3, qa2, qa4 instead of qa1..qa4, qb1, qb2."""
+    ids = ["qa1", "qb1", "qb2", "qa3", "qa2", "qa4"]
+    assert sorted(ids, key=_module_sort_key) == ["qa1", "qa2", "qa3", "qa4", "qb1", "qb2"]
+
+
+def test_module_sort_key_handles_double_digit_suffixes():
+    """Plain string sort would put 'qa10' before 'qa2' — natural sort must not."""
+    ids = ["qa10", "qa2", "qa1"]
+    assert sorted(ids, key=_module_sort_key) == ["qa1", "qa2", "qa10"]
 
 
 def test_select_interesting_sub_items(electrification_df, mock_mistral_theme):

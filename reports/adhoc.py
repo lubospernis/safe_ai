@@ -339,6 +339,19 @@ def _resolve_item_labels(module_id: str, sub_items: list[str], annex_items: dict
     return {}
 
 
+_MODULE_ID_RE = re.compile(r"^([a-z]+?)(\d*)([a-z]*)$")
+
+
+def _module_sort_key(module_id: str) -> tuple[str, int, str]:
+    """Natural sort key for module IDs: 'qa1' < 'qa2' < ... < 'qa10' < 'qb1' < 'qb2',
+    rather than plain string sort (which would put 'qa10' before 'qa2')."""
+    m = _MODULE_ID_RE.match(module_id.lower())
+    if not m:
+        return (module_id.lower(), 0, "")
+    prefix, digits, suffix = m.groups()
+    return (prefix, int(digits) if digits else 0, suffix)
+
+
 def detect_adhoc_theme(wave_number: int, con, schema: str, mistral_client=None, cost_tracker: dict | None = None) -> dict | None:
     """Return {module_id, theme_label, question_texts} for the wave's adhoc modules, or None."""
     try:
@@ -684,7 +697,11 @@ def build_adhoc_spotlight(
     sub_item_labels = theme.get("sub_item_labels", {})
     sibling_modules = theme.get("sibling_modules", [])
     annex_labels = theme.get("annex_labels", {})
-    all_question_ids = [theme["module_id"]] + sibling_modules
+    # Natural question order (QA1, QA2, ..., QB1, QB2, ...) for readability — theme["module_id"]
+    # is chosen by a topic-classification heuristic (e.g. for theme labeling) and is not
+    # necessarily QA1, so render order must not depend on which module Sonnet/heuristics
+    # picked as "primary".
+    all_question_ids = sorted([theme["module_id"]] + sibling_modules, key=_module_sort_key)
     sql_template = (SQL_DIR / "adhoc_spotlight.sql").read_text()
 
     # ── Phase 0: enumerate questions, fetch data ──────────────────────────────

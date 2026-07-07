@@ -174,7 +174,7 @@ def main() -> None:
     # ── Executive summary (adhoc-only) ───────────────────────────────────────
     print("Generating executive summary...")
     exec_bullets = get_exec_summary(
-        [], cost_tracker, adhoc_section=adhoc_section, anthropic_client=anthropic_client
+        rendered, cost_tracker, adhoc_section=adhoc_section, anthropic_client=anthropic_client
     ) if adhoc_section else []
     for item in exec_bullets:
         print(f"  [{item.get('section_id', '?')}] {item.get('bullet', '')}")

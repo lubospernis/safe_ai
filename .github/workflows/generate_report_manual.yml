@@ -16,6 +16,11 @@ on:
         required: false
         type: boolean
         default: false
+      spotlight_only:
+        description: "Skip the main report entirely — only generate the adhoc spotlight report"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   report:
@@ -45,6 +50,7 @@ jobs:
             | gunzip > "$EXT_DIR/motherduck.duckdb_extension"
 
       - name: Run report
+        if: inputs.spotlight_only != 'true'
         env:
           MOTHERDUCK_TOKEN:  ${{ secrets.MOTHERDUCK_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -57,7 +63,7 @@ jobs:
           fi
 
       - name: Run adhoc report
-        if: inputs.adhoc == 'true'
+        if: inputs.adhoc == 'true' || inputs.spotlight_only == 'true'
         env:
           MOTHERDUCK_TOKEN:  ${{ secrets.MOTHERDUCK_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -87,6 +93,26 @@ jobs:
         run: |
           if [ -f reports/output/report_latest_sk.html ]; then
             python reports/quality_check.py --html reports/output/report_latest_sk.html
+          fi
+
+      - name: Quality check (adhoc spotlight, EN)
+        if: always()
+        continue-on-error: true
+        env:
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+        run: |
+          if [ -f reports/output/report_adhoc_latest.html ]; then
+            python reports/quality_check.py --html reports/output/report_adhoc_latest.html
+          fi
+
+      - name: Quality check (adhoc spotlight, SK)
+        if: always()
+        continue-on-error: true
+        env:
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+        run: |
+          if [ -f reports/output/report_adhoc_latest_sk.html ]; then
+            python reports/quality_check.py --html reports/output/report_adhoc_latest_sk.html
           fi
 
       - name: Upload report output (not published — download from this run's artifacts)

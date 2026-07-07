@@ -21,22 +21,22 @@ Claude: tick items off as they get built; don't add speculative sub-tasks.
 - [x] A5: Adhoc dig-deeper SQL table whitelist + sanitized `module_id`/`qid` (SQL injection prevention)
 - [x] A6: Raise main `quality_check.py` threshold from 6 → 7
 - [x] A7: Persist adhoc quality scores (`adhoc_grounding`, `adhoc_coverage`, `adhoc_readability`, `adhoc_chart_alignment`, `adhoc_verdict`) to `ref_safe__run_log` in MotherDuck
-- [ ] A8: Promote grounding check from monitoring to blocking — after 2 waves of calibration, if false-positive rate < 5%, add `if grounding_warns: raise` to block deploys
+- [ ] A8: Promote grounding check from monitoring to blocking — **checked 2026-07-07 against 136 logged warnings in run_log.json: false-positive rate was ~100% in every category sampled** (wave-number refs, `n=` sample-size citations, pressingness `/10` scale denominators, and split-sentence pp-deltas all misflagged). Fixed the three confirmable bugs (`_check_numeric_grounding` now excludes `n=` citations, wave references, and `/10` denominators, and checks `n_respondents` against real sample sizes). Still monitoring-only — do not flip to blocking without a fresh calibration run post-fix, since the pp-delta/rounding category needs live-DB verification that wasn't done.
 
 ---
 
 ## Next
 
-- [ ] SK newsletter — adapt `send_newsletter.py` to send the Slovak HTML variant (now: prerequisites met — newsletter workflow gate in place)
-- [ ] Report-level feedback link — single "was this useful?" mailto/form at the foot of the report
-- [ ] Per-bullet exec-summary feedback — thumbs up/down icon on each exec bullet linking to a `mailto:` (or lightweight logging webhook writing `ref_safe__exec_feedback`: bullet text, section_id, wave, verdict); use to calibrate the tier/channel gate over time
-- [ ] Mobile viewing — report CSS is desktop-only; add responsive breakpoints
-- [ ] Auto subscription through Vercel + Supabase
-- [ ] Country selector — let the user pick a focal country in config (currently hard-coded to SK)
-- [ ] Wave comparison toggle — show current wave vs previous wave side-by-side in charts
-- [ ] EA breakdown by country — allow drilling into EA aggregate to see member-state spread
-- [ ] Surface open structural gaps from `ref_safe__gap_log` on a status page or in the gap report HTML
-- [ ] Make sure that ref periods are really 3m
+(Roughly in priority order — see reasoning in each item.)
+
+- [ ] Mobile viewing — report CSS is desktop-only; add responsive breakpoints. Highest-impact item for actual readers, since the newsletter (the primary distribution channel) is mostly opened on phones.
+- [ ] Report-level feedback link — single "was this useful?" mailto/form at the foot of the report. Cheap to build, gives real signal to prioritize everything below instead of guessing.
+- [ ] Surface open structural gaps from `ref_safe__gap_log` on a status page or in the gap report HTML — already accumulating every run; not showing it anywhere is a wasted signal.
+- [ ] Make sure that ref periods are really 3m — reads as an unresolved data-integrity doubt, not a feature; cheap to audit, could be a correctness bug if wrong.
+- [ ] Per-bullet exec-summary feedback — thumbs up/down icon on each exec bullet linking to a `mailto:` (or lightweight logging webhook writing `ref_safe__exec_feedback`: bullet text, section_id, wave, verdict); use to calibrate the tier/channel gate over time. Speculative without user feedback first (see "User interviews" in Now) — hold until that's done.
+- [ ] Country selector — let the user pick a focal country in config (currently hard-coded to SK). Speculative without user feedback.
+- [ ] Wave comparison toggle — show current wave vs previous wave side-by-side in charts. Speculative without user feedback.
+- [ ] EA breakdown by country — allow drilling into EA aggregate to see member-state spread. Speculative without user feedback.
 
 ---
 
@@ -93,7 +93,7 @@ Claude: tick items off as they get built; don't add speculative sub-tasks.
 - [x] Unit test framework — pytest + pytest-mock; 39 tests across `test_cost.py`, `test_charts.py`, `test_llm.py`, `test_html.py`; all passing; `_md_to_html()` extracted to `html_builder.py` fixing `**bold**` rendering in section bullets and adhoc sub-section bullets
 - [x] Adhoc model upgrade — `build_ai_adoption_spotlight()` and `build_adhoc_spotlight()` upgraded from Mistral Small (220 tok) to Sonnet 4.6 (500 tok) via `anthropic_client`; Mistral is kept as fallback when no Anthropic client passed
 - [x] Adhoc quality gate — `quality_check.py` extended with `extract_adhoc_text()` + a second Mistral Small supervisor call on the adhoc spotlight; fails CI if any dimension < 6
-- [x] `--adhoc-only` flag — `run_report.py --adhoc-only` skips interest checks, main section generation, ECB fetch, and wave memory write; runs only adhoc spotlight + HTML assembly (cheap iteration mode)
+- [x] Adhoc-only iteration mode — superseded by `run_adhoc_report.py` becoming a fully standalone script (no `--adhoc-only` flag on `run_report.py` anymore); use `generate_adhoc_report_manual.yml` for on-demand adhoc-only runs
 - [x] Exec summary model upgrades — Mistral Large 2512 for both passes of exec summary; Mistral Medium 2505 for Slovak translation; model used logged in `cost_tracker.json`
 - [x] Per-run cost log — `run_log.json` (append-only array) + `ref_safe__run_log` MotherDuck table; each entry records `run_type`, `run_date`, `run_time`, wave, cost, model names
 - [x] Wave memory in exec summary — `get_exec_summary()` accepts `historical_context` (last 3 waves), injected into pass 2 only with strict "only when meaningful" rule; never invents historical comparisons
@@ -103,3 +103,14 @@ Claude: tick items off as they get built; don't add speculative sub-tasks.
 - [x] Human-in-the-loop newsletter gate — `send_newsletter.yml` split into `check` + `send` jobs; `send` uses `environment: newsletter-gate` (requires manual approval) when `run_type` contains "adhoc"; no-adhoc runs bypass gate automatically
 - [x] Exec-summary reasoning-channel gate — `config.py` adds `exec_tier`/`subitem_tiers`/`must_lead_with` per section; `llm.py` adds code-computed `sk_ea_gap`, `historical_extremity`, `direction_reversal`, `reliable_n` signals plus a Mistral Small `classify_ecb_emphasis()` pass, threaded into `get_exec_summary()` via a `[SIGNALS]` line per section; `EXEC_SUMMARY_SYSTEM` rewritten so `policy_technical`/deprioritized topics (e.g. Q11b public support) need 2 channels to qualify instead of riding a raw wave-over-wave swing into the exec summary
 - [x] Painting-thumbnail fetch retry — `_fetch_painting_inner_html()` retries transient failures (3 attempts) instead of silently omitting the block on a single network hiccup
+- [x] SK newsletter — `send_newsletter.py`/`send_adhoc_newsletter.py` send each subscriber their preferred-language variant (Gmail SMTP, per-subscriber `lang` field in `newsletter/subscribers.json`)
+- [x] Auto subscription through Vercel + Supabase — `allowed_emails` table with per-user `lang` preference, OTP-authenticated subscribe/unsubscribe flow, live-verified end to end
+- [x] Newsletter sender switched from Resend to Gmail SMTP — Resend's trial mode blocked sending to real (non-owner) recipients; `reports/email_smtp.py` stdlib `smtplib` helper, `GMAIL_ADDRESS`/`GMAIL_16CHAR` secrets
+- [x] MotherDuck-only pipeline — removed local `dev.duckdb`/`--dev` mode entirely (`db.py`, `run_report.py`, `run_adhoc_report.py`); every run (local or CI) connects to MotherDuck
+- [x] Manual past-wave workflows — `generate_report_manual.yml` (main report) and `generate_adhoc_report_manual.yml` (adhoc spotlight) let you regenerate either report for a specific past wave via `workflow_dispatch`, without touching production state (no git push, no Pages publish) — output goes to a downloadable artifact
+- [x] Complete Slovak translation coverage — chart PNGs (country/instrument labels, y-axis, titles), annex question text, and the web app's own UI now respect the SK/EN language choice, not just report bullets
+- [x] Newsletter card enhancements — SAFE Slovakia card heading links to the latest published report; "last updated" and "next release" badges sourced from `run_report.py`'s run date and a new ECB stats-calendar scraper (`reports/fetch_release_calendar.py` → `main_safe.ref_safe__release_calendar`)
+- [x] Q10 chart labeling — bank_loan_terms panel titles show "(net change in %)" and the y-axis is % formatted, scoped to Q10 only since other sections' value columns aren't all percentages
+- [x] Grounding-check false-positive fixes — `_check_numeric_grounding()` no longer flags `n=` sample-size citations, wave-number references, or pressingness `/10` scale denominators (see A8 above for the calibration finding that prompted this)
+- [x] Fixed DataFrame JSON-serialization crash in adhoc section cache write — `_chart_rebuild_specs`/`_response_labels` (added for the SK chart-rebuild feature) were leaking raw DataFrames into `json.dumps()`
+- [x] Fixed matplotlib font inconsistency — switched from `Arial` (not installed on GitHub Actions runners, silently fell back to DejaVu Sans with a warning) to `DejaVu Sans` explicitly everywhere, so local and CI-rendered charts are visually consistent

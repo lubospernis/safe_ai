@@ -56,7 +56,10 @@ def _check_numeric_grounding(bullets: list[str], df: pd.DataFrame, value_cols: l
     """Return list of numbers in bullets that don't appear in any value column of df.
 
     Monitoring-only: callers log warnings but do not block on these errors.
-    Numbers ≤ single digit or > 200 are skipped (wave numbers, counts, not cited values).
+    Numbers <= single digit or > 200 are skipped (wave numbers, counts, not cited values).
+    Also skipped: sample-size citations ("n=62"), wave references ("wave 37"), and
+    pressingness-scale denominators ("6.19/10") — these are legitimate non-data-value
+    numbers that previously produced a high false-positive rate (see ROADMAP.md A8).
     """
     data_numbers: set[str] = set()
     for col in value_cols:
@@ -68,10 +71,33 @@ def _check_numeric_grounding(bullets: list[str], df: pd.DataFrame, value_cols: l
                     data_numbers.add(str(int(round(fv))))
                 except (ValueError, TypeError):
                     pass
+    if "n_respondents" in df.columns:
+        for v in df["n_respondents"].dropna():
+            try:
+                data_numbers.add(str(int(v)))
+            except (ValueError, TypeError):
+                pass
+
     errors = []
     for bullet in bullets:
         for m in _NUMBER_RE.finditer(bullet):
             num_str = m.group(1)
+            start, end = m.span()
+
+            # Sample-size citation: "n=62" or "(n=62)"
+            preceding = bullet[max(0, start - 3):start]
+            if re.search(r"n\s*=\s*$", preceding):
+                continue
+
+            # Pressingness-scale denominator: "6.19/10" — skip the number right after "/"
+            if start > 0 and bullet[start - 1] == "/":
+                continue
+
+            # Wave reference: "wave 37", "prior wave" style mentions right before the number
+            preceding_word = bullet[max(0, start - 6):start]
+            if re.search(r"wave\s*$", preceding_word, re.IGNORECASE):
+                continue
+
             try:
                 iv = int(num_str.split(".")[0])
             except ValueError:

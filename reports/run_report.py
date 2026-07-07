@@ -33,9 +33,13 @@ import matplotlib
 
 matplotlib.use("Agg")
 
-# NBS brand rcParams must be set before any chart module imports
+# NBS brand rcParams must be set before any chart module imports.
+# DejaVu Sans (matplotlib's built-in default) is used instead of Arial — Arial isn't
+# installed on GitHub Actions runners, which silently fell back to DejaVu Sans there
+# anyway (with a "findfont: Font family 'Arial' not found" warning); this makes local
+# and CI-rendered charts consistent instead of differing by environment.
 matplotlib.rcParams.update({
-    "font.family": "Arial",
+    "font.family": "DejaVu Sans",
     "font.size": 9,
     "axes.labelsize": 8,
     "xtick.labelsize": 9,

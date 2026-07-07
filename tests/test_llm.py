@@ -142,6 +142,52 @@ def test_grounding_check_accepts_rounded_integer():
     assert warnings == []
 
 
+def test_grounding_check_skips_sample_size_citation():
+    df = pd.DataFrame([{"net_balance_wtd": 5.0, "wave_number": 38}])
+    # "(n=62)" is a sample-size citation, not a data value — must not be flagged
+    # even though 62 isn't in net_balance_wtd.
+    warnings = _check_numeric_grounding(
+        ["A net 5% of Slovak firms (n=62) reported tighter conditions"], df, ["net_balance_wtd"]
+    )
+    assert warnings == []
+
+
+def test_grounding_check_skips_wave_number_reference():
+    df = pd.DataFrame([{"net_balance_wtd": 5.0, "wave_number": 38}])
+    # "wave 37" is a wave reference, not a cited data value.
+    warnings = _check_numeric_grounding(
+        ["This reversed a trend seen since wave 37 of the survey"], df, ["net_balance_wtd"]
+    )
+    assert warnings == []
+
+
+def test_grounding_check_skips_pressingness_scale_denominator():
+    df = pd.DataFrame([{"avg_pressingness_wtd": 6.19, "wave_number": 38}])
+    # "6.19/10" — the "10" is the fixed scale denominator, not a cited data value.
+    warnings = _check_numeric_grounding(
+        ["Scored 6.19/10, a moderate concern for firms"], df, ["avg_pressingness_wtd"]
+    )
+    assert warnings == []
+
+
+def test_grounding_check_uses_n_respondents_column_for_sample_sizes():
+    df = pd.DataFrame([{"net_balance_wtd": 5.0, "n_respondents": 62, "wave_number": 38}])
+    # Even without the n= prefix pattern, a real n_respondents value should be accepted.
+    warnings = _check_numeric_grounding(["Sample size reached 62 firms"], df, ["net_balance_wtd"])
+    assert warnings == []
+
+
+def test_grounding_check_still_flags_invented_number_near_n_equals():
+    df = pd.DataFrame([{"net_balance_wtd": 5.0, "n_respondents": 62, "wave_number": 38}])
+    # A genuinely invented number elsewhere in the bullet (not right after "n=") must
+    # still be flagged — the n= exclusion should not blanket-suppress the whole bullet.
+    warnings = _check_numeric_grounding(
+        ["A net 5% of firms (n=62) reported a swing of 99.7pp"], df, ["net_balance_wtd"]
+    )
+    assert len(warnings) == 1
+    assert "99.7" in warnings[0]
+
+
 # ── _shorten_question_llm ────────────────────────────────────────────────────
 
 def _mock_mistral_response(content: str, prompt_tokens=20, completion_tokens=8):

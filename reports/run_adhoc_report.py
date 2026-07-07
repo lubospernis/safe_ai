@@ -31,9 +31,13 @@ import matplotlib
 
 matplotlib.use("Agg")
 
-# NBS brand rcParams must be set before any chart module imports
+# NBS brand rcParams must be set before any chart module imports.
+# DejaVu Sans (matplotlib's built-in default) is used instead of Arial — Arial isn't
+# installed on GitHub Actions runners, which silently fell back to DejaVu Sans there
+# anyway (with a "findfont: Font family 'Arial' not found" warning); this makes local
+# and CI-rendered charts consistent instead of differing by environment.
 matplotlib.rcParams.update({
-    "font.family": "Arial",
+    "font.family": "DejaVu Sans",
     "font.size": 9,
     "axes.labelsize": 8,
     "xtick.labelsize": 9,
@@ -139,7 +143,7 @@ def main() -> None:
             import base64 as _b64
             _cache_entry = {
                 k: v for k, v in adhoc_section.items()
-                if k not in ("chart_png", "chart_pngs")
+                if k not in ("chart_png", "chart_pngs", "_chart_rebuild_specs", "_response_labels")
             }
             # Serialize chart bytes as base64 so cache is self-contained
             if adhoc_section.get("chart_pngs"):

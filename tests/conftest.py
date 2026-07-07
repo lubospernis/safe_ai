@@ -6,7 +6,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "reports"))
 
 import matplotlib
 matplotlib.use("Agg")
-matplotlib.rcParams.update({"font.family": "Arial"})
+matplotlib.rcParams.update({"font.family": "DejaVu Sans"})
 
 import pandas as pd
 import pytest

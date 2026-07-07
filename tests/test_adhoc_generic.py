@@ -332,6 +332,47 @@ def test_build_adhoc_spotlight_exposes_chart_rebuild_ingredients(
     assert all(isinstance(p, bytes) for p in sk_pngs)
 
 
+def test_build_adhoc_spotlight_result_is_cache_serializable(
+    mock_con, mock_mistral_theme, mock_anthropic_spotlight
+):
+    """Regression test: run_adhoc_report.py's section-cache write does
+    json.dumps(adhoc_section minus chart_png/chart_pngs/_chart_rebuild_specs/
+    _response_labels). _chart_rebuild_specs carries raw chart_df DataFrames
+    (see rebuild_adhoc_charts_sk) which are not JSON-serializable — a prior
+    version of the cache-write filter forgot to exclude them, crashing CI
+    with 'TypeError: Object of type DataFrame is not JSON serializable'."""
+    cost = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
+    theme = {
+        "module_id": "qe1",
+        "theme_label": "Electrification Efforts",
+        "question_texts": {"a": "To what extent has your firm invested in electrification?"},
+    }
+
+    with patch("adhoc.SQL_DIR") as mock_sql_dir:
+        mock_sql_dir.__truediv__ = lambda self, other: mock_sql_dir
+        mock_sql_dir.read_text.return_value = (
+            "SELECT country_code, sub_item, response_raw, pct_wtd, n_firms, n_firms_wtd, n_total_wtd "
+            "FROM {schema}.mart_safe__adhoc_responses "
+            "WHERE wave_number = {wave_number} AND module_id = '{module_id}'"
+        )
+        result = build_adhoc_spotlight(
+            theme, 39, mock_con, "main_safe",
+            mistral_client=mock_mistral_theme,
+            cost_tracker=cost,
+            anthropic_client=mock_anthropic_spotlight,
+        )
+
+    # Mirror run_adhoc_report.py's cache-entry filter exactly.
+    cache_entry = {
+        k: v for k, v in result.items()
+        if k not in ("chart_png", "chart_pngs", "_chart_rebuild_specs", "_response_labels")
+    }
+    cache_entry["wave_number"] = 39
+
+    # Must not raise TypeError: Object of type DataFrame is not JSON serializable
+    json.dumps(cache_entry, indent=2, ensure_ascii=False)
+
+
 def test_rebuild_adhoc_charts_sk_falls_back_to_english_on_error():
     """If rebuilding a chart raises, keep the original English PNG rather than dropping it."""
     bad_spec = {

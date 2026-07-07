@@ -106,6 +106,28 @@ def test_fetch_painting_succeeds_first_try_no_retry():
     assert "<img" in html
 
 
+def _no_image_placeholder_response():
+    resp = MagicMock()
+    resp.raise_for_status.return_value = None
+    resp.content = b"fake-no-image-placeholder-bytes"
+    resp.headers = {
+        "Content-Type": "image/jpeg",
+        "Content-Disposition": 'inline; filename="no-image-im.jpg"',
+    }
+    return resp
+
+
+def test_fetch_painting_skips_no_image_placeholder_without_retrying():
+    """webumenia.sk sometimes returns HTTP 200 with its own 'no image' placeholder —
+    this must be detected and skipped immediately, not retried (it's not transient)."""
+    with patch("requests.get", side_effect=[_no_image_placeholder_response()]) as mock_get, \
+         patch("time.sleep") as mock_sleep:
+        html = _fetch_painting_inner_html()
+    assert mock_get.call_count == 1
+    assert mock_sleep.call_count == 0
+    assert html == ""
+
+
 def _mock_annex_con():
     """Mock DuckDB connection returning one annex row for Q5 with English question text."""
     con = MagicMock()

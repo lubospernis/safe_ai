@@ -4,7 +4,7 @@ import pytest
 # _is_continuous lives in adhoc.py
 from adhoc import _is_continuous
 from charts import (
-    COUNTRIES, INSTRUMENT_LABELS, SK_LABELS, _resolve_labels,
+    CHART_STRINGS, COUNTRIES, INSTRUMENT_LABELS, SK_LABELS, _resolve_labels,
     _select_panels, build_chart, build_financing_gap_chart,
 )
 
@@ -231,5 +231,29 @@ def test_build_financing_gap_chart_with_sk_labels_still_renders():
                                      chart_title="Slovenské firmy čelia rastúcej medzere",
                                      chart_question="Získate potrebné financovanie?",
                                      labels=SK_LABELS)
+    assert isinstance(png, bytes)
+    assert png[:8] == _PNG_MAGIC
+
+
+# ── panel_title_suffix / pct_axis (Q10 net-change-in-% labeling) ────────────
+
+def test_build_chart_with_panel_title_suffix_and_pct_axis_still_renders():
+    df = _make_chart_df(["a", "b"])
+    sec = _make_section(pinned=["a", "b"], max_panels=2)
+    png = build_chart(sec, df, "bar", None,
+                       chart_title="Slovak interest rate conditions ease",
+                       chart_question="Did your bank loan terms improve?",
+                       panel_title_suffix=CHART_STRINGS["net_change_pct_suffix"],
+                       pct_axis=True)
+    assert isinstance(png, bytes)
+    assert png[:8] == _PNG_MAGIC
+
+
+def test_build_chart_without_suffix_or_pct_axis_defaults_unchanged():
+    """Default args must not add a suffix or % formatting — every other section
+    relies on build_chart()'s existing bare-number y-axis behaviour."""
+    df = _make_chart_df(["a"])
+    sec = _make_section(pinned=["a"], max_panels=1)
+    png = build_chart(sec, df, "bar", None)
     assert isinstance(png, bytes)
     assert png[:8] == _PNG_MAGIC

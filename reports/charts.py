@@ -40,6 +40,7 @@ CHART_STRINGS = {
     "financing_gap_title_tmpl":  "{label} — need vs availability (bars); financing gap (dashed)",
     "sk_instrument_gap_title":   "Slovakia — financing gap by instrument (latest wave)",
     "question_prefix":           "Q",
+    "net_change_pct_suffix":     " (net change in %)",
 }
 
 SK_LABELS = {
@@ -56,6 +57,7 @@ SK_LABELS = {
         "financing_gap_title_tmpl": "{label} — potreba vs. dostupnosť (stĺpce); medzera vo financovaní (čiarkovane)",
         "sk_instrument_gap_title":  "Slovensko — medzera vo financovaní podľa nástroja (posledná vlna)",
         "question_prefix":          "Ot",
+        "net_change_pct_suffix":    " (čistá zmena v %)",
     },
 }
 
@@ -70,7 +72,7 @@ def _resolve_labels(labels: dict | None) -> tuple[dict, dict, dict]:
     return countries, instruments, strings
 
 
-def _nbs_style_ax(ax, chart_type: str, waves=None, xtick_labels=None) -> None:
+def _nbs_style_ax(ax, chart_type: str, waves=None, xtick_labels=None, pct_axis: bool = False) -> None:
     """Apply NBS visual style to a single axes."""
     ax.set_facecolor("#f4f4f4")
     for spine in ax.spines.values():
@@ -85,9 +87,11 @@ def _nbs_style_ax(ax, chart_type: str, waves=None, xtick_labels=None) -> None:
     if chart_type == "line" and waves is not None:
         ax.set_xticks(waves)
         ax.set_xticklabels(xtick_labels or [], rotation=35, ha="right", fontsize=8)
-        ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%+.0f"))
+        fmt = "%+.0f%%" if pct_axis else "%+.0f"
+        ax.yaxis.set_major_formatter(mticker.FormatStrFormatter(fmt))
     else:
-        ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%.1f"))
+        fmt = "%.1f%%" if pct_axis else "%.1f"
+        ax.yaxis.set_major_formatter(mticker.FormatStrFormatter(fmt))
 
 
 def _select_panels(sec: dict, df: pd.DataFrame, best_panel) -> list:
@@ -149,7 +153,8 @@ def _title_block_layout(fig_w: float, fig_h: float, base_top: float,
 
 
 def build_chart(sec: dict, df: pd.DataFrame, chart_type: str, best_panel, chart_subtitle: str = "",
-                 chart_title: str = "", chart_question: str = "", labels: dict | None = None) -> bytes:
+                 chart_title: str = "", chart_question: str = "", labels: dict | None = None,
+                 panel_title_suffix: str = "", pct_axis: bool = False) -> bytes:
     countries, _instruments, strings = _resolve_labels(labels)
     panels = _select_panels(sec, df, best_panel)
     n_panels = len(panels)
@@ -231,11 +236,12 @@ def build_chart(sec: dict, df: pd.DataFrame, chart_type: str, best_panel, chart_
                     handles.append(line)
                     legend_labels.append(countries[country])
 
-        ax.set_title(label_val, fontsize=9, pad=6)
+        ax.set_title(f"{label_val}{panel_title_suffix}", fontsize=9, pad=6, wrap=True)
         ax.set_ylabel("")
         _nbs_style_ax(ax, chart_type,
                       waves=(waves if chart_type == "line" else None),
-                      xtick_labels=(xtick_labels if chart_type == "line" else None))
+                      xtick_labels=(xtick_labels if chart_type == "line" else None),
+                      pct_axis=pct_axis)
 
     for ax in axes_flat[n_panels:]:
         ax.set_visible(False)

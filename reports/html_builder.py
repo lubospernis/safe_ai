@@ -190,11 +190,19 @@ def _md_to_html(text: str) -> str:
     return re.sub(r'\*\*(.+?)\*\*', lambda m: f'<strong>{m.group(1)}</strong>', text)
 
 
+class _NoImagePlaceholder(Exception):
+    """Raised when webumenia.sk serves its own 'no image available' placeholder with a
+    200 status — a deterministic failure mode that retrying will not fix."""
+
+
 def _fetch_painting_inner_html(max_attempts: int = 3, retry_delay: float = 2.0) -> str:
     """Fetch the quarterly artwork; return inner <img>+<span> HTML. Returns "" on failure.
 
     Retries on transient failures (network hiccups are the common case on CI
-    runners) before giving up and gracefully omitting the whole block.
+    runners) before giving up and gracefully omitting the whole block. Does NOT
+    retry when webumenia.sk itself reports no image is available (see
+    _NoImagePlaceholder) — that's a persistent server-side condition, not a
+    transient one, so retrying would just waste time on a guaranteed repeat.
     """
     import time as _time
 
@@ -205,6 +213,13 @@ def _fetch_painting_inner_html(max_attempts: int = 3, retry_delay: float = 2.0) 
         try:
             resp = _requests.get(ARTWORK["img_url"], timeout=10, headers={"User-Agent": "Mozilla/5.0"})
             resp.raise_for_status()
+            # webumenia.sk returns HTTP 200 with its own "no image available" placeholder
+            # when the real artwork can't be served — status-code checks alone miss this.
+            content_disposition = resp.headers.get("Content-Disposition", "")
+            if "no-image" in content_disposition.lower():
+                raise _NoImagePlaceholder(
+                    f"webumenia.sk served its no-image placeholder ({content_disposition!r})"
+                )
             b64 = base64.b64encode(resp.content).decode()
             ct = resp.headers.get("Content-Type", "image/jpeg").split(";")[0].strip()
             title = ARTWORK["title"]
@@ -219,6 +234,9 @@ def _fetch_painting_inner_html(max_attempts: int = 3, retry_delay: float = 2.0) 
                 f'<a href="{page_url}" target="_blank" style="color:#aaa;text-decoration:none;">'
                 f'{title}</a></span>'
             )
+        except _NoImagePlaceholder as e:
+            print(f"  Warning: {e} — skipping thumbnail (not retrying, this is not transient)")
+            return ""
         except Exception as e:
             last_err = e
             if attempt < max_attempts:

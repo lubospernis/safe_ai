@@ -172,6 +172,12 @@ NBS_STYLE_GUIDE = textwrap.dedent("""
       IMPROVING — NOT that they have "recovered", "rebounded", or "turned around". Use
       "improved by X pp" or "eased" or "less negative". Reserve "recovery" / "rebound" /
       "turned around" exclusively for net balances that are POSITIVE (> 0).
+    - "moderately" / "moderate" describe MAGNITUDE only (a 2–5 pp change), never DIRECTION.
+      Never write "moderating" as a verb implying a trend is calming down or easing — that
+      claims the change is becoming smaller/less severe, which is a directional claim
+      unrelated to magnitude. If a metric moved from a smaller adverse value to a larger
+      adverse one (e.g. net 2% expecting deterioration to net 5%), that is a WORSENING —
+      write "worsened by X pp" or "deteriorated further", never "moderating X pp".
 """).strip()
 
 SECTION_CONTENT_SYSTEM = textwrap.dedent("""

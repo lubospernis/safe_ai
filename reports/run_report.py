@@ -50,7 +50,7 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 
 from config import SECTIONS  # noqa: E402
 
-from charts import SK_LABELS, build_chart, build_financing_gap_chart
+from charts import CHART_STRINGS, SK_LABELS, build_chart, build_financing_gap_chart
 from cost import _mistral_client
 from db import PROD_SCHEMA, _get_connection, build_mart_catalogue, fetch_all
 from html_builder import (
@@ -190,7 +190,9 @@ def main() -> None:
                 elif sid == "bank_loan_terms":
                     chart_png = build_chart(sec, data[sid], "bar", r["best_panel"],
                                             chart_subtitle=chart_subtitle,
-                                            chart_title=chart_title, chart_question=chart_question)
+                                            chart_title=chart_title, chart_question=chart_question,
+                                            panel_title_suffix=CHART_STRINGS["net_change_pct_suffix"],
+                                            pct_axis=True)
                 else:
                     chart_png = build_chart(sec, data[sid], r["chart_type"], r["best_panel"],
                                             chart_subtitle=chart_subtitle,
@@ -247,7 +249,9 @@ def main() -> None:
             elif sid == "bank_loan_terms":
                 chart_png = build_chart(sec, data[sid], "bar", r["best_panel"],
                                         chart_subtitle=chart_subtitle,
-                                        chart_title=chart_title, chart_question=chart_question)
+                                        chart_title=chart_title, chart_question=chart_question,
+                                        panel_title_suffix=CHART_STRINGS["net_change_pct_suffix"],
+                                        pct_axis=True)
             else:
                 chart_png = build_chart(sec, data[sid], r["chart_type"], r["best_panel"],
                                         chart_subtitle=chart_subtitle,
@@ -379,6 +383,8 @@ def main() -> None:
                 sk_sec["chart_png"] = build_chart(
                     sec, data[sid], "bar", r["best_panel"], chart_subtitle=chart_subtitle,
                     chart_title=chart_title, chart_question=chart_question, labels=SK_LABELS,
+                    panel_title_suffix=SK_LABELS["strings"]["net_change_pct_suffix"],
+                    pct_axis=True,
                 )
             else:
                 sk_sec["chart_png"] = build_chart(

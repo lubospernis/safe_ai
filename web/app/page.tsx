@@ -1,6 +1,6 @@
 import { createServerSideClient } from "@/lib/supabase-server";
 import { getSubscriptions } from "@/lib/subscriptions";
-import { getLatestLinks } from "@/lib/latestLinks";
+import { getLatestLinks, getLatestAdhocLinks, type LatestLinks } from "@/lib/latestLinks";
 import { NEWSLETTERS } from "@/lib/newsletters";
 import { STRINGS, type NewsletterId } from "@/lib/strings";
 import { redirect } from "next/navigation";
@@ -45,8 +45,14 @@ export default async function Home() {
   const lang: "en" | "sk" = allowedRow?.lang === "sk" ? "sk" : "en";
   const t = STRINGS[lang];
 
-  const latestLinks = await getLatestLinks();
-  const reportUrl = latestLinks ? (latestLinks[lang] || latestLinks.en) : null;
+  const [regularLinks, adhocLinks] = await Promise.all([
+    getLatestLinks(),
+    getLatestAdhocLinks(),
+  ]);
+  const linksByNewsletter: Record<string, LatestLinks | null> = {
+    "safe-regular": regularLinks,
+    "safe-adhoc": adhocLinks,
+  };
 
   return (
     <main className={styles.main}>
@@ -64,6 +70,8 @@ export default async function Home() {
         {NEWSLETTERS.map((nl) => {
           const isSubscribed = subscribedIds.has(nl.id);
           const nlText = t.newsletters[nl.id as NewsletterId] ?? nl;
+          const latestLinks = linksByNewsletter[nl.id] ?? null;
+          const reportUrl = latestLinks ? (latestLinks[lang] || latestLinks.en) : null;
           return (
             <div key={nl.id} className={styles.card}>
               <div className={styles.cardIcon}>{nl.icon}</div>

@@ -14,7 +14,6 @@ duckdb>=1.0,<2
 matplotlib>=3.8,<4
 numpy>=1.26,<3
 seaborn>=0.13,<1
-resend>=2.0,<3
 tabulate>=0.9,<1
 mistralai>=1.0,<2
 python-dotenv>=1.0,<2

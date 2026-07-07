@@ -1,5 +1,5 @@
 """
-SAFE Survey Newsletter — standard report digest email via Resend.
+SAFE Survey Newsletter — standard report digest email via Gmail SMTP.
 
 Parses the standard report HTML (report_latest.html / report_latest_sk.html),
 extracts executive summary bullets and section findings, and sends a digest
@@ -9,14 +9,13 @@ defaults to "en" if absent).
 Adhoc special-focus emails are sent separately by send_adhoc_newsletter.py.
 
 Usage:
-  RESEND_API_KEY=re_... python reports/send_newsletter.py
+  GMAIL_ADDRESS=you@gmail.com GMAIL_16CHAR=xxxxxxxxxxxxxxxx python reports/send_newsletter.py
 
 Required environment variables:
-  RESEND_API_KEY   — Resend API key (get from resend.com dashboard)
+  GMAIL_ADDRESS    — Gmail address to send from
+  GMAIL_16CHAR     — Gmail App Password (16 chars, see email_smtp.py docstring)
 
 Optional environment variables:
-  NEWSLETTER_FROM  — sender address (default: placeholder, must be a verified
-                     Resend domain before sending to non-test addresses)
   PAGES_URL        — URL of the published EN report (default: lubospernis.github.io/safe_ai)
 """
 
@@ -25,8 +24,9 @@ import os
 import sys
 from pathlib import Path
 
-import resend
 from bs4 import BeautifulSoup
+
+from email_smtp import send_email
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -45,7 +45,6 @@ else:
     _links = {}
 PAGES_URL = os.environ.get("PAGES_URL", _links.get("en", f"{_PAGES_BASE}/"))
 PAGES_URL_SK = _links.get("sk", f"{_PAGES_BASE}/sk.html")
-FROM_ADDRESS = os.environ.get("NEWSLETTER_FROM", "onboarding@resend.dev")
 
 _LABELS = {
     "en": {"exec_summary": "Executive Summary", "findings": "Key Findings",
@@ -183,12 +182,9 @@ def build_email_html(data: dict, pages_url: str, lang: str = "en") -> str:
 # ---------------------------------------------------------------------------
 
 def send_newsletter() -> None:
-    api_key = os.environ.get("RESEND_API_KEY", "")
-    if not api_key:
-        print("RESEND_API_KEY not set — skipping newsletter send.")
+    if not os.environ.get("GMAIL_ADDRESS") or not os.environ.get("GMAIL_16CHAR"):
+        print("GMAIL_ADDRESS/GMAIL_16CHAR not set — skipping newsletter send.")
         sys.exit(0)
-
-    resend.api_key = api_key
 
     if not REPORT_HTML.exists():
         print(f"Report not found at {REPORT_HTML} — skipping.")
@@ -229,12 +225,7 @@ def send_newsletter() -> None:
             lang = "en"
         subject, email_html = email_html_by_lang[lang]
         try:
-            resend.Emails.send({
-                "from": FROM_ADDRESS,
-                "to": [sub["email"]],
-                "subject": subject,
-                "html": email_html,
-            })
+            send_email(sub["email"], subject, email_html)
             print(f"  ✓ Sent to {sub['email']} ({lang})")
             sent += 1
         except Exception as e:

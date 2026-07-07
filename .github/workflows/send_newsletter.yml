@@ -42,5 +42,6 @@ jobs:
 
       - name: Send newsletter
         env:
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_16CHAR:  ${{ secrets.GMAIL_16CHAR }}
         run: python reports/send_newsletter.py

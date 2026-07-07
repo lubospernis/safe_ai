@@ -1,18 +1,18 @@
 """
-SAFE Survey — Adhoc Special Focus Newsletter via Resend.
+SAFE Survey — Adhoc Special Focus Newsletter via Gmail SMTP.
 
 Parses report_adhoc_latest.html, extracts the adhoc spotlight section, and sends
 a focused "Special Focus" email to all subscribers. Runs only on adhoc waves
 (the generate_adhoc_report workflow produces the HTML only when adhoc data exists).
 
 Usage:
-  RESEND_API_KEY=re_... python reports/send_adhoc_newsletter.py
+  GMAIL_ADDRESS=you@gmail.com GMAIL_16CHAR=xxxxxxxxxxxxxxxx python reports/send_adhoc_newsletter.py
 
 Required environment variables:
-  RESEND_API_KEY   — Resend API key
+  GMAIL_ADDRESS    — Gmail address to send from
+  GMAIL_16CHAR     — Gmail App Password (16 chars, see email_smtp.py docstring)
 
 Optional environment variables:
-  NEWSLETTER_FROM  — sender address
   PAGES_URL        — URL of the published adhoc report
                      (default: lubospernis.github.io/safe_ai/adhoc.html)
 """
@@ -22,8 +22,9 @@ import os
 import sys
 from pathlib import Path
 
-import resend
 from bs4 import BeautifulSoup
+
+from email_smtp import send_email
 
 ROOT = Path(__file__).parent.parent
 REPORT_HTML = Path(__file__).parent / "output" / "report_adhoc_latest.html"
@@ -36,7 +37,6 @@ if _links_path.exists():
     PAGES_URL = os.environ.get("PAGES_URL", _links.get("en", f"{_PAGES_BASE}/adhoc.html"))
 else:
     PAGES_URL = os.environ.get("PAGES_URL", f"{_PAGES_BASE}/adhoc.html")
-FROM_ADDRESS = os.environ.get("NEWSLETTER_FROM", "onboarding@resend.dev")
 
 # Inline CSS — email-safe
 _BODY = "margin:0;padding:0;background:#f4f4f4;font-family:Arial,sans-serif;"
@@ -152,12 +152,9 @@ def build_adhoc_email_html(data: dict, pages_url: str) -> str:
 
 
 def send_adhoc_newsletter() -> None:
-    api_key = os.environ.get("RESEND_API_KEY", "")
-    if not api_key:
-        print("RESEND_API_KEY not set — skipping newsletter send.")
+    if not os.environ.get("GMAIL_ADDRESS") or not os.environ.get("GMAIL_16CHAR"):
+        print("GMAIL_ADDRESS/GMAIL_16CHAR not set — skipping newsletter send.")
         sys.exit(0)
-
-    resend.api_key = api_key
 
     if not REPORT_HTML.exists():
         print(f"Adhoc report not found at {REPORT_HTML} — skipping.")
@@ -187,12 +184,7 @@ def send_adhoc_newsletter() -> None:
     sent, failed = 0, 0
     for sub in subscribers:
         try:
-            resend.Emails.send({
-                "from": FROM_ADDRESS,
-                "to": [sub["email"]],
-                "subject": subject,
-                "html": email_html,
-            })
+            send_email(sub["email"], subject, email_html)
             print(f"  ✓ Sent to {sub['email']}")
             sent += 1
         except Exception as e:

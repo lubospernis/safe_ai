@@ -1187,89 +1187,6 @@ def get_exec_summary(
     return result
 
 
-ADHOC_SYNTHESIS_SYSTEM = textwrap.dedent(f"""
-    You are an economist writing a short cross-cutting synthesis for the "Special Focus"
-    section of an ECB SAFE survey report for Slovakia. You will receive per-question
-    findings for every adhoc question asked in this wave (e.g. QA1, QA2, QB1, ...).
-
-    {NBS_STYLE_GUIDE}
-
-    Your task: write 2–4 short bullets that connect findings ACROSS questions — patterns
-    no single question's own bullets capture alone. Examples of a genuine cross-cutting
-    synthesis: "firms report low current AI use (QA1) alongside modest planned investment
-    (QA4), consistent with early-stage adoption", or "the gap between SK's own adoption
-    estimate (QB1.a) and its estimate of peer countries (QB1.b) suggests Slovak firms may
-    underrate domestic uptake".
-
-    Rules:
-    - Only name a connection that is actually visible in the findings given — do not invent
-      a link between questions that don't relate.
-    - If the questions don't meaningfully connect, it's fine to write bullets that each
-      summarise the single most important finding instead — do not force a false synthesis.
-    - Number provenance: every number you cite must appear verbatim in the question finding
-      you are drawing from. Do NOT invent or blend numbers across questions.
-    - FORMAT — every bullet must follow this exact structure:
-        **Short label (2-4 words):** One concise sentence of explanation.
-    - No leading bullet character inside the bullet text. No section IDs, no markdown fences.
-
-    Return a JSON array only:
-    [{{"bullet": "**Label:** explanation"}}, ...]
-""").strip()
-
-
-def get_adhoc_synthesis(
-    question_descriptions: list[dict],
-    cost_tracker: dict,
-    anthropic_client=None,
-) -> list[str]:
-    """Cross-cutting synthesis across every adhoc question in the wave (QA1, QA2, ...).
-
-    Distinct from get_exec_summary()'s adhoc handling: that function treats the whole
-    adhoc spotlight as a single pseudo-section within the MAIN report's exec summary
-    (hardcoded section_id allowlist, guaranteed single emoji bullet). This function is
-    for the synthesis WITHIN the adhoc report itself, across its own N questions, and
-    has no coupling to the main report's section vocabulary.
-
-    Returns a list of bullet strings (2-4), or [] on failure/no client.
-    """
-    if not question_descriptions or anthropic_client is None:
-        return []
-
-    lines = []
-    for q in question_descriptions:
-        qid = q.get("question_id", "").upper()
-        finding = q.get("key_finding") or q.get("description") or ""
-        if not finding:
-            continue
-        lines.append(f"[{qid}] {q.get('question_text', '')}\n  {finding}")
-    if not lines:
-        return []
-
-    user_msg = "Per-question findings this wave:\n\n" + "\n\n".join(lines)
-
-    try:
-        model = "claude-opus-4-8"
-        resp = anthropic_client.messages.create(
-            model=model,
-            max_tokens=400,
-            system=ADHOC_SYNTHESIS_SYSTEM,
-            messages=[{"role": "user", "content": user_msg}],
-        )
-        _track_cost(cost_tracker, model, resp.usage)
-        raw = resp.content[0].text.strip()
-        raw = re.sub(r"^```(?:json)?\s*", "", raw)
-        raw = re.sub(r"\s*```$", "", raw).strip()
-        items = json.loads(repair_json(raw))
-        bullets = [
-            str(item.get("bullet", "")).strip().lstrip("•- ")
-            for item in items if isinstance(item, dict)
-        ]
-        return [b for b in bullets if b][:4]
-    except Exception as e:
-        print(f"  Adhoc synthesis failed: {e}")
-        return []
-
-
 def _add_so_what(content: dict, sec: dict, mistral_client, cost_tracker: dict) -> dict:
     """Add implication clauses to purely-descriptive section bullets via Mistral Small."""
     bullets_text = "\n".join(f"- {b}" for b in content["bullets"])
@@ -1342,6 +1259,49 @@ def _shorten_question_llm(source_text: str, mistral_client) -> dict:
         raw = re.sub(r"\s*```$", "", raw).strip()
         parsed = json.loads(repair_json(raw))
         result["short_question"] = str(parsed.get("short_question", "")).strip()
+        if resp.usage:
+            result["_usage"] = {"input": resp.usage.prompt_tokens, "output": resp.usage.completion_tokens}
+    except Exception:
+        pass
+    return result
+
+
+SHORTEN_PANEL_LABEL_SYSTEM = textwrap.dedent("""
+    You shorten a raw ECB survey item label into a short chart panel title.
+
+    Rules:
+    - Produce ONE short label or phrase, at most 6 words.
+    - Strip interviewer instructions (e.g. bracketed "[READ IF NECESSARY: ...]"
+      text), item-letter prefixes (e.g. "a)", "b)"), and any leftover punctuation
+      artifacts — keep only the substantive content a chart reader needs.
+    - Do not invent content not present in the source text.
+
+    Respond with JSON only, no markdown fences: {"short_label": "..."}
+""").strip()
+
+
+def _shorten_panel_label_llm(source_text: str, mistral_client) -> dict:
+    """Shorten a messy/long annex item label into a short chart panel title.
+
+    Returns {"short_label": str, "_usage": {...}} — short_label is "" on any
+    failure (malformed response, API error); caller should fall back to the
+    deterministically-cleaned (but possibly still long) original text.
+    """
+    result = {"short_label": ""}
+    try:
+        resp = mistral_client.chat.complete(
+            model="mistral-small-latest",
+            max_tokens=40,
+            messages=[
+                {"role": "system", "content": SHORTEN_PANEL_LABEL_SYSTEM},
+                {"role": "user", "content": source_text[:500]},
+            ],
+        )
+        raw = resp.choices[0].message.content.strip()
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw).strip()
+        parsed = json.loads(repair_json(raw))
+        result["short_label"] = str(parsed.get("short_label", "")).strip()
         if resp.usage:
             result["_usage"] = {"input": resp.usage.prompt_tokens, "output": resp.usage.completion_tokens}
     except Exception:
@@ -1523,7 +1483,6 @@ def translate_to_slovak(
             "finding":     adhoc_s.get("finding", ""),
             "bullets":     adhoc_s.get("bullets", []),
             "bullets_by_question": adhoc_s.get("bullets_by_question", {}),
-            "synthesis_bullets": adhoc_s.get("synthesis_bullets", []),
             "sub_sections": [
                 {
                     "heading": ss.get("heading", ""),
@@ -1593,7 +1552,6 @@ def translate_to_slovak(
             "bullets_by_question": {
                 qid: t_bbq.get(qid, orig_bbq.get(qid, [])) for qid in orig_bbq
             },
-            "synthesis_bullets": sk_adhoc.get("synthesis_bullets", adhoc_s.get("synthesis_bullets", [])),
             "sub_sections": [
                 {
                     **orig_ss,

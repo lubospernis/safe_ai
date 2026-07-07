@@ -50,7 +50,9 @@ matplotlib.rcParams.update({
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-from adhoc import build_adhoc_spotlight, detect_adhoc_theme, rebuild_adhoc_charts_sk
+from adhoc import (
+    build_adhoc_spotlight, detect_adhoc_theme, rebuild_adhoc_charts_en, rebuild_adhoc_charts_sk,
+)
 from cost import _mistral_client
 from db import PROD_SCHEMA, _get_connection, fetch_all
 from html_builder import (
@@ -88,6 +90,13 @@ def main() -> None:
                         help="Ignore cached adhoc spotlight and regenerate from scratch")
     parser.add_argument("--rerun-sections", type=str, default=None,
                         help="Comma-separated section IDs to force-rerun (e.g. adhoc_spotlight)")
+    parser.add_argument("--rebuild-charts-only", action="store_true",
+                        help="Dev flag: on cache hit, only re-run chart building (Phase 2) from the "
+                             "cached question data — skips every LLM phase (descriptions, bullets, "
+                             "review, exec summary, translation). For verifying chart/label formatting "
+                             "changes cheaply. Requires a cache entry from a prior full run; falls back "
+                             "to a full run if none exists. Note: bullets were written against the OLD "
+                             "charts in this mode, so it is for dev iteration only, not final output.")
     args = parser.parse_args()
     _force_rerun = set(s.strip() for s in args.rerun_sections.split(",")) if args.rerun_sections else set()
 
@@ -127,27 +136,44 @@ def main() -> None:
         print(f"  WARN: Questionnaire fetched ({_questionnaire_url}) but no answer labels parsed")
 
     # ── Build adhoc spotlight (with section cache) ───────────────────────────
+    # Cache is pickled (not JSON) so it can hold the raw DataFrames each question's
+    # chart was built from (_chart_rebuild_specs) — needed for --rebuild-charts-only
+    # to re-run just Phase 2 (chart building) without re-paying for every LLM phase.
+    import pickle
     _cache_dir = OUTPUT_DIR / "section_cache"
     _cache_dir.mkdir(exist_ok=True)
-    _cache_path = _cache_dir / f"adhoc_spotlight_w{latest_wave}.json"
+    _cache_path = _cache_dir / f"adhoc_spotlight_w{latest_wave}.pkl"
     _sid = "adhoc_spotlight"
     _use_cache = (
         not args.no_cache
         and _sid not in _force_rerun
         and _cache_path.exists()
     )
+    adhoc_section = None
     if _use_cache:
-        import base64 as _b64
-        _cached = json.loads(_cache_path.read_text())
+        _cached = pickle.loads(_cache_path.read_bytes())
         if _cached.get("wave_number") == latest_wave:
-            print(f"  [CACHE HIT] {_sid} — skipping LLM phases")
-            # Restore chart bytes from base64
-            if "chart_pngs_b64" in _cached:
-                _cached["chart_pngs"] = [_b64.b64decode(s) for s in _cached.pop("chart_pngs_b64")]
-                _cached["chart_png"] = _cached["chart_pngs"][0] if _cached["chart_pngs"] else None
             adhoc_section = _cached
         else:
             _use_cache = False
+
+    if _use_cache and args.rebuild_charts_only:
+        _rebuild_specs = adhoc_section.get("_chart_rebuild_specs")
+        if _rebuild_specs:
+            print(f"  [CACHE HIT] {_sid} — rebuilding charts only (Phase 2), skipping all LLM phases")
+            new_pngs = rebuild_adhoc_charts_en(
+                _rebuild_specs, adhoc_section.get("_response_labels", {}), mistral_client, cost_tracker,
+                theme_label=adhoc_section.get("theme_label", ""),
+            )
+            adhoc_section["chart_pngs"] = new_pngs
+            adhoc_section["chart_png"] = new_pngs[0] if new_pngs else None
+        else:
+            print("  --rebuild-charts-only requested but cache has no chart_rebuild_specs — "
+                  "falling back to a full rebuild")
+            _use_cache = False
+            adhoc_section = None
+    elif _use_cache:
+        print(f"  [CACHE HIT] {_sid} — skipping LLM phases")
 
     if not _use_cache:
         adhoc_section = build_adhoc_spotlight(
@@ -155,18 +181,9 @@ def main() -> None:
             anthropic_client=anthropic_client,
         )
         if adhoc_section:
-            import base64 as _b64
-            _cache_entry = {
-                k: v for k, v in adhoc_section.items()
-                if k not in ("chart_png", "chart_pngs", "_chart_rebuild_specs", "_response_labels")
-            }
-            # Serialize chart bytes as base64 so cache is self-contained
-            if adhoc_section.get("chart_pngs"):
-                _cache_entry["chart_pngs_b64"] = [
-                    _b64.b64encode(p).decode() for p in adhoc_section["chart_pngs"]
-                ]
+            _cache_entry = dict(adhoc_section)
             _cache_entry["wave_number"] = latest_wave
-            _cache_path.write_text(json.dumps(_cache_entry, indent=2, ensure_ascii=False))
+            _cache_path.write_bytes(pickle.dumps(_cache_entry))
 
     if not adhoc_section:
         print("Adhoc spotlight build failed — no output produced.")
@@ -188,11 +205,23 @@ def main() -> None:
 
     rendered = [adhoc_section]
 
+    # ── Translation cache (dev-only): reused verbatim in --rebuild-charts-only
+    # mode so that mode skips the exec-summary + Slovak-translation LLM calls too,
+    # not just Phase 1-4. Charts (EN + SK) are still rebuilt fresh either way.
+    _translation_cache_path = _cache_dir / f"adhoc_translation_w{latest_wave}.pkl"
+    _translation_cached = None
+    if args.rebuild_charts_only and _use_cache and _translation_cache_path.exists():
+        _translation_cached = pickle.loads(_translation_cache_path.read_bytes())
+
     # ── Executive summary (adhoc-only) ───────────────────────────────────────
-    print("Generating executive summary...")
-    exec_bullets = get_exec_summary(
-        rendered, cost_tracker, adhoc_section=adhoc_section, anthropic_client=anthropic_client
-    ) if adhoc_section else []
+    if _translation_cached:
+        print("  [CACHE HIT] executive summary — reusing cached bullets")
+        exec_bullets = _translation_cached["exec_bullets"]
+    else:
+        print("Generating executive summary...")
+        exec_bullets = get_exec_summary(
+            rendered, cost_tracker, adhoc_section=adhoc_section, anthropic_client=anthropic_client
+        ) if adhoc_section else []
     for item in exec_bullets:
         print(f"  [{item.get('section_id', '?')}] {item.get('bullet', '')}")
 
@@ -217,10 +246,22 @@ def main() -> None:
     print(f"Saved → {OUTPUT_DIR / wave_en}")
     print(f"WAVE_ADHOC_EN={wave_en}")
 
-    print("Translating to Slovak...")
-    sk_rendered, sk_exec_bullets, sk_question_texts = translate_to_slovak(
-        rendered, exec_bullets, cost_tracker, question_texts=question_texts,
-    )
+    if _translation_cached:
+        print("  [CACHE HIT] Slovak translation — reusing cached text")
+        sk_rendered = _translation_cached["sk_rendered"]
+        sk_exec_bullets = _translation_cached["sk_exec_bullets"]
+        sk_question_texts = _translation_cached["sk_question_texts"]
+    else:
+        print("Translating to Slovak...")
+        sk_rendered, sk_exec_bullets, sk_question_texts = translate_to_slovak(
+            rendered, exec_bullets, cost_tracker, question_texts=question_texts,
+        )
+        _translation_cache_path.write_bytes(pickle.dumps({
+            "sk_rendered": sk_rendered,
+            "sk_exec_bullets": sk_exec_bullets,
+            "sk_question_texts": sk_question_texts,
+            "exec_bullets": exec_bullets,
+        }))
     sk_annex_html = build_annex_html(con=tool_con, ui=_SK_UI, question_texts_override=sk_question_texts)
     tool_con.close()
 

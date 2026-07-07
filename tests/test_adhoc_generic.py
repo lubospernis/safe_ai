@@ -92,7 +92,7 @@ def mock_con(electrification_rows, electrification_df):
 def mock_mistral_theme():
     """Mistral client that returns a theme label for electrification (Phase 1 + detection),
     and a per-question description for _describe_question() so Phase 1 produces a real
-    key_finding (needed for get_adhoc_synthesis() to have non-empty input)."""
+    key_finding."""
     client = MagicMock()
 
     def complete_side_effect(*args, **kwargs):
@@ -131,28 +131,21 @@ def mock_mistral_theme():
 
 @pytest.fixture
 def mock_anthropic_spotlight():
-    """Anthropic client that serves both the Phase 3 spotlight call (bullets dict keyed
-    by question_id) and get_adhoc_synthesis's cross-cutting call (bullet array),
-    distinguished by the system prompt each function passes."""
+    """Anthropic client serving the Phase 3 spotlight call (bullets dict keyed by
+    question_id)."""
     client = MagicMock()
 
     def create_side_effect(*args, **kwargs):
         resp = MagicMock()
-        system = kwargs.get("system", "")
-        if "cross-cutting synthesis" in system:
-            resp.content[0].text = json.dumps([
-                {"bullet": "**Cross-cutting:** Electrification readiness gaps mirror broader digital adoption trends."},
-            ])
-        else:
-            resp.content[0].text = json.dumps({
-                "finding": "Slovak firms lag Euro Area peers in electrification readiness.",
-                "bullets": {
-                    "qe1": [
-                        "**SK readiness gap:** 35% of Slovak firms report low electrification readiness (code 1), vs 28% in the EA.",
-                        "**EA more advanced:** 31% of EA firms report moderate readiness (code 2), slightly above Slovakia's 28%.",
-                    ],
-                },
-            })
+        resp.content[0].text = json.dumps({
+            "finding": "Slovak firms lag Euro Area peers in electrification readiness.",
+            "bullets": {
+                "qe1": [
+                    "**SK readiness gap:** 35% of Slovak firms report low electrification readiness (code 1), vs 28% in the EA.",
+                    "**EA more advanced:** 31% of EA firms report moderate readiness (code 2), slightly above Slovakia's 28%.",
+                ],
+            },
+        })
         resp.usage.input_tokens = 800
         resp.usage.output_tokens = 120
         return resp
@@ -332,11 +325,6 @@ def test_build_adhoc_spotlight_output_structure(
     assert "qe1" in result["bullets_by_question"]
     assert len(result["bullets_by_question"]["qe1"]) > 0
     assert len(result["chart_pngs"]) == 1
-
-    # Cross-cutting synthesis is populated separately from per-question bullets.
-    assert isinstance(result["synthesis_bullets"], list)
-    assert len(result["synthesis_bullets"]) > 0
-    assert result["synthesis_bullets"] != result["bullets_by_question"]["qe1"]
 
 
 def test_build_adhoc_spotlight_threads_shortened_chart_caption(

@@ -187,6 +187,45 @@ SECTION_TMPL = textwrap.dedent("""
 """).strip()
 
 
+def render_section(
+    *,
+    section_id: str,
+    headline: str,
+    subtitle: str,
+    bullets: list[str],
+    chart_html: str = "",
+    footnote: str = "",
+    section_class: str = "",
+) -> str:
+    """Canonical section shape used by every report — main and adhoc alike:
+
+        <h3>headline</h3>          (the story — a full-sentence finding, never a raw label)
+        <p class="section-subtitle">subtitle</p>   (topic/question this section is about)
+        <ul>bullets</ul>
+        chart(s) last
+
+    New report types must render their sections through this function rather than
+    hand-building section HTML, so the chart-after-bullets order and headline-as-story
+    convention can't silently drift per report. `headline`/`subtitle` are inserted as-is
+    (format/escape before calling); `bullets` are markdown-bold-converted automatically.
+    """
+    bullets_html = "\n".join(
+        f"    <li>{_md_to_html(b.lstrip('• ').strip())}</li>"
+        for b in bullets
+    )
+    bullets_block = f'  <ul>\n{bullets_html}\n  </ul>\n' if bullets_html else ""
+    class_attr = f' class="{section_class}"' if section_class else ""
+    return (
+        f'<section id="{section_id}"{class_attr}>\n'
+        f'  <h3>{headline}</h3>\n'
+        f'  <p class="section-subtitle">{subtitle}</p>\n'
+        f'{bullets_block}'
+        f'{footnote}'
+        f'{chart_html}'
+        f'</section>'
+    )
+
+
 def _md_to_html(text: str) -> str:
     """Convert **bold** markdown to <strong> HTML tags."""
     return re.sub(r'\*\*(.+?)\*\*', lambda m: f'<strong>{m.group(1)}</strong>', text)
@@ -493,22 +532,24 @@ def build_html(
             continue
         sections_parts.append(f"<h2>{group_labels.get(group, group)}</h2>")
         for s in secs:
+            chart_b64 = base64.b64encode(s["chart_png"]).decode() if s.get("chart_png") else ""
+            chart_html = (
+                f'  <img class="chart-img" src="data:image/png;base64,{chart_b64}" '
+                f'alt="{s["title"]} {_ui.get("chart_alt_suffix", "chart")}">\n'
+            )
+            footnote = (
+                (fn_routed + "\n" if s.get("routed") else "") +
+                (fn_missing + "\n" if s.get("has_missingness_caveat") else "") +
+                (fn_agentic if s.get("tool_calls", 0) > 0 else "")
+            )
             sections_parts.append(
-                SECTION_TMPL.format(
+                render_section(
                     section_id=s["section_id"],
-                    finding=s["finding"],
-                    title=s["title"],
-                    bullets="\n".join(
-                        f"    <li>{_md_to_html(b.lstrip('• ').strip())}</li>"
-                        for b in s["bullets"]
-                    ),
-                    footnote=(
-                        (fn_routed + "\n" if s.get("routed") else "") +
-                        (fn_missing + "\n" if s.get("has_missingness_caveat") else "")
-                    ),
-                    agentic_footnote=fn_agentic if s.get("tool_calls", 0) > 0 else "",
-                    chart_b64=base64.b64encode(s["chart_png"]).decode() if s.get("chart_png") else "",
-                    chart_alt_suffix=_ui.get("chart_alt_suffix", "chart"),
+                    headline=s["finding"],
+                    subtitle=s["title"],
+                    bullets=s["bullets"],
+                    chart_html=chart_html,
+                    footnote=footnote,
                 )
             )
 
@@ -590,30 +631,18 @@ def build_html(
                     f'    <ul>\n{flat_bullets_html}\n    </ul>\n'
                 )
             else:
-                # Cross-cutting synthesis, above the per-question sections — connects
-                # findings across questions rather than repeating any one question's
-                # own bullets (see get_adhoc_synthesis() in llm.py).
-                synthesis_bullets = adhoc_s.get("synthesis_bullets") or []
-                synthesis_html = ""
-                if synthesis_bullets:
-                    synthesis_items = "\n".join(
-                        f"    <li>{_md_to_html(b.lstrip('• ').strip())}</li>"
-                        for b in synthesis_bullets
-                    )
-                    synthesis_html = (
-                        f'    <ul class="adhoc-synthesis">\n{synthesis_items}\n    </ul>\n'
-                    )
-
-                # Each question is its own independent <section>, exactly like the main
-                # report's regular sections (SECTION_TMPL) — not nested inside one big
-                # adhoc-spotlight wrapper. Every question in this wave's adhoc module
-                # gets its own chart + bullets, not just a top-1-3 selection.
+                # Each question is its own independent <section>, matching the main
+                # report's regular sections (SECTION_TMPL) exactly: story headline (h3),
+                # question-text subtitle, bullets, then chart last — not nested inside
+                # one big adhoc-spotlight wrapper. Every question in this wave's adhoc
+                # module gets its own chart + bullets, not just a top-1-3 selection.
                 q_sections = []
                 for i, qid in enumerate(selected_qids):
                     qd = q_descs_by_id.get(qid, {})
                     qt = qd.get("question_text", "") or qid.upper()
                     qt = re.sub(r"^[-–•]\s*", "", qt).strip()
-                    heading = f"{qid.upper()} — {qt}" if qt else qid.upper()
+                    subtitle = f"{qid.upper()} — {qt}" if qt else qid.upper()
+                    headline = qd.get("description", "").strip() or subtitle
 
                     chart_html = ""
                     if i < len(chart_pngs):
@@ -624,24 +653,21 @@ def build_html(
                         )
 
                     q_bullets = bullets_by_q.get(qid, [])
-                    bullets_html = "\n".join(
-                        f"      <li>{_md_to_html(b.lstrip('• ').strip())}</li>"
-                        for b in q_bullets
-                    )
-                    bullets_block = f'    <ul>\n{bullets_html}\n    </ul>\n' if bullets_html else ""
 
                     q_sections.append(
-                        f'<section id="{qid}" class="adhoc-question-section">\n'
-                        f'  <h3>{heading}</h3>\n'
-                        f'{chart_html}'
-                        f'{bullets_block}'
-                        f'</section>'
+                        render_section(
+                            section_id=qid,
+                            headline=_md_to_html(headline),
+                            subtitle=subtitle,
+                            bullets=q_bullets,
+                            chart_html=chart_html,
+                            section_class="adhoc-question-section",
+                        )
                     )
 
                 inner_html = (
                     f'    <p class="section-subtitle" style="margin-bottom:1rem;">'
                     f'{adhoc_s["finding"]}</p>\n'
-                    + synthesis_html
                     + "\n".join(q_sections) + "\n"
                 )
 

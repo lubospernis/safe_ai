@@ -14,7 +14,7 @@ from json_repair import repair_json
 from charts import SK_LABELS, _build_adhoc_chart
 from cost import _Usage, _track_cost
 from db import ALLOWED_MART_TABLES, _WRITE_RE
-from llm import NBS_STYLE_GUIDE, _check_numeric_grounding, get_adhoc_synthesis, get_shortened_questions
+from llm import NBS_STYLE_GUIDE, _check_numeric_grounding, get_shortened_questions
 from questionnaire import (
     build_response_label_context,
     fetch_adhoc_response_labels,
@@ -267,6 +267,20 @@ def _fetch_adhoc_chart_data(df: pd.DataFrame, theme: dict, wave_number: int, sch
 # row for that module — see _resolve_item_labels().
 _PICK_ORDER_LABELS: dict[str, str] = {"a": "First reason", "b": "Second reason"}
 
+# Firm-size-split sub-item labels: some continuous modules ask the same item (a/b)
+# separately for SME-sized vs large-firm peers, encoded as a microdata-only suffix
+# (e.g. QB2's a_g3/a_g4/b_g3/b_g4 — g3 = SME peers, g4 = large-firm peers). Like
+# _PICK_ORDER_LABELS, the annex has no representation of the g3/g4 split at all —
+# these labels are mirrored from dbt_project/models/marts/mart_safe__ai_adoption.sql,
+# the one place this split is already documented. Applied only when a module's chart
+# sub-items are exactly this set and the annex items mart has no row for the module.
+_FIRM_SIZE_SPLIT_LABELS: dict[str, str] = {
+    "a_g3": "SME peers — your country",
+    "a_g4": "Large firm peers — your country",
+    "b_g3": "SME peers — DE / FR / IT",
+    "b_g4": "Large firm peers — DE / FR / IT",
+}
+
 
 def _fetch_annex_labels(
     con, schema: str, module_ids: list[str], period_suffix: str | None,
@@ -323,19 +337,75 @@ def _fetch_annex_labels(
     return result
 
 
+_BRACKETED_INSTRUCTION_RE = re.compile(r"\[.*?\]", re.DOTALL)
+_ITEM_LETTER_PREFIX_RE = re.compile(r"^[a-z]\)\s*", re.IGNORECASE)
+_PANEL_LABEL_LEN_THRESHOLD = 40  # chars — above this, try an LLM shortener too
+
+
+def _clean_panel_label(text: str) -> str:
+    """Strip interviewer instructions and item-letter prefixes from a raw annex
+    item label before it's used as a chart panel title.
+
+    Annex item text is written for the interviewer script, not a chart reader —
+    e.g. QB1's sub-item b is "b)   In Germany, France and Italy [READ IF
+    NECESSARY: Please provide your best estimate...]". Blind character
+    truncation (as charts.py's ax.set_title(panel_title[:55]) does) cuts mid
+    bracket and produces a garbled title; this strips the bracketed instruction
+    and the leading item-letter prefix first so truncation (if still needed)
+    lands on a clean sentence.
+    """
+    cleaned = _BRACKETED_INSTRUCTION_RE.sub("", text)
+    cleaned = _ITEM_LETTER_PREFIX_RE.sub("", cleaned)
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
+def _shorten_long_panel_labels(
+    labels: dict[str, str], mistral_client, cost_tracker: dict | None = None,
+) -> dict[str, str]:
+    """Deterministically clean every label, then LLM-shorten any still long
+    after cleanup. Best-effort — falls back to the cleaned (not LLM-shortened)
+    text on any failure, never raises."""
+    cleaned = {k: _clean_panel_label(v) for k, v in labels.items()}
+    if mistral_client is None:
+        return cleaned
+    from llm import _shorten_panel_label_llm  # local import: avoid import cycle at module load
+    result = dict(cleaned)
+    for key, text in cleaned.items():
+        if len(text) <= _PANEL_LABEL_LEN_THRESHOLD:
+            continue
+        try:
+            r = _shorten_panel_label_llm(text, mistral_client)
+            if r.get("short_label"):
+                result[key] = r["short_label"]
+            if cost_tracker is not None and "_usage" in r:
+                u = r["_usage"]
+                _track_cost(cost_tracker, "mistral-small-latest", _Usage(u["input"], u["output"]))
+        except Exception:
+            pass
+    return result
+
+
 def _resolve_item_labels(module_id: str, sub_items: list[str], annex_items: dict[str, str]) -> dict[str, str]:
     """Resolve sub-item -> label for one module. annex_items is already the
     module's own {item_key: label} dict from _fetch_annex_labels().
 
-    Falls back to _PICK_ORDER_LABELS only when annex_items is empty for this module
-    AND sub_items look exactly like a two-slot pick-order pattern ('a'/'b' only) —
-    this is the fix for QA2-style questions where the chart previously showed bare
-    "a"/"b" as panel titles.
+    Falls back to _PICK_ORDER_LABELS or _FIRM_SIZE_SPLIT_LABELS when annex_items
+    doesn't actually cover this module's real chart sub_items (either annex_items is
+    empty, OR it has rows but for different keys — e.g. QB2's annex only has bare
+    "a"/"b" item rows, but its real chart sub_items are "a_g3"/"a_g4"/"b_g3"/"b_g4",
+    a firm-size split with no annex representation at all) AND sub_items look exactly
+    like one of those known microdata-only encoding patterns — this is the fix for
+    QA2/QB2-style questions where the chart previously showed bare "a"/"b" or
+    "a_g3"/"a_g4" as panel titles.
     """
-    if annex_items:
+    if annex_items and set(sub_items) <= set(annex_items):
         return dict(annex_items)
     if set(sub_items) and set(sub_items) <= set(_PICK_ORDER_LABELS):
         return dict(_PICK_ORDER_LABELS)
+    if set(sub_items) and set(sub_items) <= set(_FIRM_SIZE_SPLIT_LABELS):
+        return dict(_FIRM_SIZE_SPLIT_LABELS)
+    if annex_items:
+        return dict(annex_items)
     return {}
 
 
@@ -745,6 +815,10 @@ def build_adhoc_spotlight(
         effective_qt.update(
             _resolve_item_labels(qid, module_sub_items, module_annex_items)
         )
+        # Clean interviewer-instruction brackets / item-letter prefixes out of every
+        # panel label before it reaches chart-building, and LLM-shorten anything still
+        # long after cleanup (see _shorten_long_panel_labels docstring).
+        effective_qt = _shorten_long_panel_labels(effective_qt, mistral_client, cost_tracker)
 
         question_contexts.append({
             "question_id": qid,
@@ -1056,21 +1130,6 @@ def build_adhoc_spotlight(
             chart_pngs.append(q["chart_png"])
             chart_rebuild_specs.append(q)
 
-    # ── Cross-cutting synthesis across all questions (separate from per-question bullets) ──
-    synthesis_bullets = get_adhoc_synthesis(
-        [
-            {
-                "question_id": q["question_id"],
-                "question_text": q.get("question_text", ""),
-                "key_finding": q.get("key_finding", ""),
-                "description": q.get("description", ""),
-            }
-            for q in question_contexts
-        ],
-        cost_tracker,
-        anthropic_client=anthropic_client,
-    )
-
     # ── Phase 4: critical review (Mistral Large, threshold ≥ 8) ─────────────
     review_scores: dict = {}
     review_passed = True
@@ -1140,7 +1199,6 @@ def build_adhoc_spotlight(
         "bullets": bullets,
         "bullets_by_question": bullets_by_question,
         "selected_question_ids": selected_qids,
-        "synthesis_bullets": synthesis_bullets,
         "chart_png": chart_pngs[0] if chart_pngs else None,
         "chart_pngs": chart_pngs,
         "theme_label": theme["theme_label"],
@@ -1154,6 +1212,47 @@ def build_adhoc_spotlight(
         "_chart_rebuild_specs": chart_rebuild_specs,
         "_response_labels": response_labels,
     }
+
+
+def rebuild_adhoc_charts_en(
+    chart_rebuild_specs: list[dict],
+    response_labels: dict,
+    mistral_client,
+    cost_tracker: dict | None = None,
+    theme_label: str = "",
+) -> list[bytes]:
+    """Re-render adhoc spotlight charts in English from cached chart_rebuild_specs,
+    without re-running any LLM description/bullet/review phase.
+
+    Used by run_adhoc_report.py's --rebuild-charts-only dev flag: lets a chart- or
+    label-formatting change (e.g. panel-label cleanup) be verified by rebuilding just
+    the chart PNGs from a previous run's cached DataFrames, instead of re-paying for
+    every LLM phase. Falls back to the original chart_png for any question that fails
+    to rebuild, so a bug in the new chart code never drops a chart entirely (surfaces
+    as a printed warning instead)."""
+    pngs: list[bytes] = []
+    for q in chart_rebuild_specs:
+        try:
+            qid = q["question_id"]
+            effective_qt = _shorten_long_panel_labels(
+                dict(q.get("effective_question_texts") or {}), mistral_client, cost_tracker,
+            )
+            chart_theme = {
+                "module_id": qid,
+                "question_text": q.get("question_text", ""),
+                "question_texts": effective_qt,
+                "theme_label": theme_label or qid,
+            }
+            png = _build_adhoc_chart(
+                q["chart_df"], chart_theme,
+                is_continuous=q["is_continuous"],
+                response_labels=response_labels,
+            )
+            pngs.append(png if png else q["chart_png"])
+        except Exception as e:
+            print(f"  Chart rebuild failed for {q.get('question_id', '?')} — keeping cached chart: {e}")
+            pngs.append(q["chart_png"])
+    return pngs
 
 
 def rebuild_adhoc_charts_sk(

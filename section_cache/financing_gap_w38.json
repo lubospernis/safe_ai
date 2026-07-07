@@ -1,15 +1,15 @@
 {
   "section_id": "financing_gap",
   "wave_number": 38,
-  "finding": "Credit line stress widened notably as demand surged, diverging from easy bank loan conditions",
+  "finding": "Credit line stress widened substantially, driven by surging Slovak firm need",
   "bullets": [
-    "The Slovak credit line financing gap widened notably to +14.8pp (n=278) from +4.8pp in the prior quarter, driven almost entirely by rising need (from +3.1pp to +12.3pp), while availability moved only marginally (from -1.7pp to -2.5pp) — suggesting Slovak firms face heightened short-term liquidity strain compared to the euro area's +12.6pp.",
-    "By contrast, Slovak bank loan conditions remained favourable: the gap held negative at -4.0pp (n=254), with availability steady at +1.4pp — 5.7pp less stressed than the euro area's +1.7pp gap — underscoring a sharp divergence between short-term liquidity instruments and term lending.",
-    "Trade credit stress eased moderately, with the Slovak gap narrowing from +9.8pp to +6.3pp (n=150), as need fell from +10.1pp to +7.1pp and availability edged up from +0.3pp to +0.8pp — indicating Slovak firms are now less exposed to trade credit constraints than the euro area's +8.2pp."
+    "The Slovak credit line gap widened substantially from +4.8pp to +14.8pp — exceeding the EA gap of +12.6pp by 2.2pp — driven primarily by a sharp rise in financing need from +3.1pp to +12.3pp, while availability deteriorated only marginally (from -1.7pp to -2.5pp), signalling tighter liquidity constraints for Slovak firms.",
+    "By contrast, the bank loan gap improved from -7.6pp to -4.0pp as need rose from -6.2pp to -2.6pp while availability held steady at +1.4pp, leaving Slovak firms notably less stressed than the EA (+1.7pp gap); this cross-instrument divergence — easing bank loans alongside tightening credit lines — is the defining feature of wave 38 financing conditions.",
+    "Trade credit conditions eased moderately, with the Slovak gap narrowing from +9.8pp to +6.3pp as need fell from +10.1pp to +7.1pp and availability improved marginally (from +0.3pp to +0.8pp), placing Slovakia 1.9pp less stressed than the EA (+8.2pp), suggesting some relief for firms reliant on supplier credit."
   ],
-  "chart_subtitle": "Slovak credit line gap widened to +14.8pp, exceeding the euro area.",
+  "chart_subtitle": "Slovak credit line gap rose sharply to +14.8pp in wave 38.",
   "grounding_warnings": [
-    "'150' not found in source data"
+    "'38' not found in source data"
   ],
   "tool_calls": 0
 }

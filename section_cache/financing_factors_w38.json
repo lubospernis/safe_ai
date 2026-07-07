@@ -1,18 +1,20 @@
 {
   "section_id": "financing_factors",
   "wave_number": 38,
-  "finding": "Bank willingness positive for Slovak firms but edging lower",
+  "finding": "Slovak bank willingness remained positive but eased marginally in wave 38",
   "bullets": [
-    "A net 7.8% of Slovak firms (n=306) reported that banks' willingness to provide credit improved, easing marginally by 2.6 pp from the prior quarter's net 10.4% — yet remaining above the euro area's net 5.5% and well above Germany's net -4.4%, suggesting continued but weakening support for external financing.",
-    "Access to public financial support deteriorated notably for Slovak firms (n=298), with a net 33.8% reporting worsening conditions — an 8.8 pp decline from the previous quarter's net 25.0%, and materially worse than the euro area's net 15.5%, putting pressure on firms reliant on state-backed funding.",
-    "The general economic outlook continued to deteriorate for Slovak firms (n=442), with a net 44.4% reporting a worsening outlook — 6.1 pp more negative than the prior quarter and 18.3 pp below the euro area's already negative net 26.1%, indicating heightened macroeconomic headwinds for financing decisions."
+    "A net 7.8% of Slovak firms (n=306) reported that banks' willingness to provide credit improved, easing marginally by 2.6 pp from a net 10.4% in the prior wave, yet remaining above the euro area's net 5.5% and well above Germany's net 4.4% deterioration — suggesting continued, though slightly weaker, support for Slovak firms' financing access.",
+    "Access to public financial support deteriorated notably for a net 33.8% of Slovak firms (n=298), worsening by 8.8 pp from a net 25.0% in wave 37, compared with a near-unchanged net 15.5% deterioration across the euro area — putting pressure on firms reliant on state-backed financing.",
+    "The general economic outlook deteriorated further for a net 44.4% of Slovak firms (n=442), declining by 6.1 pp from a net 38.3% in the prior wave and remaining 18.3 pp worse than the euro area's net 26.1% — indicating heightened macro headwinds for external financing conditions."
   ],
-  "chart_subtitle": "A net 7.8% of Slovak firms reported banks more willing to lend.",
+  "chart_subtitle": "Net 7.8% of Slovak firms reported improved bank willingness.",
   "grounding_warnings": [
     "'33.8' not found in source data",
     "'25.0' not found in source data",
+    "'37' not found in source data",
     "'15.5' not found in source data",
     "'44.4' not found in source data",
+    "'38.3' not found in source data",
     "'18.3' not found in source data",
     "'26.1' not found in source data"
   ],

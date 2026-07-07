@@ -1,16 +1,17 @@
 {
   "section_id": "bank_loan_terms",
   "wave_number": 38,
-  "finding": "Slovak interest rate conditions tightened notably, reversing prior quarter's easing",
+  "finding": "Slovak interest rate conditions reversed to tightening after prior quarter easing",
   "bullets": [
-    "A net 5% of Slovak firms (n=62) reported tighter interest rate conditions — a swing of 13.8 pp from the prior quarter's net 8% easing — though SK tightening remained well below the EA's net 27% and DE's net 38%, suggesting Slovak firms face relatively less pressure compared to peers.",
-    "Non-interest financing costs (charges, fees, commissions) remained persistently elevated, with a net 41% of Slovak firms (n=60) reporting increases, broadly stable (easing marginally by 1.8 pp vs wave 37) and above the EA's net 37%, putting further strain on firm profitability.",
-    "Collateral requirements and other loan terms tightened only marginally for Slovak firms (net 1% and net 8%, respectively), remaining notably below DE levels of net 32% and net 33%, indicating Slovak firms face comparatively less restrictive lending conditions."
+    "A net 5% of Slovak firms (n=62) reported higher interest rates on bank financing — a reversal of 13.8 pp from the prior quarter's net easing of 8%, though still well below the EA's net 27% and DE's net 38% tightening, implying increased debt servicing costs for borrowers.",
+    "Non-interest financing costs (charges, fees, commissions) remained broadly stable, with a net 41% of Slovak firms (n=60) reporting tighter conditions — almost unchanged from the prior quarter's net 42% and approaching Germany's net 49%, putting pressure on firms' operational margins.",
+    "Credit availability eased marginally, with a net 6% of Slovak firms (n=62) reporting a reduction in the available size of loans or credit lines, compared with a net 7% in the previous quarter and the EA's net 9% — suggesting limited but persistent constraints on growth financing."
   ],
-  "chart_subtitle": "A net 5% of Slovak firms reported interest rate tightening.",
+  "chart_subtitle": "Net 5% of Slovak firms reported higher interest rates.",
   "grounding_warnings": [
     "'62' not found in source data",
-    "'60' not found in source data"
+    "'60' not found in source data",
+    "'62' not found in source data"
   ],
   "tool_calls": 0
 }

@@ -1,22 +1,21 @@
 {
   "section_id": "business_situation",
   "wave_number": 38,
-  "finding": "Slovak firm profits deteriorated notably as turnover declined and costs surged",
+  "finding": "Slovak turnover contraction deepened as labour costs outpaced euro area peers",
   "bullets": [
-    "A net 39.80% of Slovak firms (n=229) reported falling profits in wave 38, worsening by 17.37 pp from a net 22% in the prior quarter — more than double the euro area's net 17% profit decline, signalling weaker financial performance for Slovak businesses.",
-    "Slovak turnover contracted for a net 26% of firms (n=229), deepening 11.60 pp from a net 15% decline in wave 37, while the euro area remained broadly flat at a net 1% increase, reducing revenue streams for Slovak firms.",
-    "Labour cost pressures intensified, with a net 84% of Slovak firms (n=229) reporting higher labour costs — up 21.78 pp from the prior quarter and exceeding the euro area's net 63% — compressing margins alongside rising other costs at a net 72%, squeezing profitability further."
+    "Slovak labour costs rose for a net 84% of firms (n=229), up 21.78 pp from the prior wave's net 62%, widening the gap above the euro area's net 63% to over 20 pp — putting further pressure on margins.",
+    "A net 26% of Slovak firms (n=229) reported falling turnover, deteriorating 11.60 pp from the prior wave's net 15%, contrasting sharply with the euro area's near-flat net 1% — signalling a sharper demand downturn.",
+    "Slovak profits declined for a net 40% of firms (n=229), worsening 17.37 pp from the prior wave's net 22% — more than double the euro area's net 17% contraction pace."
   ],
-  "chart_subtitle": "Net 40% of Slovak firms reported falling profits in wave 38.",
+  "chart_subtitle": "A net 26% of Slovak firms reported falling turnover.",
   "grounding_warnings": [
-    "'38' not found in source data",
-    "'17.37' not found in source data",
-    "'22' not found in source data",
-    "'17' not found in source data",
+    "'21.78' not found in source data",
+    "'20' not found in source data",
     "'26' not found in source data",
     "'15' not found in source data",
-    "'37' not found in source data",
-    "'21.78' not found in source data"
+    "'17.37' not found in source data",
+    "'22' not found in source data",
+    "'17' not found in source data"
   ],
   "tool_calls": 0
 }

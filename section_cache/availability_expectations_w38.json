@@ -3,15 +3,16 @@
   "wave_number": 38,
   "finding": "Slovak firms' bank loan availability expectations deteriorated moderately in wave 38",
   "bullets": [
-    "Slovak firms' expectations for trade credit availability remained notably more pessimistic than the EA, with a net 10% expecting deterioration (n=79) versus a net 1% in the EA — a gap of 9.4 pp — though conditions improved marginally by 1.5 pp from the previous quarter's net 12%, suggesting tighter liquidity constraints ahead.",
-    "A net 5% of Slovak firms (n=130) expected bank loan availability to deteriorate over the coming quarters, worsening by 3.2 pp from a net 2% in the prior wave, broadly in line with the EA's parallel deterioration of 3.4 pp to a net 4%, putting pressure on investment plans.",
-    "Expectations for credit line and bank overdraft availability also edged lower for Slovak firms, with a net 7% expecting deterioration (n=138) — a 1.3 pp decline from the previous quarter — compared with a net 4% in the EA, leaving a moderate 3.3 pp gap, signalling tighter short-term financing conditions."
+    "A net 5% of Slovak firms (n=130) expected bank loan availability to deteriorate in wave 38, moderating 3.2 pp from a near-neutral net 2% in the previous wave — converging with the EA, where expectations also worsened by 3.4 pp to a net 4%, signalling tighter financing conditions ahead.",
+    "Slovak firms were considerably more pessimistic about trade credit availability than EA peers, with a net 10% expecting deterioration (n=79) compared with a net 1% for the EA — a gap of 9.4 pp, suggesting persistent local supply tightness not yet visible in EA-wide data.",
+    "Expectations for credit line and bank overdraft availability edged further negative for Slovak firms (net 7%, n=138, easing marginally by 1.3 pp), remaining 3.2 pp more pessimistic than the EA's net 4% — indicating continued constraints on short-term liquidity options."
   ],
-  "chart_subtitle": "A net 5% of Slovak firms expect bank loan availability to deteriorate.",
+  "chart_subtitle": "A net 5% of Slovak firms expected bank loan availability to deteriorate.",
   "grounding_warnings": [
+    "'130' not found in source data",
+    "'38' not found in source data",
     "'10' not found in source data",
     "'79' not found in source data",
-    "'130' not found in source data",
     "'138' not found in source data"
   ],
   "tool_calls": 0

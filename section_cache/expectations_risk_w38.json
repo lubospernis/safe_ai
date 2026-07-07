@@ -1,17 +1,14 @@
 {
   "section_id": "expectations_risk",
   "wave_number": 38,
-  "finding": "Slovak firms retain the highest upside inflation risk balance across three economies",
+  "finding": "Slovak firms report the highest upside five-year inflation risk balance",
   "bullets": [
-    "A net 59% of Slovak firms (n=229) viewed five-year inflation risks as skewed to the upside, exceeding the euro area's net 55% (n=5,278) and Germany's net 51%, retaining the widest upside bias across the three economies in wave 38 — underscoring heightened pricing pressures for Slovak businesses.",
-    "The euro area's upside inflation risk balance rose notably by 9.90 pp from the prior wave to net 55%, narrowing the SK–EA gap from 7.7 pp in wave 37 to 3.6 pp — as EA firms' inflation concerns catch up with Slovak firms', reducing the relative advantage Slovak firms previously held.",
-    "Slovak firms' own upside balance rose moderately by 5.80 pp from net 53% in wave 37 to net 59% in wave 38, a smaller acceleration than the euro area's, yet confirming persistent local price-risk concerns on the upside — suggesting sustained uncertainty over input and output pricing strategies."
+    "A net 59% of Slovak firms (n=229) saw upside risks to five-year inflation expectations in wave 38, rising notably by 5.80 pp from a net 53% in the prior wave — the highest reading among the three regions, signalling heightened long-term pricing pressures for firms.",
+    "The euro area closed the gap moderately, with its net balance rising more sharply by 9.90 pp to a net 55% (n=5,278), compared with Slovak firms' smaller 5.80 pp increase, leaving Slovakia above the EA by 3.61 pp — implying Slovak firms remain more concerned about persistent inflation than their peers.",
+    "Germany's net upside inflation risk balance rose 9.67 pp to a net 51%, confirming a broad regional shift toward elevated inflation risk perceptions, though still below both SK and EA."
   ],
   "chart_subtitle": "Slovak firms' upside inflation risk balance reached net 59%.",
   "grounding_warnings": [
-    "'38' not found in source data",
-    "'37' not found in source data",
-    "'37' not found in source data",
     "'38' not found in source data"
   ],
   "tool_calls": 0

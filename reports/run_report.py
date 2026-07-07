@@ -342,6 +342,21 @@ def main() -> None:
         rendered, exec_bullets, cost_tracker, question_texts=question_texts,
     )
     sk_annex_html = build_annex_html(con=tool_con, ui=_SK_UI, question_texts_override=sk_question_texts)
+
+    _next_release_date = None
+    _next_release_note = None
+    try:
+        _cal_row = tool_con.execute("""
+            SELECT next_release_date, reference_period
+            FROM main_safe.ref_safe__release_calendar
+            WHERE dataset = 'SAFE'
+        """).fetchone()
+        if _cal_row and _cal_row[0]:
+            _next_release_date = _cal_row[0].isoformat()
+            _next_release_note = _cal_row[1] or None
+    except Exception as e:
+        print(f"  WARNING: could not read release calendar: {e}")
+
     tool_con.close()
 
     print("Rebuilding charts with Slovak labels...")
@@ -381,12 +396,20 @@ def main() -> None:
     print(f"Saved → {OUTPUT_DIR / wave_sk}")
     print(f"WAVE_REPORT_SK={wave_sk}")
 
+    from datetime import date as _date
+
     _pages_base = "https://lubospernis.github.io/safe_ai"
     _links = {
         "wave": latest_wave,
         "en": f"{_pages_base}/{wave_en}",
         "sk": f"{_pages_base}/{wave_sk}",
+        "last_updated": _date.today().isoformat(),
     }
+    if _next_release_date:
+        _links["next_release"] = _next_release_date
+        if _next_release_note:
+            _links["next_release_note"] = _next_release_note
+
     (OUTPUT_DIR / "latest_links.json").write_text(
         json.dumps(_links, indent=2), encoding="utf-8"
     )

@@ -7,6 +7,11 @@ export const STRINGS = {
     subscribe: "Subscribe",
     unsubscribe: "Unsubscribe",
     somethingWentWrong: "Something went wrong",
+    formatDescription:
+      "Sent to regulators every quarter, with an occasional extra ad-hoc newsletter for special survey rounds.",
+    lastUpdated: "Updated {date}",
+    nextRelease: "Next release: {date}*",
+    nextReleaseFootnote: "*Newsletter will be sent out around this date.",
     newsletters: {
       "safe-slovakia": {
         name: "SAFE Slovakia",
@@ -22,6 +27,11 @@ export const STRINGS = {
     subscribe: "Odoberať",
     unsubscribe: "Zrušiť odber",
     somethingWentWrong: "Niečo sa pokazilo",
+    formatDescription:
+      "Zasielané regulátorom každý štvrťrok, príležitostne aj mimoriadny newsletter pri špeciálnych kolách prieskumu.",
+    lastUpdated: "Aktualizované {date}",
+    nextRelease: "Ďalšie vydanie: {date}*",
+    nextReleaseFootnote: "*Newsletter bude odoslaný približne v tomto termíne.",
     newsletters: {
       "safe-slovakia": {
         name: "SAFE Slovensko",

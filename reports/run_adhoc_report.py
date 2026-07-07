@@ -61,6 +61,21 @@ from llm import _find_ecb_focus_article, get_exec_summary, translate_to_slovak
 OUTPUT_DIR = Path(__file__).parent / "output"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
+# Abort the run if spend crosses this ceiling — guards against a runaway loop or
+# pricing-table error silently burning API budget. Override via env for testing.
+COST_CEILING_USD = float(os.environ.get("COST_CEILING_USD", "15.0"))
+
+
+class CostCeilingExceeded(RuntimeError):
+    pass
+
+
+def _check_cost_ceiling(cost_tracker: dict) -> None:
+    if cost_tracker["usd"] > COST_CEILING_USD:
+        raise CostCeilingExceeded(
+            f"Spend ${cost_tracker['usd']:.2f} exceeded ceiling ${COST_CEILING_USD:.2f} — aborting run"
+        )
+
 
 def main() -> None:
     from datetime import datetime as _dt
@@ -157,6 +172,8 @@ def main() -> None:
         print("Adhoc spotlight build failed — no output produced.")
         tool_con.close()
         sys.exit(1)
+
+    _check_cost_ceiling(cost_tracker)
 
     print(f"  Adhoc spotlight generated: {adhoc_section['finding']}")
     if not adhoc_section.get("review_passed", True):

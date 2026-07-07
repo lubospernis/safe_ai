@@ -202,7 +202,14 @@ def main() -> None:
         ecb_url = args.ecb_url
     else:
         print(f"Discovering latest ECB SAFE report URL from {ECB_INDEX} ...")
-        ecb_url = discover_ecb_url()
+        try:
+            ecb_url = discover_ecb_url()
+        except Exception as e:
+            # Gap analysis is optional context, not a report-blocking step — an ECB
+            # site-structure change or transient network error must not fail the
+            # whole CI job (it runs before the Pages-publish step).
+            print(f"  WARNING: ECB URL discovery failed ({e}) — skipping gap analysis.")
+            sys.exit(0)
         print(f"  Found: {ecb_url}")
 
     if not REPORT_HTML.exists():

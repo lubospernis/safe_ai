@@ -20,6 +20,8 @@ from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from mistralai import Mistral
 
+from evals import check_magnitude_calibration, check_sign_language
+
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 _DEFAULT_REPORT_HTML = Path(__file__).parent / "output" / "report_latest.html"
@@ -153,6 +155,25 @@ def extract_report_text(html: str) -> str:
     return "\n".join(parts)
 
 
+def extract_all_bullets(html: str) -> list[str]:
+    """Extract every <li> bullet in the report (exec summary + all sections)."""
+    soup = BeautifulSoup(html, "lxml")
+    return [li.get_text(strip=True) for li in soup.select("li") if li.get_text(strip=True)]
+
+
+def run_deterministic_checks(html: str) -> list[str]:
+    """Code-enforced style checks — sign-language and magnitude-calibration mismatches.
+
+    Unlike the Mistral supervisor scores below, these are regex-based and cannot be
+    talked out of failing by an LLM having a good day.
+    """
+    errors = []
+    for bullet in extract_all_bullets(html):
+        errors.extend(check_sign_language(bullet))
+        errors.extend(check_magnitude_calibration(bullet))
+    return errors
+
+
 def extract_adhoc_text(html: str) -> str:
     """Extract adhoc spotlight text (finding + sub-section bullets) for quality checking."""
     soup = BeautifulSoup(html, "lxml")
@@ -203,6 +224,20 @@ def main() -> None:
 
     print(f"Quality check: evaluating {len(report_text):,} chars of report text...")
 
+    # Deterministic style checks — code-enforced, run before any LLM call.
+    print("Quality check: running deterministic sign/magnitude checks...")
+    determ_errors = run_deterministic_checks(html)
+    if determ_errors:
+        print(f"  DETERMINISTIC CHECK FAIL ({len(determ_errors)} issue(s)):")
+        for e in determ_errors:
+            print(f"    - {e}")
+        scores = {"readability": 1, "substance": 1, "coherence": 1, "sign_convention": 1,
+                  "verdict": "fail", "reason": f"Deterministic check failures: {'; '.join(determ_errors[:5])}"}
+        SCORES_PATH.write_text(json.dumps(scores))
+        print("Quality gate FAILED — sign-language/magnitude-calibration issues detected")
+        sys.exit(1)
+    print("  Deterministic checks OK")
+
     client = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
 
     # Chart sanity check via Pixtral vision
@@ -217,23 +252,25 @@ def main() -> None:
         sys.exit(1)
     print(f"  Charts OK")
 
-    resp = client.chat.complete(
-        model="mistral-small-latest",
-        max_tokens=400,
-        messages=[
-            {"role": "system", "content": SUPERVISOR_SYSTEM},
-            {"role": "user", "content": report_text[:8000]},
-        ],
-    )
-    raw = resp.choices[0].message.content.strip()
-
     try:
+        resp = client.chat.complete(
+            model="mistral-small-latest",
+            max_tokens=400,
+            messages=[
+                {"role": "system", "content": SUPERVISOR_SYSTEM},
+                {"role": "user", "content": report_text[:8000]},
+            ],
+        )
+        raw = resp.choices[0].message.content.strip()
         result = json.loads(raw)
-    except Exception:
-        print(f"Quality check: could not parse supervisor response — assuming pass")
-        print(f"  Raw response: {raw[:200]}")
+    except Exception as e:
+        # A Mistral API outage must not be indistinguishable from a real quality
+        # failure — degrade to a clearly-labeled "assumed pass" rather than crashing
+        # the CI job (matches the parse-error fallback below and the adhoc
+        # supervisor's existing try/except pattern).
+        print(f"Quality check: supervisor call failed ({e}) — assuming pass")
         fallback = {"readability": 10, "substance": 10, "coherence": 10,
-                    "sign_convention": 10, "verdict": "pass", "reason": "parse error — assumed pass"}
+                    "sign_convention": 10, "verdict": "pass", "reason": f"supervisor error — assumed pass: {e}"}
         SCORES_PATH.write_text(json.dumps(fallback))
         sys.exit(0)
 

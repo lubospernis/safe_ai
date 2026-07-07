@@ -5,9 +5,14 @@ import os
 from mistralai import Mistral
 
 _PRICE = {
-    "claude-sonnet-4-6":     {"input": 3.00,  "output": 15.00},
-    "mistral-small-latest":  {"input": 0.10,  "output": 0.30},
-    "mistral-medium-latest": {"input": 0.40,  "output": 2.00},
+    "claude-sonnet-4-6":         {"input": 3.00,  "output": 15.00},
+    "claude-opus-4-8":           {"input": 15.00, "output": 75.00},
+    "claude-haiku-4-5-20251001": {"input": 1.00,  "output": 5.00},
+    "mistral-small-latest":      {"input": 0.10,  "output": 0.30},
+    "mistral-medium-latest":     {"input": 0.40,  "output": 2.00},
+    "mistral-medium-2505":       {"input": 0.40,  "output": 2.00},
+    "mistral-large-2512":        {"input": 2.00,  "output": 6.00},
+    "pixtral-12b-2409":          {"input": 0.15,  "output": 0.15},
 }
 
 

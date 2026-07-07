@@ -640,14 +640,25 @@ def _check_one(sec: dict, df: pd.DataFrame) -> dict:
     lines.append(f"pinned_panels: {sec['pinned_panels']}")
 
     client = _mistral_client()
-    resp = client.chat.complete(
-        model="mistral-small-latest",
-        max_tokens=120,
-        messages=[
-            {"role": "system", "content": INTEREST_SYSTEM},
-            {"role": "user", "content": "\n".join(lines)},
-        ],
-    )
+    try:
+        resp = client.chat.complete(
+            model="mistral-small-latest",
+            max_tokens=120,
+            messages=[
+                {"role": "system", "content": INTEREST_SYSTEM},
+                {"role": "user", "content": "\n".join(lines)},
+            ],
+        )
+    except Exception as e:
+        # Interest-check is a cheap triage step, not a hard gate — an API outage
+        # must not crash the whole report run. Default to "interesting" so the
+        # section still gets full treatment (same conservative fallback used
+        # below for JSON parse failures).
+        print(f"  WARNING: interest check failed for section '{sec['id']}' ({e}) — defaulting to interesting.")
+        result = {"interesting": True, "chart_type": "line", "best_panel": None, "reason": "api error"}
+        result["section_id"] = sec["id"]
+        return result
+
     raw = resp.choices[0].message.content.strip()
     try:
         result = json.loads(repair_json(raw))

@@ -430,6 +430,20 @@ def build_financing_gap_chart(sec: dict, df: pd.DataFrame, chart_title: str = ""
     return buf.read()
 
 
+def _adhoc_chart_caption(theme: dict) -> str:
+    """Caption shown above an adhoc chart's panels: prefer the LLM-shortened
+    question (theme['chart_question'], set by get_shortened_questions() in
+    llm.py), fall back to the raw annex question text truncated to 110 chars."""
+    short_q = (theme.get("chart_question") or "").strip()
+    if short_q:
+        return short_q
+    q_text = (theme.get("question_text") or "").strip()
+    if q_text:
+        q_text = re.sub(r"^[-–•]\s*", "", q_text).strip()
+        return q_text[:110]
+    return ""
+
+
 def _build_adhoc_chart(
     df: pd.DataFrame,
     theme: dict,
@@ -511,10 +525,9 @@ def _build_adhoc_chart_continuous(df: pd.DataFrame, theme: dict, labels: dict | 
     for ax in axes_flat[n_panels:]:
         ax.set_visible(False)
 
-    q_text = (theme.get("question_text") or "").strip()
-    if q_text:
-        q_text = re.sub(r"^[-–•]\s*", "", q_text).strip()
-        fig.suptitle(q_text[:110], fontsize=7, color="#666666", style="italic",
+    caption = _adhoc_chart_caption(theme)
+    if caption:
+        fig.suptitle(caption, fontsize=7, color="#666666", style="italic",
                      y=1.01, ha="center", wrap=True)
 
     buf = io.BytesIO()
@@ -598,11 +611,9 @@ def _build_adhoc_chart_categorical(
                bbox_to_anchor=(0.5, 0.01), ncol=len(countries),
                fontsize=9, frameon=False, handlelength=1.0)
 
-    q_text = (theme.get("question_text") or "").strip()
-    if q_text:
-        # Strip leading bullet/dash artefacts from the annex question text
-        q_text = re.sub(r"^[-–•]\s*", "", q_text).strip()
-        fig.suptitle(q_text[:110], fontsize=7, color="#666666", style="italic",
+    caption = _adhoc_chart_caption(theme)
+    if caption:
+        fig.suptitle(caption, fontsize=7, color="#666666", style="italic",
                      y=1.01, ha="center", wrap=True)
 
     buf = io.BytesIO()

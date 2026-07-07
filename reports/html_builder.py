@@ -114,6 +114,8 @@ HTML_PAGE = textwrap.dedent("""
   ul          {{ padding-left: 20px; margin: 0 0 16px 0; }}
   li          {{ margin-bottom: 6px; font-size: 13.5px; line-height: 1.5; }}
   .chart-img  {{ display: block; max-width: 560px; width: 100%; margin-top: 8px; }}
+  .chart-img.chart-img--adhoc {{ margin: 8px 0 10px; }}
+  .chart-img.chart-img--flex-third {{ max-width: calc(34% - 0.5rem); min-width: 220px; flex: 1 1 220px; }}
   .footnote   {{ font-size: 11px; color: #888; margin-top: 10px; line-height: 1.4; }}
   .footer     {{ color: #adadad; font-size: 11px; margin-top: 32px; text-align: center; }}
   .lang-switch {{ float: right; font-size: 12px; color: #2B5291; text-decoration: none;
@@ -511,8 +513,8 @@ def build_html(
                 if ss.get("chart_png"):
                     ss_b64 = base64.b64encode(ss["chart_png"]).decode()
                     ss_chart_html = (
-                        f'<img class="chart-img" src="data:image/png;base64,{ss_b64}" '
-                        f'alt="{ss["heading"]} {_ui.get("chart_alt_suffix", "chart")}" style="margin:8px 0 12px;">\n'
+                        f'<img class="chart-img chart-img--adhoc" src="data:image/png;base64,{ss_b64}" '
+                        f'alt="{ss["heading"]} {_ui.get("chart_alt_suffix", "chart")}">\n'
                     )
                 ss_bullets = "\n".join(
                     f"    <li>{_md_to_html(b.lstrip('• ').strip())}</li>"
@@ -558,8 +560,8 @@ def build_html(
                 all_charts_html = ""
                 if chart_pngs:
                     img_tags = "".join(
-                        f'<img class="chart-img" src="data:image/png;base64,{base64.b64encode(png).decode()}" '
-                        f'alt="{theme_label} {_ui.get("chart_alt_suffix", "chart")}" style="max-width:calc(34% - 0.5rem);min-width:220px;flex:1 1 220px;">\n'
+                        f'<img class="chart-img chart-img--flex-third" src="data:image/png;base64,{base64.b64encode(png).decode()}" '
+                        f'alt="{theme_label} {_ui.get("chart_alt_suffix", "chart")}">\n'
                         for png in chart_pngs
                     )
                     all_charts_html = (
@@ -573,7 +575,22 @@ def build_html(
                     f'    <ul>\n{flat_bullets_html}\n    </ul>\n'
                 )
             else:
-                # Build one block per selected question
+                # Cross-cutting synthesis, above the per-question blocks — connects
+                # findings across questions rather than repeating any one question's
+                # own bullets (see get_adhoc_synthesis() in llm.py).
+                synthesis_bullets = adhoc_s.get("synthesis_bullets") or []
+                synthesis_html = ""
+                if synthesis_bullets:
+                    synthesis_items = "\n".join(
+                        f"    <li>{_md_to_html(b.lstrip('• ').strip())}</li>"
+                        for b in synthesis_bullets
+                    )
+                    synthesis_html = (
+                        f'    <ul class="adhoc-synthesis">\n{synthesis_items}\n    </ul>\n'
+                    )
+
+                # Build one block per question — every question in this wave's adhoc
+                # module gets its own chart + bullets, not just the top 1-3.
                 q_blocks = []
                 for i, qid in enumerate(selected_qids):
                     qd = q_descs_by_id.get(qid, {})
@@ -585,8 +602,8 @@ def build_html(
                     if i < len(chart_pngs):
                         b64 = base64.b64encode(chart_pngs[i]).decode()
                         chart_html = (
-                            f'<img class="chart-img" src="data:image/png;base64,{b64}" '
-                            f'alt="{qid} {_ui.get("chart_alt_suffix", "chart")}" style="max-width:100%;margin:8px 0 10px;">\n'
+                            f'<img class="chart-img chart-img--adhoc" src="data:image/png;base64,{b64}" '
+                            f'alt="{qid} {_ui.get("chart_alt_suffix", "chart")}">\n'
                         )
 
                     q_bullets = bullets_by_q.get(qid, [])
@@ -607,6 +624,7 @@ def build_html(
                 inner_html = (
                     f'    <p class="section-subtitle" style="margin-bottom:1rem;">'
                     f'{adhoc_s["finding"]}</p>\n'
+                    + synthesis_html
                     + "\n".join(q_blocks) + "\n"
                 )
 
@@ -621,8 +639,13 @@ def build_html(
                 </details>
             """).strip()
 
-        # Collapsible "All adhoc questions" block
+        # Collapsible "All adhoc questions" fallback — every question already gets its
+        # own full subsection above (chart + bullets), so this only needs to render
+        # questions that DIDN'T make it into that loop (e.g. chart build or bullet
+        # write failed for that question) rather than duplicating every question.
         q_descs = adhoc_s.get("question_descriptions") or []
+        rendered_qids = set(adhoc_s.get("selected_question_ids", []))
+        q_descs = [qd for qd in q_descs if qd.get("question_id") not in rendered_qids]
         if q_descs:
             q_items = []
             for qd in q_descs:

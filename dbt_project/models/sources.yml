@@ -5,3 +5,14 @@ sources:
     schema: raw
     tables:
       - name: safe_microdata
+
+  - name: main_safe
+    schema: main_safe
+    tables:
+      - name: ref_safe__annex_long
+        description: >
+          Long-format ECB SAFE questionnaire annex, unpivoted from the wave-labelled
+          wide columns (safe_2024q1, safe_2024q2, ...) by the safe_annex dlt pipeline
+          (safe_microdata/__init__.py, _safe_annex_long). One row per
+          (question_item, element, wave_label), non-blank cells only.
+          Populated with write_disposition="replace" on every fetch_annex.py run.

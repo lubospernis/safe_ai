@@ -19,11 +19,15 @@ Config (via .dlt/config.toml  [sources.safe_microdata_source])
 
 safe_annex_source
 -----------------
-Downloads the ECB SAFE questionnaire annex XLSX and yields one row per
-spreadsheet row into main_safe.ref_safe__annex (dataset: main_safe).
+Downloads the ECB SAFE questionnaire annex XLSX once and yields two resources:
+  - ref_safe__annex       wide, one row per spreadsheet row (legacy shape).
+  - ref_safe__annex_long  unpivoted, one row per (question_item, element,
+                          wave_label), non-blank cells only. dbt models build
+                          on this long table instead of every consumer running
+                          its own information_schema.columns + COALESCE query.
 
-Always performs a full refresh (write_disposition="replace") since the
-annex is small (~1 300 rows) and changes infrequently.
+Both land in dataset main_safe. Always a full refresh (write_disposition=
+"replace") since the annex is small (~1 300 rows) and changes infrequently.
 
 Exits 1 if the URL is unreachable or the file cannot be parsed — CI will
 catch this non-zero exit and open a GitHub Issue.
@@ -197,18 +201,12 @@ def _safe_col_name(raw: str | None, index: int) -> str:
     return name or f"col_{index}"
 
 
-@dlt.source
-def safe_annex_source() -> dlt.sources.DltSource:
-    """dlt source: ECB SAFE questionnaire annex XLSX → main_safe.ref_safe__annex."""
-    return _safe_annex()
+def _download_and_parse_annex() -> tuple[list[str], list[list[str]]]:
+    """Download the annex XLSX and return (column_names, padded_data_rows).
 
-
-@dlt.resource(
-    name="ref_safe__annex",
-    write_disposition="replace",
-)
-def _safe_annex() -> Iterator[dict]:
-    """Download annex XLSX and yield one dict per data row."""
+    Shared by both the wide (_safe_annex) and long (_safe_annex_long) resources
+    so the XLSX is only downloaded/parsed once per pipeline run.
+    """
     session = _make_session()
 
     logger.info("Downloading annex from %s …", ANNEX_URL)
@@ -255,12 +253,72 @@ def _safe_annex() -> Iterator[dict]:
             deduped.append(name)
     col_names = deduped
 
-    n_yielded = 0
+    padded_rows: list[list[str]] = []
     for row in data_rows:
         padded = [str(c) if c is not None else "" for c in row]
         padded = (padded + [""] * n_cols)[:n_cols]
         if any(v.strip() for v in padded):
-            yield dict(zip(col_names, padded))
+            padded_rows.append(padded)
+
+    logger.info(
+        "Annex: parsed %d rows (%d columns) from sheet '%s'", len(padded_rows), n_cols, sheet_name,
+    )
+    return col_names, padded_rows
+
+
+@dlt.source
+def safe_annex_source() -> dlt.sources.DltSource:
+    """dlt source: ECB SAFE questionnaire annex XLSX → main_safe.ref_safe__annex
+    (wide, one row per sheet row) and main_safe.ref_safe__annex_long (unpivoted,
+    one row per question_item × element × wave, non-blank cells only)."""
+    col_names, padded_rows = _download_and_parse_annex()
+    return (
+        _safe_annex(col_names, padded_rows),
+        _safe_annex_long(col_names, padded_rows),
+    )
+
+
+@dlt.resource(
+    name="ref_safe__annex",
+    write_disposition="replace",
+)
+def _safe_annex(col_names: list[str], padded_rows: list[list[str]]) -> Iterator[dict]:
+    """Yield one dict per annex sheet row, in its original wide shape."""
+    n_yielded = 0
+    for padded in padded_rows:
+        yield dict(zip(col_names, padded))
+        n_yielded += 1
+    logger.info("Annex (wide): yielded %d rows.", n_yielded)
+
+
+# Fixed, non-wave metadata columns carried on every long-format row for filtering/joins.
+_ANNEX_LONG_META_COLS = ("element", "question_item", "answer", "sample", "notes")
+
+
+@dlt.resource(
+    name="ref_safe__annex_long",
+    write_disposition="replace",
+)
+def _safe_annex_long(col_names: list[str], padded_rows: list[list[str]]) -> Iterator[dict]:
+    """Unpivot the wave-labelled columns (safe_2024q1, safe_2024q2, ...) into a long
+    table: one row per (question_item, element, wave_label), non-blank cells only.
+
+    This removes the need for downstream consumers to run
+    `information_schema.columns` introspection + COALESCE(NULLIF(...)) over the wide
+    annex table — dbt models can build directly on this long table with plain SQL.
+    """
+    col_index = {name: i for i, name in enumerate(col_names)}
+    wave_cols = [c for c in col_names if c.startswith("safe_")]
+    meta_cols = [c for c in _ANNEX_LONG_META_COLS if c in col_index]
+
+    n_yielded = 0
+    for padded in padded_rows:
+        meta = {c: padded[col_index[c]] for c in meta_cols}
+        for wave_col in wave_cols:
+            text = padded[col_index[wave_col]]
+            if not text or not text.strip():
+                continue
+            yield {**meta, "wave_label": wave_col, "text": text}
             n_yielded += 1
 
-    logger.info("Annex: yielded %d rows (%d columns) from sheet '%s'", n_yielded, n_cols, sheet_name)
+    logger.info("Annex (long): yielded %d rows across %d wave columns.", n_yielded, len(wave_cols))

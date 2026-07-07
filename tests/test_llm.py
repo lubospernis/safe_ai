@@ -1,3 +1,4 @@
+import json
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
@@ -6,8 +7,8 @@ import pytest
 from llm import (
     _check_numeric_grounding, _fmt_data_for_prompt, _parse_section_response,
     _shorten_question_llm, _sme_divergence_note, build_section_signals,
-    classify_ecb_emphasis, direction_reversal, get_exec_summary, get_shortened_questions,
-    historical_extremity, reliable_n, sk_ea_gap, translate_to_slovak,
+    classify_ecb_emphasis, direction_reversal, get_adhoc_synthesis, get_exec_summary,
+    get_shortened_questions, historical_extremity, reliable_n, sk_ea_gap, translate_to_slovak,
 )
 
 
@@ -484,6 +485,69 @@ def test_translate_to_slovak_parse_failure_falls_back_to_english_questions():
     assert sk_question_texts == {"q5": "Original question"}
 
 
+def test_translate_to_slovak_translates_bullets_by_question_and_synthesis():
+    """Regression guard: per-question adhoc bullets and the cross-cutting synthesis
+    bullets must be translated too, not just the flat 'bullets' list — a prior gap
+    left every per-question adhoc subsection showing English text in the SK report."""
+    client = _mock_mistral_response(json.dumps({
+        "exec_bullets": ["Preložený exec bod"],
+        "sections": [],
+        "adhoc": {
+            "theme_label": "Umelá inteligencia",
+            "title": "Špeciálne zameranie",
+            "finding": "Preložené zistenie",
+            "bullets": ["Preložený bod"],
+            "bullets_by_question": {"qa1": ["Preložený bod QA1"], "qa2": ["Preložený bod QA2"]},
+            "synthesis_bullets": ["Preložená syntéza"],
+        },
+    }))
+    tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
+    adhoc_section = {
+        "section_id": "adhoc_spotlight",
+        "title": "Special Focus",
+        "finding": "English finding",
+        "bullets": ["English bullet"],
+        "bullets_by_question": {"qa1": ["English bullet QA1"], "qa2": ["English bullet QA2"]},
+        "synthesis_bullets": ["English synthesis"],
+        "theme_label": "Artificial Intelligence",
+    }
+    with patch("llm._mistral_client", return_value=client):
+        sk_rendered, _, _ = translate_to_slovak([adhoc_section], [], tracker)
+
+    sk_adhoc = sk_rendered[0]
+    assert sk_adhoc["bullets_by_question"]["qa1"] == ["Preložený bod QA1"]
+    assert sk_adhoc["bullets_by_question"]["qa2"] == ["Preložený bod QA2"]
+    assert sk_adhoc["synthesis_bullets"] == ["Preložená syntéza"]
+
+
+def test_translate_to_slovak_bullets_by_question_falls_back_per_question():
+    """If the SK translation only returns some questions' bullets (or the model omits
+    the key entirely), each question falls back to its own English bullets rather than
+    losing every question because one was missing."""
+    client = _mock_mistral_response(json.dumps({
+        "exec_bullets": [],
+        "sections": [],
+        "adhoc": {
+            "bullets_by_question": {"qa1": ["Preložený bod QA1"]},  # qa2 missing
+        },
+    }))
+    tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
+    adhoc_section = {
+        "section_id": "adhoc_spotlight",
+        "title": "Special Focus",
+        "finding": "English finding",
+        "bullets": ["English bullet"],
+        "bullets_by_question": {"qa1": ["English bullet QA1"], "qa2": ["English bullet QA2"]},
+        "theme_label": "Artificial Intelligence",
+    }
+    with patch("llm._mistral_client", return_value=client):
+        sk_rendered, _, _ = translate_to_slovak([adhoc_section], [], tracker)
+
+    sk_adhoc = sk_rendered[0]
+    assert sk_adhoc["bullets_by_question"]["qa1"] == ["Preložený bod QA1"]
+    assert sk_adhoc["bullets_by_question"]["qa2"] == ["English bullet QA2"]
+
+
 # ── build_section_signals ────────────────────────────────────────────────────
 
 def test_build_section_signals_resolves_tier_and_deprioritized_subitem():
@@ -587,6 +651,73 @@ def test_get_exec_summary_includes_signals_line_in_prompt():
     assert "[SIGNALS]" in pass2_user_msg
     assert "tier=policy_technical" in pass2_user_msg
     assert "deprioritized: Access to public financial support (Q11b)" in pass2_user_msg
+
+
+# ── get_adhoc_synthesis (cross-cutting synthesis across adhoc questions) ───────
+
+def test_get_adhoc_synthesis_returns_bullets_from_anthropic():
+    anthropic_client = MagicMock()
+    resp = MagicMock()
+    resp.usage = MagicMock(input_tokens=10, output_tokens=5,
+                           cache_creation_input_tokens=0, cache_read_input_tokens=0)
+    resp.content = [MagicMock(text=(
+        '[{"bullet": "**Adoption stage:** low current use (QA1) matches modest planned investment (QA4)."}]'
+    ))]
+    anthropic_client.messages.create.return_value = resp
+
+    question_descriptions = [
+        {"question_id": "qa1", "question_text": "How would you assess AI use?",
+         "key_finding": "SK 46.5% vs EA 32.7% on code 2"},
+        {"question_id": "qa4", "question_text": "AI investment share?",
+         "key_finding": "SK 7.2% vs EA 9.1%"},
+    ]
+    tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
+
+    bullets = get_adhoc_synthesis(question_descriptions, tracker, anthropic_client=anthropic_client)
+
+    assert len(bullets) == 1
+    assert "Adoption stage" in bullets[0]
+    user_msg = anthropic_client.messages.create.call_args.kwargs["messages"][0]["content"]
+    assert "[QA1]" in user_msg and "[QA4]" in user_msg
+
+
+def test_get_adhoc_synthesis_returns_empty_without_client():
+    result = get_adhoc_synthesis(
+        [{"question_id": "qa1", "key_finding": "SK 10% vs EA 20%"}],
+        {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}},
+        anthropic_client=None,
+    )
+    assert result == []
+
+
+def test_get_adhoc_synthesis_returns_empty_when_no_findings_present():
+    """If every question has an empty key_finding/description (e.g. Phase 1 failed for
+    all of them), there's nothing to synthesise — must not call the LLM with an empty
+    prompt or fabricate a bullet."""
+    anthropic_client = MagicMock()
+    result = get_adhoc_synthesis(
+        [{"question_id": "qa1", "key_finding": "", "description": ""}],
+        {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}},
+        anthropic_client=anthropic_client,
+    )
+    assert result == []
+    anthropic_client.messages.create.assert_not_called()
+
+
+def test_get_adhoc_synthesis_caps_at_four_bullets():
+    anthropic_client = MagicMock()
+    resp = MagicMock()
+    resp.usage = MagicMock(input_tokens=10, output_tokens=5,
+                           cache_creation_input_tokens=0, cache_read_input_tokens=0)
+    resp.content = [MagicMock(text=json.dumps([{"bullet": f"**B{i}:** text"} for i in range(6)]))]
+    anthropic_client.messages.create.return_value = resp
+
+    bullets = get_adhoc_synthesis(
+        [{"question_id": "qa1", "key_finding": "SK 10% vs EA 20%"}],
+        {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}},
+        anthropic_client=anthropic_client,
+    )
+    assert len(bullets) <= 4
 
 
 # ── get_section_content_agentic mandatory-lead instruction ─────────────────

@@ -17,8 +17,8 @@ import pandas as pd
 import pytest
 
 from adhoc import (
-    _fetch_question_texts,
     _is_continuous,
+    _resolve_item_labels,
     _select_interesting_sub_items,
     build_adhoc_spotlight,
     detect_adhoc_theme,
@@ -67,12 +67,14 @@ def mock_con(electrification_rows, electrification_df):
         sql_lower = sql.lower()
         if "sum(n_firms)" in sql_lower and "group by module_id" in sql_lower:
             result.fetchall.return_value = electrification_rows
-        elif "information_schema.columns" in sql_lower:
-            result.fetchall.return_value = [("safe_2025q4",)]
-        elif "ref_safe__annex" in sql_lower:
+        elif "mart_safe__annex_questions" in sql_lower:
             result.fetchall.return_value = [
                 ("qe1", "To what extent has your firm invested in electrification of equipment or vehicles?"),
             ]
+        elif "mart_safe__annex_answers" in sql_lower:
+            result.fetchall.return_value = []
+        elif "mart_safe__annex_items" in sql_lower:
+            result.fetchall.return_value = []
         elif "mart_safe__slovakia_kpis" in sql_lower:
             # Return None so questionnaire URL lookup gracefully skips
             result.fetchone.return_value = None
@@ -87,17 +89,30 @@ def mock_con(electrification_rows, electrification_df):
 
 @pytest.fixture
 def mock_mistral_theme():
-    """Mistral client that returns a theme label for electrification (Phase 1 + detection)."""
+    """Mistral client that returns a theme label for electrification (Phase 1 + detection),
+    and a per-question description for _describe_question() so Phase 1 produces a real
+    key_finding (needed for get_adhoc_synthesis() to have non-empty input)."""
     client = MagicMock()
 
     def complete_side_effect(*args, **kwargs):
         resp = MagicMock()
-        # Phase 1 selection call returns JSON; theme detection call returns plain text
         messages = kwargs.get("messages", args[0] if args else [])
+        system = next((m["content"] for m in messages if m["role"] == "system"), "")
         last_user = next(
             (m["content"] for m in reversed(messages) if m["role"] == "user"), ""
         )
-        if "Classify each sub-item" in last_user or "interesting" in last_user.lower():
+        if "statistical analyst summarising one ECB SAFE survey question" in system:
+            resp.choices[0].message.content = json.dumps({
+                "description": "Slovak firms report lower electrification readiness than the EA.",
+                "interest_score": 4,
+                "key_finding": "SK 35% vs EA 28% on code 1 (low readiness)",
+                "routing_note": "all firms",
+            })
+        elif "You paraphrase official ECB survey question wording" in system:
+            resp.choices[0].message.content = json.dumps({
+                "short_question": "How ready is your firm for electrification?",
+            })
+        elif "Classify each sub-item" in last_user or "interesting" in last_user.lower():
             resp.choices[0].message.content = json.dumps({
                 "interesting": ["a"],
                 "skip": [],
@@ -115,20 +130,33 @@ def mock_mistral_theme():
 
 @pytest.fixture
 def mock_anthropic_spotlight():
-    """Anthropic client returning a valid JSON spotlight for electrification (Phase 2)."""
+    """Anthropic client that serves both the Phase 3 spotlight call (bullets dict keyed
+    by question_id) and get_adhoc_synthesis's cross-cutting call (bullet array),
+    distinguished by the system prompt each function passes."""
     client = MagicMock()
-    resp = MagicMock()
-    resp.content[0].text = json.dumps({
-        "finding": "Slovak firms lag Euro Area peers in electrification readiness.",
-        "bullets": [
-            "**SK readiness gap:** 35% of Slovak firms report low electrification readiness (code 1), vs 28% in the EA.",
-            "**EA more advanced:** 31% of EA firms report moderate readiness (code 2), slightly above Slovakia's 28%.",
-        ],
-        "chart_sub_items": ["a"],
-    })
-    resp.usage.input_tokens = 800
-    resp.usage.output_tokens = 120
-    client.messages.create.return_value = resp
+
+    def create_side_effect(*args, **kwargs):
+        resp = MagicMock()
+        system = kwargs.get("system", "")
+        if "cross-cutting synthesis" in system:
+            resp.content[0].text = json.dumps([
+                {"bullet": "**Cross-cutting:** Electrification readiness gaps mirror broader digital adoption trends."},
+            ])
+        else:
+            resp.content[0].text = json.dumps({
+                "finding": "Slovak firms lag Euro Area peers in electrification readiness.",
+                "bullets": {
+                    "qe1": [
+                        "**SK readiness gap:** 35% of Slovak firms report low electrification readiness (code 1), vs 28% in the EA.",
+                        "**EA more advanced:** 31% of EA firms report moderate readiness (code 2), slightly above Slovakia's 28%.",
+                    ],
+                },
+            })
+        resp.usage.input_tokens = 800
+        resp.usage.output_tokens = 120
+        return resp
+
+    client.messages.create.side_effect = create_side_effect
     return client
 
 
@@ -209,6 +237,32 @@ def test_detect_adhoc_theme_returns_question_texts(mock_con, mock_mistral_theme)
     assert isinstance(result["question_texts"], dict)
 
 
+def test_resolve_item_labels_uses_annex_when_present():
+    """When mart_safe__annex_items has rows for a module (e.g. QB1-style), those
+    labels are used as-is, in preference to any fallback."""
+    labels = _resolve_item_labels("qb1", ["a", "b"], {"a": "In your country", "b": "In Germany, France and Italy"})
+    assert labels == {"a": "In your country", "b": "In Germany, France and Italy"}
+
+
+def test_resolve_item_labels_pick_order_fallback_for_qa2_style_questions():
+    """QA2's 'a'/'b' sub-items are a microdata pick-order artifact (first/second reason
+    chosen in a pick-two question) with NO annex representation at all — the annex
+    items mart will never have a row for these. Regression guard for the bug where
+    chart panel titles fell back to the bare sub-item code ('a'/'b') instead of a
+    readable label."""
+    labels = _resolve_item_labels("qa2", ["a", "b"], {})
+    assert labels == {"a": "First reason", "b": "Second reason"}
+
+
+def test_resolve_item_labels_no_fallback_for_non_pick_order_sub_items():
+    """A module with no annex items AND sub-items that aren't the {'a','b'} pick-order
+    pattern should get no fabricated labels — falls through to the bare-code display
+    in charts.py, which is the correct (if unhelpful) behaviour for genuinely unknown
+    sub-items rather than incorrectly guessing pick-order semantics."""
+    labels = _resolve_item_labels("qe1", ["a", "b", "c"], {})
+    assert labels == {}
+
+
 def test_select_interesting_sub_items(electrification_df, mock_mistral_theme):
     """_select_interesting_sub_items() should return the interesting list from Mistral."""
     cost = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
@@ -254,6 +308,65 @@ def test_build_adhoc_spotlight_output_structure(
     assert 2 <= len(result["bullets"]) <= 4
     assert result["theme_label"] == "Electrification Efforts"
     assert result["title"].startswith("Special Focus:")
+
+    # Every question in question_contexts must get its own bullets and a chart —
+    # not just a top-1-3 selection (this fixture has a single question, qe1, but the
+    # assertion generalises: selected_question_ids must equal every question present).
+    assert result["selected_question_ids"] == ["qe1"]
+    assert "qe1" in result["bullets_by_question"]
+    assert len(result["bullets_by_question"]["qe1"]) > 0
+    assert len(result["chart_pngs"]) == 1
+
+    # Cross-cutting synthesis is populated separately from per-question bullets.
+    assert isinstance(result["synthesis_bullets"], list)
+    assert len(result["synthesis_bullets"]) > 0
+    assert result["synthesis_bullets"] != result["bullets_by_question"]["qe1"]
+
+
+def test_build_adhoc_spotlight_threads_shortened_chart_caption(
+    mock_con, mock_mistral_theme, mock_anthropic_spotlight
+):
+    """Phase 2 must fetch a shortened chart caption via get_shortened_questions()
+    (mirroring the main report's chart_question mechanism) and pass it through the
+    chart theme as 'chart_question', so charts.py's _adhoc_chart_caption() renders
+    the short paraphrase instead of the raw (possibly long/conditional) annex text."""
+    from adhoc import _build_adhoc_chart as real_build_adhoc_chart
+
+    cost = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
+    theme = {
+        "module_id": "qe1",
+        "theme_label": "Electrification Efforts",
+        "question_texts": {"a": "To what extent has your firm invested in electrification?"},
+        # module_question_texts must be populated for question_text to resolve non-empty
+        # in Phase 0 — needed so annex_question_texts has something to shorten.
+        "module_question_texts": {
+            "qe1": "To what extent has your firm invested in electrification of equipment or vehicles?",
+        },
+        "primary_question_text": "To what extent has your firm invested in electrification of equipment or vehicles?",
+    }
+    seen_themes = []
+
+    def spy_build_adhoc_chart(df, chart_theme, **kwargs):
+        seen_themes.append(chart_theme)
+        return real_build_adhoc_chart(df, chart_theme, **kwargs)
+
+    with patch("adhoc.SQL_DIR") as mock_sql_dir, \
+         patch("adhoc._build_adhoc_chart", side_effect=spy_build_adhoc_chart):
+        mock_sql_dir.__truediv__ = lambda self, other: mock_sql_dir
+        mock_sql_dir.read_text.return_value = (
+            "SELECT country_code, sub_item, response_raw, pct_wtd, n_firms, n_firms_wtd, n_total_wtd "
+            "FROM {schema}.mart_safe__adhoc_responses "
+            "WHERE wave_number = {wave_number} AND module_id = '{module_id}'"
+        )
+        build_adhoc_spotlight(
+            theme, 39, mock_con, "main_safe",
+            mistral_client=mock_mistral_theme,
+            cost_tracker=cost,
+            anthropic_client=mock_anthropic_spotlight,
+        )
+
+    assert len(seen_themes) == 1
+    assert seen_themes[0]["chart_question"] == "How ready is your firm for electrification?"
 
 
 def test_build_adhoc_spotlight_html_compatible_keys(

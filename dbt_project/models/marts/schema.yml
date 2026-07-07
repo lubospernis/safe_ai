@@ -1045,3 +1045,132 @@ models:
           Weighted percentage: n_firms_wtd / n_total_wtd * 100.
           Shares across all response_raw codes within a (wave, module_id, sub_item, country_code)
           group sum to 100.
+
+  - name: mart_safe__annex_questions
+    description: >
+      One row per (module_id, question_period): the ECB SAFE questionnaire text for
+      each question code. Built from a long-format unpivot of the annex XLSX
+      (ref_safe__annex_long) via stg_safe__annex / int_safe__annex_current.
+
+      question_period is NULL for stable Common/ECB questions (e.g. 'q5') and
+      populated (e.g. '2025Q4') for adhoc QA/QB-series modules, which reuse
+      module_id across eras for entirely different questions -- always filter to
+      a specific question_period when looking up an adhoc module's text.
+
+    config:
+      tags: ["safe", "ecb", "survey", "mart", "annex"]
+
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - module_id
+            - question_period
+
+    columns:
+      - name: module_id
+        description: Lowercase question/module code with any wave suffix stripped (e.g. 'q5', 'qa1', 'qb1').
+        tests:
+          - not_null
+      - name: question_period
+        description: >
+          Survey period suffix in YYYYQn/YYYYHn format (e.g. '2025Q4'), parsed from
+          question_item. NULL for question_item values with no wave suffix.
+      - name: question_text
+        description: Current (most recent wave) question wording.
+        tests:
+          - not_null
+      - name: sample
+        description: "Module type badge from the annex (e.g. 'ad-hoc ECB', 'Common')."
+      - name: notes
+        description: Free-text notes from the annex, when present.
+
+  - name: mart_safe__annex_answers
+    description: >
+      One row per (module_id, question_period, answer_code): the label text for
+      each response/answer code of a question (e.g. qa1.1 = "Not currently in
+      use"). Use to resolve chart x-axis tick labels and response-code
+      descriptions instead of the PDF-parsed labels in
+      reports/questionnaire.py::fetch_adhoc_response_labels, which is kept only
+      as a fallback for gaps not covered here.
+
+    config:
+      tags: ["safe", "ecb", "survey", "mart", "annex"]
+
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - module_id
+            - question_period
+            - answer_code
+
+    columns:
+      - name: module_id
+        description: Lowercase question/module code with any wave suffix stripped.
+        tests:
+          - not_null
+      - name: question_period
+        description: Survey period suffix in YYYYQn/YYYYHn format. NULL for question_item values with no wave suffix.
+      - name: answer_code
+        description: Raw answer/response code as it appears in the annex (e.g. '1', '9', '99').
+        tests:
+          - not_null
+      - name: answer_label
+        description: >
+          Cleaned answer label text with the leading "- "/"- [" bullet formatting
+          and a trailing "]" stripped.
+        tests:
+          - not_null
+
+  - name: mart_safe__annex_items
+    description: >
+      One row per (module_id, question_period, item_key): the sub-item label
+      for multi-part questions (e.g. qb1.a = "In your country"). Fixes chart
+      panel titles that previously fell back to a bare sub-item code ("a"/"b")
+      whenever the annex-derived question_texts dict wasn't populated for a
+      sibling adhoc module.
+
+      The source XLSX encodes item identity three different ways: some questions
+      (e.g. qb1/qb2) letter-prefix the item text itself ("a) ..."); others (e.g.
+      qa6, the inflation-horizon question) leave text unprefixed and instead
+      populate a numeric answer_code as the item's identifier; and for many
+      stable Common/ECB questions (e.g. q2_d, q5_f) the sub-item is already
+      baked into module_id, with exactly one item row per module_id ×
+      question_period. item_key normalises the first two into one join key
+      (parsed letter, else raw answer_code) and falls back to an empty string
+      for the third, where module_id alone is already unique.
+
+      Coverage is inherently sparse: only questions whose source XLSX rows use
+      element='item' get a row here. A missing row does NOT imply "no
+      sub-items" -- some sub-item letters (e.g. QA2's pick-order "a"/"b" slots)
+      are a microdata artifact with no annex representation at all; see
+      reports/adhoc.py for that fallback.
+
+    config:
+      tags: ["safe", "ecb", "survey", "mart", "annex"]
+
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - module_id
+            - question_period
+            - item_key
+
+    columns:
+      - name: module_id
+        description: Lowercase question/module code with any wave suffix stripped.
+        tests:
+          - not_null
+      - name: question_period
+        description: Survey period suffix in YYYYQn/YYYYHn format. NULL for question_item values with no wave suffix.
+      - name: item_key
+        description: >
+          Sub-item identifier: the parsed letter ("a", "b", ...) when the source
+          text was letter-prefixed, else the raw numeric answer_code, else an
+          empty string when module_id itself already fully identifies the
+          sub-item (stable Common/ECB questions like q2_d, q5_f).
+        tests:
+          - not_null
+      - name: item_label
+        description: Cleaned sub-item label text with any leading letter prefix stripped.
+        tests:
+          - not_null

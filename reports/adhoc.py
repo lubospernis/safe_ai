@@ -14,7 +14,7 @@ from json_repair import repair_json
 from charts import SK_LABELS, _build_adhoc_chart
 from cost import _Usage, _track_cost
 from db import ALLOWED_MART_TABLES, _WRITE_RE
-from llm import NBS_STYLE_GUIDE, _check_numeric_grounding
+from llm import NBS_STYLE_GUIDE, _check_numeric_grounding, get_adhoc_synthesis, get_shortened_questions
 from questionnaire import (
     build_response_label_context,
     fetch_adhoc_response_labels,
@@ -167,11 +167,12 @@ _ADHOC_SPOTLIGHT_SYSTEM = textwrap.dedent(f"""
     {NBS_STYLE_GUIDE}
 
     YOUR TASK:
-    1. Select the 1–3 most interesting questions based on the interest scores and descriptions.
-    2. For each selected question, write 1–3 tight bullets (≤ 35 words each), grounded only
-       in that question's data.
-    3. Write one overall finding sentence (≤ 20 words) naming the theme and most striking gap.
-    4. If a specific breakdown would meaningfully strengthen ONE finding, you may request it.
+    1. For EVERY question provided, write 1–3 tight bullets (≤ 35 words each), grounded only
+       in that question's own data. Do not skip any question — even a low-interest question
+       gets at least one bullet stating the key finding (or that SK and EA are broadly similar).
+    2. Write one overall finding sentence (≤ 20 words) naming the theme and most striking gap
+       across all questions.
+    3. If a specific breakdown would meaningfully strengthen ONE finding, you may request it.
 
     GROUNDING RULES — CRITICAL:
     - Every comparative claim ("SK leads EA", "broadly comparable", "higher/lower than EA")
@@ -189,17 +190,17 @@ _ADHOC_SPOTLIGHT_SYSTEM = textwrap.dedent(f"""
       "finding": "<one sentence headline>",
       "bullets": {{
         "<question_id_1>": ["bullet 1", "bullet 2"],
-        "<question_id_2>": ["bullet 3"]
+        "<question_id_2>": ["bullet 3"],
+        "<question_id_3>": ["bullet 4"]
       }},
-      "selected_question_ids": ["qa1", "qa3"],
       "dig_deeper": {{
         "question_id": "qa1",
         "sql": "SELECT country_code, sub_item, response_raw, pct_wtd, n_firms FROM {{schema}}.mart_safe__adhoc_responses WHERE wave_number = {{wave_number}} AND module_id = 'qa1' AND country_code IN ('SK','EA') AND response_raw >= 0 ORDER BY sub_item, country_code, response_raw"
       }} or null
     }}
 
-    The "bullets" value is a dict keyed by question_id — one key per selected question.
-    Each question gets its own list of 1–3 bullets grounded only in that question's data.
+    The "bullets" value is a dict keyed by question_id — you MUST include one key for every
+    question_id given in the question summaries below, with no exceptions.
     Use dig_deeper only when a follow-up query would materially change the bullets.
     The SQL must use {{schema}} and {{wave_number}} as literal format placeholders.
     Set dig_deeper to null if no follow-up is needed.
@@ -257,47 +258,85 @@ def _fetch_adhoc_chart_data(df: pd.DataFrame, theme: dict, wave_number: int, sch
     return con.execute(sql).df()
 
 
-def _fetch_question_texts(con, schema: str, module_ids: list[str], period_suffix: str | None = None) -> str:
-    """Return a formatted block of survey question texts for the given module IDs from ref_safe__annex.
+# Pick-order sub-item labels: some adhoc questions store the microdata's internal
+# "first choice"/"second choice" answer slots as sub_item 'a'/'b' (e.g. QA2's "please
+# indicate the TWO main reasons" questions), but the annex has no representation of
+# these at all — they are a microdata encoding artifact, not a real survey sub-item,
+# so mart_safe__annex_items will never have a row for them. Applied only when a
+# module's chart sub-items are exactly {'a', 'b'} and the annex items mart has no
+# row for that module — see _resolve_item_labels().
+_PICK_ORDER_LABELS: dict[str, str] = {"a": "First reason", "b": "Second reason"}
 
-    If period_suffix is given (e.g. '2025Q4'), only rows whose question_item ends with that suffix
-    are returned — preventing historical module reuse from polluting the context (QA1 was about
-    exports in 2022 but AI adoption in 2025Q4).
+
+def _fetch_annex_labels(
+    con, schema: str, module_ids: list[str], period_suffix: str | None,
+) -> dict[str, dict]:
+    """Fetch question/answer/item text for module_ids from the annex reference marts
+    (mart_safe__annex_questions/_answers/_items — see dbt_project/models/marts).
+
+    Returns {module_id.lower(): {"question_text": str, "answers": {code: label},
+    "items": {item_key: label}}}. Always scoped to period_suffix when given, since
+    adhoc module_ids are reused across eras for entirely different questions
+    (confirmed by inspecting the raw annex — e.g. qa1 meant a price-expectations
+    question in 2021H2, AI adoption in 2025Q4).
     """
+    result: dict[str, dict] = {m.lower(): {"question_text": "", "answers": {}, "items": {}} for m in module_ids}
+    if not module_ids:
+        return result
+    mids = [m.lower() for m in module_ids]
+    placeholders = ", ".join(f"'{m}'" for m in mids)
+    period_filter = f"AND question_period = '{period_suffix}'" if period_suffix else "AND question_period IS NULL"
+
     try:
-        annex_cols = con.execute(f"""
-            SELECT column_name FROM information_schema.columns
-            WHERE table_schema = '{schema}'
-              AND table_name = 'ref_safe__annex'
-              AND column_name LIKE 'safe_%'
-            ORDER BY column_name DESC
-        """).fetchall()
-        wave_cols = [r[0] for r in annex_cols]
-        if not wave_cols:
-            return ""
-        # NULLIF strips empty strings so COALESCE falls through to the column with actual content
-        coalesce_expr = ", ".join(f"NULLIF({c}, '')" for c in wave_cols)
-        if period_suffix:
-            pattern = " OR ".join(
-                f"UPPER(question_item) = UPPER('{m}_{period_suffix}')" for m in module_ids
-            )
-        else:
-            pattern = " OR ".join(f"UPPER(question_item) LIKE UPPER('{m}%')" for m in module_ids)
         rows = con.execute(f"""
-            SELECT question_item, COALESCE({coalesce_expr}) AS question_text
-            FROM {schema}.ref_safe__annex
-            WHERE element = 'question' AND ({pattern})
-            ORDER BY question_item
+            SELECT module_id, question_text FROM {schema}.mart_safe__annex_questions
+            WHERE module_id IN ({placeholders}) {period_filter}
         """).fetchall()
-        if not rows:
-            return ""
-        lines = ["Survey question texts (use for plain-language descriptions only):"]
-        for qitem, qtext in rows:
+        for mid, qtext in rows:
             if qtext:
-                lines.append(f"  {qitem.upper()}: {qtext}")
-        return "\n".join(lines)
+                result.setdefault(mid, {"question_text": "", "answers": {}, "items": {}})["question_text"] = qtext
     except Exception:
-        return ""
+        pass
+
+    try:
+        rows = con.execute(f"""
+            SELECT module_id, answer_code, answer_label FROM {schema}.mart_safe__annex_answers
+            WHERE module_id IN ({placeholders}) {period_filter}
+        """).fetchall()
+        for mid, code, label in rows:
+            if label:
+                result.setdefault(mid, {"question_text": "", "answers": {}, "items": {}})["answers"][code] = label
+    except Exception:
+        pass
+
+    try:
+        rows = con.execute(f"""
+            SELECT module_id, item_key, item_label FROM {schema}.mart_safe__annex_items
+            WHERE module_id IN ({placeholders}) {period_filter}
+        """).fetchall()
+        for mid, key, label in rows:
+            if label:
+                result.setdefault(mid, {"question_text": "", "answers": {}, "items": {}})["items"][key] = label
+    except Exception:
+        pass
+
+    return result
+
+
+def _resolve_item_labels(module_id: str, sub_items: list[str], annex_items: dict[str, str]) -> dict[str, str]:
+    """Resolve sub-item -> label for one module. annex_items is already the
+    module's own {item_key: label} dict from _fetch_annex_labels().
+
+    Falls back to _PICK_ORDER_LABELS only when annex_items is empty for this module
+    AND sub_items look exactly like a two-slot pick-order pattern ('a'/'b' only) —
+    this is the fix for QA2-style questions where the chart previously showed bare
+    "a"/"b" as panel titles.
+    """
+    if annex_items:
+        return dict(annex_items)
+    if set(sub_items) and set(sub_items) <= set(_PICK_ORDER_LABELS):
+        return dict(_PICK_ORDER_LABELS)
+    return {}
 
 
 def detect_adhoc_theme(wave_number: int, con, schema: str, mistral_client=None, cost_tracker: dict | None = None) -> dict | None:
@@ -329,39 +368,14 @@ def detect_adhoc_theme(wave_number: int, con, schema: str, mistral_client=None, 
     except Exception:
         pass
 
-    # Fetch one question text per module to use for primary-module selection heuristic
-    # and for theme classification. Build wave_cols once and reuse.
-    wave_cols: list[str] = []
-    coalesce_expr = ""
-    try:
-        annex_col_rows = con.execute(f"""
-            SELECT column_name FROM information_schema.columns
-            WHERE table_schema = '{schema}'
-              AND table_name = 'ref_safe__annex'
-              AND column_name LIKE 'safe_%'
-            ORDER BY column_name DESC
-        """).fetchall()
-        wave_cols = [r[0] for r in annex_col_rows]
-        if wave_cols:
-            coalesce_expr = ", ".join(f"NULLIF({c}, '')" for c in wave_cols)
-    except Exception:
-        pass
-
-    module_question_texts: dict[str, str] = {}  # {module_id: question_text}
-    if wave_cols and period_suffix:
-        try:
-            for mid in all_module_ids_wave:
-                q_row = con.execute(f"""
-                    SELECT COALESCE({coalesce_expr}) as qt
-                    FROM {schema}.ref_safe__annex
-                    WHERE element = 'question'
-                      AND UPPER(question_item) = UPPER('{mid}_{period_suffix}')
-                    LIMIT 1
-                """).fetchone()
-                if q_row and q_row[0]:
-                    module_question_texts[mid] = q_row[0]
-        except Exception:
-            pass
+    # Fetch question/answer/item text for every module in the wave from the annex
+    # reference marts, scoped to this wave's period_suffix (see mart_safe__annex_questions/
+    # _answers/_items in dbt_project/models/marts — replaces the live
+    # information_schema.columns + COALESCE introspection this function used to run).
+    annex_labels = _fetch_annex_labels(con, schema, all_module_ids_wave, period_suffix)
+    module_question_texts: dict[str, str] = {
+        mid: data["question_text"] for mid, data in annex_labels.items() if data["question_text"]
+    }
 
     # Re-rank modules: current-state questions before forward-looking/peer-perception ones,
     # and within current-state prefer non-routed questions (no [IF ...] conditional).
@@ -386,28 +400,14 @@ def detect_adhoc_theme(wave_number: int, con, schema: str, mistral_client=None, 
     # theme-label block below can reference it even if PDF is not yet fetched.
     pdf_section_title: str | None = None
 
-    # Build question_texts dict for the primary module (sub_item → question_text mapping)
-    question_texts: dict[str, str] = {}
+    # Sub-item -> label mapping for the primary module, sourced from the annex items
+    # mart (with the pick-order fallback for questions like QA2 that have no annex
+    # item representation at all — see _resolve_item_labels()).
     primary_question_text: str | None = module_question_texts.get(primary_module_id)
-    if wave_cols and primary_question_text is None:
-        # Period suffix not available — fall back to prefix match
-        try:
-            if period_suffix:
-                period_filter = f"UPPER(question_item) = UPPER('{primary_module_id}_{period_suffix}')"
-            else:
-                period_filter = f"UPPER(question_item) LIKE UPPER('{primary_module_id}%')"
-            ann_rows = con.execute(f"""
-                SELECT question_item, COALESCE({coalesce_expr}) as question_text
-                FROM {schema}.ref_safe__annex
-                WHERE element = 'question' AND ({period_filter})
-            """).fetchall()
-            for qitem, qtext in ann_rows:
-                if qtext:
-                    sub = qitem.lower().replace(primary_module_id.lower(), "").strip() or "a"
-                    question_texts[sub] = qtext
-            primary_question_text = next((qt for _, qt in ann_rows if qt), None)
-        except Exception:
-            pass
+    primary_annex_items = annex_labels.get(primary_module_id, {}).get("items", {})
+    question_texts: dict[str, str] = _resolve_item_labels(
+        primary_module_id, list(primary_annex_items.keys()), primary_annex_items,
+    )
 
     # Fetch questionnaire PDF FIRST so pdf_section_title is available for theme label selection.
     # Extracts: response code → label mappings, sub-item labels, and the human-readable
@@ -513,6 +513,9 @@ def detect_adhoc_theme(wave_number: int, con, schema: str, mistral_client=None, 
         "sub_item_labels": sub_item_labels,
         "sibling_modules": sibling_modules,
         "period_suffix": period_suffix,
+        # Per-module {question_text, answers, items} from the annex reference marts —
+        # covers every module in the wave, not just the primary one (see _fetch_annex_labels).
+        "annex_labels": annex_labels,
     }
 
 
@@ -680,6 +683,7 @@ def build_adhoc_spotlight(
     response_labels = theme.get("response_labels", {})
     sub_item_labels = theme.get("sub_item_labels", {})
     sibling_modules = theme.get("sibling_modules", [])
+    annex_labels = theme.get("annex_labels", {})
     all_question_ids = [theme["module_id"]] + sibling_modules
     sql_template = (SQL_DIR / "adhoc_spotlight.sql").read_text()
 
@@ -711,13 +715,19 @@ def build_adhoc_spotlight(
             qt = theme.get("primary_question_text") or ""
         qt = re.sub(r"^[-–•]\s*", "", qt).strip()
 
-        # Merge PDF sub-item labels into question_texts for chart panel titles
-        effective_qt: dict[str, str] = {}
-        for letter, label in (sub_item_labels.get(qid.lower(), {})).items():
-            effective_qt[letter] = label
-        # Override with annex texts if available
-        for k, v in (theme.get("question_texts") or {}).items():
-            effective_qt[k] = v
+        # Sub-item -> label mapping for THIS question's own module (each sibling module
+        # gets its own annex item labels, not the primary module's — a prior bug here
+        # applied the primary module's item labels uniformly to every sibling question).
+        # Merges PDF-parsed sub_item_labels (fallback) with the annex items mart
+        # (preferred), then falls back to a pick-order label ("First reason"/"Second
+        # reason") only when the annex has no item rows at all for this module and its
+        # sub-items are exactly the {'a','b'} pick-order pattern (e.g. QA2).
+        module_sub_items = sorted(df["sub_item"].unique().tolist()) if "sub_item" in df.columns else []
+        module_annex_items = annex_labels.get(qid.lower(), {}).get("items", {})
+        effective_qt: dict[str, str] = dict(sub_item_labels.get(qid.lower(), {}))
+        effective_qt.update(
+            _resolve_item_labels(qid, module_sub_items, module_annex_items)
+        )
 
         question_contexts.append({
             "question_id": qid,
@@ -762,6 +772,27 @@ def build_adhoc_spotlight(
     for q in question_contexts:
         print(f"  Phase 1 [{q['question_id']}] score={q['interest_score']}: {q.get('key_finding', '')}")
 
+    # Shortened chart captions: paraphrase each question's official annex wording
+    # into a short, natural caption (e.g. QA3's long [IF ...] conditional wording
+    # becomes "Why aren't you using AI more?") via the same mechanism the main
+    # report uses for its section charts (get_shortened_questions() in llm.py).
+    # Cached in ref_safe__chart_question_captions, keyed by question_id.
+    chart_question_captions: dict[str, str] = {}
+    try:
+        pseudo_sections = [
+            {"id": q["question_id"], "question_ids": [q["question_id"]]}
+            for q in question_contexts
+        ]
+        annex_question_texts = {
+            q["question_id"].lower(): q["question_text"]
+            for q in question_contexts if q.get("question_text")
+        }
+        chart_question_captions = get_shortened_questions(
+            pseudo_sections, annex_question_texts, con, schema, mistral_client, cost_tracker,
+        )
+    except Exception as e:
+        print(f"  Chart question captions failed (non-fatal): {e}")
+
     # ── Phase 2: build charts for all questions ───────────────────────────────
     for q in question_contexts:
         try:
@@ -770,6 +801,7 @@ def build_adhoc_spotlight(
                 "module_id": q["question_id"],
                 "question_text": q["question_text"],
                 "question_texts": q["effective_question_texts"],
+                "chart_question": chart_question_captions.get(q["question_id"], ""),
             }
             chart_df = _fetch_adhoc_chart_data(q["df"], chart_theme, wave_number, schema, con)
             q["chart_png"] = _build_adhoc_chart(
@@ -954,29 +986,39 @@ def build_adhoc_spotlight(
         except Exception as e:
             print(f"  Dig deeper SQL failed ({e}) — skipping")
 
-    # Handle both old (list) and new (dict keyed by question_id) bullets schemas
+    # All questions get a section now (no 1-3 selection) — order matches Phase 0
+    # enumeration. "selected_question_ids" is kept in the return dict under the same
+    # key for backward compatibility with html_builder.py, but it now always equals
+    # every question_id in question_contexts.
+    all_qids = [q["question_id"] for q in question_contexts]
     raw_bullets = result.get("bullets", {})
-    selected_qids = result.get("selected_question_ids", [q["question_id"] for q in question_contexts])
     if isinstance(raw_bullets, dict):
         bullets_by_question: dict[str, list[str]] = {
             qid: (v if isinstance(v, list) else [v])
             for qid, v in raw_bullets.items()
         }
-        # Flat list for review pass and Slovak translation (backward compat)
-        bullets: list[str] = [b for qid in selected_qids for b in bullets_by_question.get(qid, [])]
     elif isinstance(raw_bullets, list):
-        bullets = [b for b in raw_bullets if isinstance(b, str)]
-        bullets_by_question = {selected_qids[0]: bullets} if selected_qids and bullets else {}
+        # Backward-compat: a flat list with no per-question keys — attribute it all
+        # to the first question rather than dropping it.
+        bullets_by_question = {all_qids[0]: [b for b in raw_bullets if isinstance(b, str)]} if all_qids else {}
     else:
-        bullets = []
         bullets_by_question = {}
-    print(f"  Phase 3: {len(bullets)} bullets across {len(selected_qids)} questions, selected={selected_qids}")
+
+    # Any question the model didn't return bullets for still gets a section — fall
+    # back to its own key_finding from Phase 1 so no question is ever silently empty.
+    for qid in all_qids:
+        if not bullets_by_question.get(qid):
+            q = next((qc for qc in question_contexts if qc["question_id"] == qid), None)
+            fallback = q.get("key_finding") or q.get("description") if q else ""
+            bullets_by_question[qid] = [fallback] if fallback else []
+
+    selected_qids = all_qids
+    bullets: list[str] = [b for qid in selected_qids for b in bullets_by_question.get(qid, [])]
+    print(f"  Phase 3: {len(bullets)} bullets across {len(selected_qids)} questions: {selected_qids}")
 
     # ── Programmatic grounding check (monitoring-only, mirrors llm.py) ────────
     grounding_warnings: list[str] = []
     for q in question_contexts:
-        if q["question_id"] not in selected_qids:
-            continue
         q_bullets = bullets_by_question.get(q["question_id"], [])
         if not q_bullets:
             continue
@@ -989,24 +1031,28 @@ def build_adhoc_spotlight(
         for w in grounding_warnings:
             print(f"    {w}")
 
-    # ── Assemble chart_pngs from selected + all questions ────────────────────
-    # Selected questions first (in order), then remaining ones (up to 3 total)
-    q_by_id = {q["question_id"]: q for q in question_contexts}
+    # ── Assemble chart_pngs for every question (no cap) ───────────────────────
     chart_pngs: list[bytes] = []
     chart_rebuild_specs: list[dict] = []  # same order as chart_pngs — for SK chart rebuild
-    for qid in selected_qids:
-        if len(chart_pngs) >= 3:
-            break
-        q = q_by_id.get(qid)
-        if q and q.get("chart_png"):
-            chart_pngs.append(q["chart_png"])
-            chart_rebuild_specs.append(q)
     for q in question_contexts:
-        if len(chart_pngs) >= 3:
-            break
-        if q["question_id"] not in selected_qids and q.get("chart_png"):
+        if q.get("chart_png"):
             chart_pngs.append(q["chart_png"])
             chart_rebuild_specs.append(q)
+
+    # ── Cross-cutting synthesis across all questions (separate from per-question bullets) ──
+    synthesis_bullets = get_adhoc_synthesis(
+        [
+            {
+                "question_id": q["question_id"],
+                "question_text": q.get("question_text", ""),
+                "key_finding": q.get("key_finding", ""),
+                "description": q.get("description", ""),
+            }
+            for q in question_contexts
+        ],
+        cost_tracker,
+        anthropic_client=anthropic_client,
+    )
 
     # ── Phase 4: critical review (Mistral Large, threshold ≥ 8) ─────────────
     review_scores: dict = {}
@@ -1077,6 +1123,7 @@ def build_adhoc_spotlight(
         "bullets": bullets,
         "bullets_by_question": bullets_by_question,
         "selected_question_ids": selected_qids,
+        "synthesis_bullets": synthesis_bullets,
         "chart_png": chart_pngs[0] if chart_pngs else None,
         "chart_pngs": chart_pngs,
         "theme_label": theme["theme_label"],

@@ -1,7 +1,8 @@
+import re
 from unittest.mock import MagicMock, patch
 
 from html_builder import (
-    _fetch_painting_inner_html, _md_to_html, _clean_question_text, build_annex_html, build_toc,
+    _fetch_painting_inner_html, _md_to_html, _clean_question_text, build_annex_html, build_html, build_toc,
 )
 
 
@@ -165,3 +166,42 @@ def test_build_annex_html_override_is_case_insensitive_and_partial():
     con = _mock_annex_con()
     html = build_annex_html(con=con, question_texts_override={"q5": "Preložený text"})
     assert "Preložený text" in html
+
+
+def _adhoc_section_stub():
+    return {
+        "section_id": "adhoc_spotlight",
+        "finding": "Slovak firms trail the EA in AI adoption depth.",
+        "title": "Special Focus",
+        "theme_label": "Artificial intelligence technologies",
+        "group": "Other",
+        "selected_question_ids": ["qa1", "qa2"],
+        "bullets_by_question": {
+            "qa1": ["46.5% of Slovak firms report only pilot AI use."],
+            "qa2": ["Improving non-core processes is the top reason cited."],
+        },
+        "question_descriptions": [
+            {"question_id": "qa1", "question_text": "How would you assess the use of AI technologies?",
+             "interest_score": 4, "description": "desc", "key_finding": "kf"},
+            {"question_id": "qa2", "question_text": "Please indicate the two main reasons.",
+             "interest_score": 3, "description": "desc", "key_finding": "kf"},
+        ],
+        "chart_pngs": [b"fake-png-bytes-1", b"fake-png-bytes-2"],
+    }
+
+
+def test_build_html_adhoc_per_question_chart_has_no_inline_width_style():
+    """Regression guard: per-question adhoc chart-img tags must rely on the shared
+    .chart-img CSS class for sizing, not an inline style= override (the root cause of
+    adhoc charts rendering oversized relative to the main report's charts)."""
+    html = build_html(
+        rendered_sections=[_adhoc_section_stub()],
+        annex_html="",
+        exec_bullets=[],
+        toc_html="",
+    )
+    chart_imgs = re.findall(r'<img class="chart-img[^"]*"[^>]*>', html)
+    assert len(chart_imgs) == 2
+    for tag in chart_imgs:
+        assert "style=" not in tag
+        assert "chart-img--adhoc" in tag

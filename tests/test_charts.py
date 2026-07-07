@@ -4,7 +4,7 @@ import pytest
 # _is_continuous lives in adhoc.py
 from adhoc import _is_continuous
 from charts import (
-    CHART_STRINGS, COUNTRIES, INSTRUMENT_LABELS, SK_LABELS, _resolve_labels,
+    CHART_STRINGS, COUNTRIES, INSTRUMENT_LABELS, SK_LABELS, _adhoc_chart_caption, _resolve_labels,
     _select_panels, build_chart, build_financing_gap_chart,
 )
 
@@ -257,3 +257,25 @@ def test_build_chart_without_suffix_or_pct_axis_defaults_unchanged():
     png = build_chart(sec, df, "bar", None)
     assert isinstance(png, bytes)
     assert png[:8] == _PNG_MAGIC
+
+
+# ── _adhoc_chart_caption ─────────────────────────────────────────────────────
+
+def test_adhoc_chart_caption_prefers_shortened_question():
+    theme = {
+        "chart_question": "Why aren't you using AI more?",
+        "question_text": "Please indicate the two main reasons for [IF QA1_2025Q4=1 \"not using AI\"] "
+                          "[IF QA1_2025Q4=2,3 \"not using AI more intensively\"] in your firm.",
+    }
+    assert _adhoc_chart_caption(theme) == "Why aren't you using AI more?"
+
+
+def test_adhoc_chart_caption_falls_back_to_truncated_raw_text():
+    theme = {"question_text": "- " + "A" * 200}
+    caption = _adhoc_chart_caption(theme)
+    assert caption == "A" * 110
+    assert not caption.startswith("-")
+
+
+def test_adhoc_chart_caption_empty_when_no_text_available():
+    assert _adhoc_chart_caption({}) == ""

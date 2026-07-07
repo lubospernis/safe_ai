@@ -30,6 +30,45 @@ INSTRUMENT_LABELS = {
     "g": "Leasing/hire-purchase", "h": "Other loans",
 }
 
+# Chart text strings not derived from data — used as the English default. Pass a
+# `labels` dict (see SK_LABELS) with the same keys to render a translated chart.
+CHART_STRINGS = {
+    "weighted_mean_pct":         "Weighted mean (%)",
+    "need_suffix":               "need",
+    "availability_suffix":       "availability",
+    "gap_suffix":                "gap",
+    "financing_gap_title_tmpl":  "{label} — need vs availability (bars); financing gap (dashed)",
+    "sk_instrument_gap_title":   "Slovakia — financing gap by instrument (latest wave)",
+    "question_prefix":           "Q",
+}
+
+SK_LABELS = {
+    "countries":    {"SK": "Slovensko", "EA": "Eurozóna", "DE": "Nemecko"},
+    "instruments":  {
+        "a": "Bankové úvery", "b": "Obchodný úver", "f": "Kreditné linky",
+        "g": "Lízing/nákup na splátky", "h": "Ostatné úvery",
+    },
+    "strings": {
+        "weighted_mean_pct":        "Vážený priemer (%)",
+        "need_suffix":              "potreba",
+        "availability_suffix":      "dostupnosť",
+        "gap_suffix":               "medzera",
+        "financing_gap_title_tmpl": "{label} — potreba vs. dostupnosť (stĺpce); medzera vo financovaní (čiarkovane)",
+        "sk_instrument_gap_title":  "Slovensko — medzera vo financovaní podľa nástroja (posledná vlna)",
+        "question_prefix":          "Ot",
+    },
+}
+
+
+def _resolve_labels(labels: dict | None) -> tuple[dict, dict, dict]:
+    """Merge an optional override dict (see SK_LABELS shape) over the English
+    defaults. Returns (countries, instruments, strings)."""
+    labels = labels or {}
+    countries = {**COUNTRIES, **labels.get("countries", {})}
+    instruments = {**INSTRUMENT_LABELS, **labels.get("instruments", {})}
+    strings = {**CHART_STRINGS, **labels.get("strings", {})}
+    return countries, instruments, strings
+
 
 def _nbs_style_ax(ax, chart_type: str, waves=None, xtick_labels=None) -> None:
     """Apply NBS visual style to a single axes."""
@@ -110,7 +149,8 @@ def _title_block_layout(fig_w: float, fig_h: float, base_top: float,
 
 
 def build_chart(sec: dict, df: pd.DataFrame, chart_type: str, best_panel, chart_subtitle: str = "",
-                 chart_title: str = "", chart_question: str = "") -> bytes:
+                 chart_title: str = "", chart_question: str = "", labels: dict | None = None) -> bytes:
+    countries, _instruments, strings = _resolve_labels(labels)
     panels = _select_panels(sec, df, best_panel)
     n_panels = len(panels)
     panel_col = sec["panel_col"]
@@ -169,9 +209,9 @@ def build_chart(sec: dict, df: pd.DataFrame, chart_type: str, best_panel, chart_
                              edgecolor="none", zorder=2)
                 if panel_val == panels[0]:
                     handles.append(bar)
-                    legend_labels.append(COUNTRIES[country])
+                    legend_labels.append(countries[country])
             ax.set_xticks(x)
-            ax.set_xticklabels([COUNTRIES[c] for c in COUNTRY_ORDER], fontsize=8)
+            ax.set_xticklabels([countries[c] for c in COUNTRY_ORDER], fontsize=8)
             ax.axhline(0, color="#D2DBE0", linewidth=0.9, linestyle="-", zorder=0)
         else:
             for country in COUNTRY_ORDER:
@@ -181,7 +221,7 @@ def build_chart(sec: dict, df: pd.DataFrame, chart_type: str, best_panel, chart_
                 line, = ax.plot(
                     cdf["wave_number"],
                     cdf[value_col],
-                    label=COUNTRIES[country],
+                    label=countries[country],
                     color=COUNTRY_COLORS[country],
                     linewidth=2,
                     marker="o",
@@ -189,7 +229,7 @@ def build_chart(sec: dict, df: pd.DataFrame, chart_type: str, best_panel, chart_
                 )
                 if panel_val == panels[0]:
                     handles.append(line)
-                    legend_labels.append(COUNTRIES[country])
+                    legend_labels.append(countries[country])
 
         ax.set_title(label_val, fontsize=9, pad=6)
         ax.set_ylabel("")
@@ -215,7 +255,7 @@ def build_chart(sec: dict, df: pd.DataFrame, chart_type: str, best_panel, chart_
         fig.suptitle(chart_title, fontsize=_TITLE_FONTSIZE, fontweight="bold", color=NBS_TEXT,
                      y=title_y, wrap=True)
     if chart_question:
-        fig.text(0.5, question_y, f"Q: {chart_question}", ha="center", va="top",
+        fig.text(0.5, question_y, f"{strings['question_prefix']}: {chart_question}", ha="center", va="top",
                  fontsize=_QUESTION_FONTSIZE, style="italic", color="#5a5a5a", wrap=True)
 
     if chart_subtitle:
@@ -229,12 +269,14 @@ def build_chart(sec: dict, df: pd.DataFrame, chart_type: str, best_panel, chart_
     return buf.read()
 
 
-def _financing_gap_bars(df: pd.DataFrame, chart_title: str = "", chart_question: str = "") -> bytes:
+def _financing_gap_bars(df: pd.DataFrame, chart_title: str = "", chart_question: str = "",
+                         labels: dict | None = None) -> bytes:
     """Grouped bars (need/availability) + gap line for bank loans (sub_item='a')."""
     import matplotlib.colors as mcolors
 
+    countries, instruments, strings = _resolve_labels(labels)
     sub_df = df[df["sub_item"] == "a"].copy()
-    label_val = sub_df["sub_item_label"].iloc[0] if not sub_df.empty else "Bank loans"
+    label_val = sub_df["sub_item_label"].iloc[0] if not sub_df.empty else instruments["a"]
 
     waves = sorted(sub_df["wave_number"].unique())
     wave_labels = (
@@ -274,7 +316,10 @@ def _financing_gap_bars(df: pd.DataFrame, chart_title: str = "", chart_question:
                         color=light_color, hatch="//", edgecolor=base_color, linewidth=0.5, zorder=2)
             if w_idx == 0:
                 bar_handles += [b1, b2]
-                bar_labels_leg += [f"{COUNTRIES[country]} — need", f"{COUNTRIES[country]} — availability"]
+                bar_labels_leg += [
+                    f"{countries[country]} — {strings['need_suffix']}",
+                    f"{countries[country]} — {strings['availability_suffix']}",
+                ]
 
         x_pts = [i * group_gap for i, w in enumerate(waves) if not cdf[cdf["wave_number"] == w].empty]
         gap_vals = [cdf[cdf["wave_number"] == w]["financing_gap_wtd"].iloc[0] for w in waves
@@ -282,7 +327,7 @@ def _financing_gap_bars(df: pd.DataFrame, chart_title: str = "", chart_question:
         line, = ax.plot(x_pts, gap_vals, color=base_color, linewidth=2.0,
                         marker="D", markersize=4, linestyle="--", zorder=3)
         line_handles.append(line)
-        line_labels_leg.append(f"{COUNTRIES[country]} — gap")
+        line_labels_leg.append(f"{countries[country]} — {strings['gap_suffix']}")
 
     ax.set_facecolor("#f4f4f4")
     for spine in ax.spines.values():
@@ -296,7 +341,7 @@ def _financing_gap_bars(df: pd.DataFrame, chart_title: str = "", chart_question:
     ax.set_xticklabels([str(wave_labels[w]) for w in waves], rotation=35, ha="right", fontsize=8)
     ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%+.0f"))
     ax.set_ylabel("")
-    ax.set_title(f"{label_val} — need vs availability (bars); financing gap (dashed)", fontsize=9)
+    ax.set_title(strings["financing_gap_title_tmpl"].format(label=label_val), fontsize=9)
     fig.legend(bar_handles + line_handles, bar_labels_leg + line_labels_leg,
                loc="lower center", bbox_to_anchor=(0.5, 0.0), ncol=3, fontsize=7.5, frameon=False)
 
@@ -304,7 +349,7 @@ def _financing_gap_bars(df: pd.DataFrame, chart_title: str = "", chart_question:
         fig.suptitle(chart_title, fontsize=_TITLE_FONTSIZE, fontweight="bold", color=NBS_TEXT,
                      y=title_y, wrap=True)
     if chart_question:
-        fig.text(0.5, question_y, f"Q: {chart_question}", ha="center", va="top",
+        fig.text(0.5, question_y, f"{strings['question_prefix']}: {chart_question}", ha="center", va="top",
                  fontsize=_QUESTION_FONTSIZE, style="italic", color="#5a5a5a", wrap=True)
 
     buf = io.BytesIO()
@@ -314,21 +359,22 @@ def _financing_gap_bars(df: pd.DataFrame, chart_title: str = "", chart_question:
     return buf.read()
 
 
-def _financing_gap_sk_instruments(df_sk: pd.DataFrame) -> bytes:
+def _financing_gap_sk_instruments(df_sk: pd.DataFrame, labels: dict | None = None) -> bytes:
     """Financing gap for Slovakia by instrument — bar chart, latest wave only."""
+    _countries, instrument_labels, strings = _resolve_labels(labels)
     latest_wave = df_sk["wave_number"].max()
     bar_df = df_sk[df_sk["wave_number"] == latest_wave].copy()
 
     instruments = [s for s in INSTRUMENT_COLORS if not bar_df[bar_df["sub_item"] == s].empty]
     x = np.arange(len(instruments))
-    vals, colors, labels = [], [], []
+    vals, colors, tick_labels = [], [], []
     for sub_item in instruments:
         row = bar_df[bar_df["sub_item"] == sub_item]
         vals.append(row["financing_gap_wtd"].iloc[0] if not row.empty else 0)
         colors.append(INSTRUMENT_COLORS[sub_item])
-        labels.append(
+        tick_labels.append(
             row["sub_item_label"].iloc[0] if ("sub_item_label" in row.columns and not row.empty)
-            else INSTRUMENT_LABELS.get(sub_item, sub_item)
+            else instrument_labels.get(sub_item, sub_item)
         )
 
     fig, ax = plt.subplots(1, 1, figsize=(5.5, 3.2))
@@ -337,7 +383,7 @@ def _financing_gap_sk_instruments(df_sk: pd.DataFrame) -> bytes:
 
     ax.bar(x, vals, 0.55, color=colors, edgecolor="none", zorder=2)
     ax.set_xticks(x)
-    ax.set_xticklabels(labels, fontsize=8, rotation=25, ha="right")
+    ax.set_xticklabels(tick_labels, fontsize=8, rotation=25, ha="right")
     ax.set_facecolor("#f4f4f4")
     for spine in ax.spines.values():
         spine.set_visible(False)
@@ -348,7 +394,7 @@ def _financing_gap_sk_instruments(df_sk: pd.DataFrame) -> bytes:
     ax.axhline(0, color="#9aa5ad", linewidth=0.8, zorder=1)
     ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%+.0f"))
     ax.set_ylabel("")
-    ax.set_title("Slovakia — financing gap by instrument (latest wave)", fontsize=9)
+    ax.set_title(strings["sk_instrument_gap_title"], fontsize=9)
 
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="#f4f4f4")
@@ -358,13 +404,13 @@ def _financing_gap_sk_instruments(df_sk: pd.DataFrame) -> bytes:
 
 
 def build_financing_gap_chart(sec: dict, df: pd.DataFrame, chart_title: str = "",
-                               chart_question: str = "") -> bytes:
+                               chart_question: str = "", labels: dict | None = None) -> bytes:
     """Returns a single PNG stacking the need/availability chart and SK instrument chart."""
     df_main = df[df["chart_type"] == "main"]
     df_sk = df[df["chart_type"] == "sk_all"]
 
-    png1 = _financing_gap_bars(df_main, chart_title=chart_title, chart_question=chart_question)
-    png2 = _financing_gap_sk_instruments(df_sk)
+    png1 = _financing_gap_bars(df_main, chart_title=chart_title, chart_question=chart_question, labels=labels)
+    png2 = _financing_gap_sk_instruments(df_sk, labels=labels)
 
     from PIL import Image
     img1 = Image.open(io.BytesIO(png1))
@@ -383,21 +429,23 @@ def _build_adhoc_chart(
     theme: dict,
     is_continuous: bool = False,
     response_labels: dict | None = None,
+    labels: dict | None = None,
 ) -> bytes | None:
     """Render NBS-styled bar chart from adhoc chart DataFrame. Returns PNG bytes or None."""
     if df is None or df.empty:
         return None
     try:
         if is_continuous:
-            return _build_adhoc_chart_continuous(df, theme)
-        return _build_adhoc_chart_categorical(df, theme, response_labels)
+            return _build_adhoc_chart_continuous(df, theme, labels=labels)
+        return _build_adhoc_chart_categorical(df, theme, response_labels, labels=labels)
     except Exception as e:
         print(f"  Adhoc chart render failed: {e}")
         return None
 
 
-def _build_adhoc_chart_continuous(df: pd.DataFrame, theme: dict) -> bytes | None:
+def _build_adhoc_chart_continuous(df: pd.DataFrame, theme: dict, labels: dict | None = None) -> bytes | None:
     """For continuous modules: grouped bar chart with countries on x-axis, mean % on y-axis."""
+    countries, _instruments, strings = _resolve_labels(labels)
     sub_items = sorted(df["sub_item"].unique())
     n_panels = len(sub_items)
     ncols = min(n_panels, 2)
@@ -441,11 +489,11 @@ def _build_adhoc_chart_continuous(df: pd.DataFrame, theme: dict) -> bytes | None
         if sub == sub_items[0]:
             for bar, country in zip(bars, country_keys):
                 handles.append(bar)
-                legend_labels_list.append(COUNTRIES.get(country, country))
+                legend_labels_list.append(countries.get(country, country))
 
         ax.set_xticks(x)
-        ax.set_xticklabels([COUNTRIES.get(c, c) for c in country_keys], fontsize=8)
-        ax.set_ylabel("Weighted mean (%)", fontsize=7.5)
+        ax.set_xticklabels([countries.get(c, c) for c in country_keys], fontsize=8)
+        ax.set_ylabel(strings["weighted_mean_pct"], fontsize=7.5)
 
         # Panel title from question_texts or theme label
         panel_title = str(
@@ -474,8 +522,10 @@ def _build_adhoc_chart_categorical(
     df: pd.DataFrame,
     theme: dict,
     response_labels: dict | None = None,
+    labels: dict | None = None,
 ) -> bytes | None:
     """For categorical modules: grouped bars by response code, SK vs EA per panel."""
+    country_names, _instruments, _strings = _resolve_labels(labels)
     sub_items = sorted(df["sub_item"].unique())
     n_panels = len(sub_items)
     ncols = min(n_panels, 2)
@@ -519,7 +569,7 @@ def _build_adhoc_chart_categorical(
                          edgecolor="none", zorder=2)
             if sub == sub_items[0]:
                 handles.append(bar)
-                legend_labels_list.append(COUNTRIES.get(country, country))
+                legend_labels_list.append(country_names.get(country, country))
 
         ax.set_xticks(x)
         tick_labels = [flat_labels.get(int(v), str(int(v))) for v in x_vals]

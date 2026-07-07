@@ -47,11 +47,11 @@ matplotlib.rcParams.update({
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-from adhoc import build_adhoc_spotlight, detect_adhoc_theme
+from adhoc import build_adhoc_spotlight, detect_adhoc_theme, rebuild_adhoc_charts_sk
 from cost import _mistral_client
 from db import DEV_SCHEMA, PROD_SCHEMA, _get_connection, fetch_all
 from html_builder import (
-    _SK_UI, _fetch_painting_inner_html, build_annex_html, build_html, build_toc,
+    _SK_UI, _fetch_painting_inner_html, _load_annex_question_texts, build_annex_html, build_html, build_toc,
 )
 from llm import _find_ecb_focus_article, get_exec_summary, translate_to_slovak
 
@@ -190,8 +190,7 @@ def main() -> None:
 
     print("Building question annex...")
     annex_html = build_annex_html(con=tool_con)
-    sk_annex_html = build_annex_html(con=tool_con, ui=_SK_UI)
-    tool_con.close()
+    question_texts = _load_annex_question_texts(con=tool_con)
 
     print("Fetching painting thumbnail...")
     painting_inner_html = _fetch_painting_inner_html()
@@ -207,7 +206,25 @@ def main() -> None:
     print(f"WAVE_ADHOC_EN={wave_en}")
 
     print("Translating to Slovak...")
-    sk_rendered, sk_exec_bullets = translate_to_slovak(rendered, exec_bullets, cost_tracker)
+    sk_rendered, sk_exec_bullets, sk_question_texts = translate_to_slovak(
+        rendered, exec_bullets, cost_tracker, question_texts=question_texts,
+    )
+    sk_annex_html = build_annex_html(con=tool_con, ui=_SK_UI, question_texts_override=sk_question_texts)
+    tool_con.close()
+
+    _rebuild_specs = adhoc_section.get("_chart_rebuild_specs")
+    if _rebuild_specs:
+        print("Rebuilding adhoc charts with Slovak labels...")
+        sk_adhoc = sk_rendered[0]
+        sk_chart_pngs = rebuild_adhoc_charts_sk(
+            _rebuild_specs, sk_question_texts, adhoc_section.get("_response_labels", {}),
+            theme_label_sk=sk_adhoc.get("theme_label", ""),
+        )
+        sk_adhoc["chart_pngs"] = sk_chart_pngs
+        sk_adhoc["chart_png"] = sk_chart_pngs[0] if sk_chart_pngs else None
+    else:
+        print("Skipping SK chart rebuild — adhoc section was loaded from cache (no rebuild data).")
+
     sk_toc_html = build_toc(sk_rendered, ui=_SK_UI)
     sk_html = build_html(sk_rendered, sk_annex_html, sk_exec_bullets, sk_toc_html,
                          painting_inner_html, latest_wave, ui=_SK_UI)

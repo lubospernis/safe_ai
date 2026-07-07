@@ -13,8 +13,15 @@ export async function POST() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { data: allowedRow } = await supabase
+    .from("allowed_emails")
+    .select("lang")
+    .eq("email", user.email)
+    .maybeSingle();
+  const lang = allowedRow?.lang === "sk" ? "sk" : "en";
+
   try {
-    await addSubscriber(user.email);
+    await addSubscriber(user.email, lang);
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("subscribe error:", err);

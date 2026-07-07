@@ -4,8 +4,11 @@ const GITHUB_PATH =
   process.env.GITHUB_SUBSCRIBERS_PATH ?? "newsletter/subscribers.json";
 const API_BASE = "https://api.github.com";
 
+export type Lang = "en" | "sk";
+
 interface Subscriber {
   email: string;
+  lang: Lang;
   subscribed_at: string;
 }
 
@@ -71,11 +74,11 @@ export async function getSubscribers(): Promise<string[]> {
   return data.subscribers.map((s) => s.email);
 }
 
-export async function addSubscriber(email: string): Promise<void> {
+export async function addSubscriber(email: string, lang: Lang): Promise<void> {
   const { data, sha } = await getFile();
   if (data.subscribers.some((s) => s.email === email)) return;
-  data.subscribers.push({ email, subscribed_at: new Date().toISOString() });
-  await putFile(data, sha, `newsletter: subscribe ${email} [skip ci]`);
+  data.subscribers.push({ email, lang, subscribed_at: new Date().toISOString() });
+  await putFile(data, sha, `newsletter: subscribe ${email} (${lang}) [skip ci]`);
 }
 
 export async function removeSubscriber(email: string): Promise<void> {
@@ -84,4 +87,12 @@ export async function removeSubscriber(email: string): Promise<void> {
   data.subscribers = data.subscribers.filter((s) => s.email !== email);
   if (data.subscribers.length === before) return;
   await putFile(data, sha, `newsletter: unsubscribe ${email} [skip ci]`);
+}
+
+export async function updateSubscriberLang(email: string, lang: Lang): Promise<void> {
+  const { data, sha } = await getFile();
+  const sub = data.subscribers.find((s) => s.email === email);
+  if (!sub || sub.lang === lang) return;
+  sub.lang = lang;
+  await putFile(data, sha, `newsletter: set ${email} lang=${lang} [skip ci]`);
 }

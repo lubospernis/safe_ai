@@ -6,9 +6,17 @@ import styles from "./page.module.css";
 interface Props {
   newsletterId: string;
   isSubscribed: boolean;
+  subscribeLabel: string;
+  unsubscribeLabel: string;
+  errorLabel: string;
 }
 
-export default function SubscribeButton({ isSubscribed: initial }: Props) {
+export default function SubscribeButton({
+  isSubscribed: initial,
+  subscribeLabel,
+  unsubscribeLabel,
+  errorLabel,
+}: Props) {
   const [subscribed, setSubscribed] = useState(initial);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -22,7 +30,7 @@ export default function SubscribeButton({ isSubscribed: initial }: Props) {
       if (!res.ok) throw new Error(await res.text());
       setSubscribed((s) => !s);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(err instanceof Error ? err.message : errorLabel);
     } finally {
       setLoading(false);
     }
@@ -36,7 +44,7 @@ export default function SubscribeButton({ isSubscribed: initial }: Props) {
         onClick={toggle}
         disabled={loading}
       >
-        {loading ? "…" : subscribed ? "Unsubscribe" : "Subscribe"}
+        {loading ? "…" : subscribed ? unsubscribeLabel : subscribeLabel}
       </button>
     </div>
   );

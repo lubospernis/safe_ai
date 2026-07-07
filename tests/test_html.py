@@ -1,6 +1,8 @@
 from unittest.mock import MagicMock, patch
 
-from html_builder import _fetch_painting_inner_html, _md_to_html, _clean_question_text, build_toc
+from html_builder import (
+    _fetch_painting_inner_html, _md_to_html, _clean_question_text, build_annex_html, build_toc,
+)
 
 
 def test_md_to_html_bold():
@@ -102,3 +104,42 @@ def test_fetch_painting_succeeds_first_try_no_retry():
         html = _fetch_painting_inner_html()
     assert mock_get.call_count == 1
     assert "<img" in html
+
+
+def _mock_annex_con():
+    """Mock DuckDB connection returning one annex row for Q5 with English question text."""
+    con = MagicMock()
+    cols = ["group", "element", "question_item", "notes_extra", "sample", "notes", "safe_2024q1"]
+
+    def execute_side_effect(sql, *args, **kwargs):
+        result = MagicMock()
+        if "information_schema.columns" in sql:
+            result.fetchall.return_value = [(c,) for c in cols]
+        else:
+            result.fetchall.return_value = [
+                ("Q5", "ECB module", "What is the change in your financing need?"),
+            ]
+        return result
+
+    con.execute.side_effect = execute_side_effect
+    return con
+
+
+def test_build_annex_html_uses_english_text_by_default():
+    con = _mock_annex_con()
+    html = build_annex_html(con=con)
+    assert "What is the change in your financing need?" in html
+
+
+def test_build_annex_html_question_texts_override_replaces_text():
+    con = _mock_annex_con()
+    html = build_annex_html(con=con, question_texts_override={"q5": "Aká je zmena vo vašej potrebe financovania?"})
+    assert "Aká je zmena vo vašej potrebe financovania?" in html
+    assert "What is the change in your financing need?" not in html
+
+
+def test_build_annex_html_override_is_case_insensitive_and_partial():
+    """Only overridden question IDs should be replaced; others keep the English fallback text."""
+    con = _mock_annex_con()
+    html = build_annex_html(con=con, question_texts_override={"q5": "Preložený text"})
+    assert "Preložený text" in html

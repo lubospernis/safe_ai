@@ -22,6 +22,7 @@ from adhoc import (
     _select_interesting_sub_items,
     build_adhoc_spotlight,
     detect_adhoc_theme,
+    rebuild_adhoc_charts_sk,
 )
 
 
@@ -128,6 +129,44 @@ def mock_anthropic_spotlight():
     resp.usage.input_tokens = 800
     resp.usage.output_tokens = 120
     client.messages.create.return_value = resp
+    return client
+
+
+@pytest.fixture
+def mock_mistral_theme_with_pixtral_fallback():
+    """Mistral client that also handles the Phase 3 Pixtral vision-spotlight fallback
+    (used when no Anthropic client is passed to build_adhoc_spotlight)."""
+    client = MagicMock()
+
+    def complete_side_effect(*args, **kwargs):
+        resp = MagicMock()
+        messages = kwargs.get("messages", args[0] if args else [])
+        last_user = next(
+            (m["content"] for m in reversed(messages) if m["role"] == "user"), ""
+        )
+        if isinstance(last_user, list):
+            # Phase 3 Pixtral fallback: user content is a list of text/image_url blocks
+            resp.choices[0].message.content = json.dumps({
+                "finding": "Slovak firms lag Euro Area peers in electrification readiness.",
+                "bullets": [
+                    "**SK readiness gap:** 35% of Slovak firms report low electrification readiness (code 1), vs 28% in the EA.",
+                    "**EA more advanced:** 31% of EA firms report moderate readiness (code 2), slightly above Slovakia's 28%.",
+                ],
+                "chart_sub_items": ["a"],
+            })
+        elif "Classify each sub-item" in last_user or "interesting" in last_user.lower():
+            resp.choices[0].message.content = json.dumps({
+                "interesting": ["a"],
+                "skip": [],
+                "routing_notes": {"a": "all firms"},
+            })
+        else:
+            resp.choices[0].message.content = "Electrification Efforts"
+        resp.usage.prompt_tokens = 100
+        resp.usage.completion_tokens = 15
+        return resp
+
+    client.chat.complete.side_effect = complete_side_effect
     return client
 
 
@@ -251,3 +290,103 @@ def test_build_adhoc_spotlight_html_compatible_keys(
 def test_is_continuous_categorical(electrification_df):
     """Electrification data with 4 distinct coded responses should NOT be treated as continuous."""
     assert _is_continuous(electrification_df) is False
+
+
+def test_build_adhoc_spotlight_exposes_chart_rebuild_ingredients(
+    mock_con, mock_mistral_theme, mock_anthropic_spotlight
+):
+    """build_adhoc_spotlight() must return _chart_rebuild_specs/_response_labels so the SK
+    report can re-render charts with Slovak labels after translation."""
+    cost = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
+    theme = {
+        "module_id": "qe1",
+        "theme_label": "Electrification Efforts",
+        "question_texts": {"a": "To what extent has your firm invested in electrification?"},
+    }
+
+    with patch("adhoc.SQL_DIR") as mock_sql_dir:
+        mock_sql_dir.__truediv__ = lambda self, other: mock_sql_dir
+        mock_sql_dir.read_text.return_value = (
+            "SELECT country_code, sub_item, response_raw, pct_wtd, n_firms, n_firms_wtd, n_total_wtd "
+            "FROM {schema}.mart_safe__adhoc_responses "
+            "WHERE wave_number = {wave_number} AND module_id = '{module_id}'"
+        )
+        result = build_adhoc_spotlight(
+            theme, 39, mock_con, "main_safe",
+            mistral_client=mock_mistral_theme,
+            cost_tracker=cost,
+            anthropic_client=mock_anthropic_spotlight,
+        )
+
+    assert result is not None
+    specs = result["_chart_rebuild_specs"]
+    assert len(specs) == len(result["chart_pngs"])
+    for spec in specs:
+        assert "chart_df" in spec and "is_continuous" in spec and "question_id" in spec
+
+    sk_pngs = rebuild_adhoc_charts_sk(
+        specs, sk_question_texts={"qe1": "Do akej miery vaša firma investovala do elektrifikácie?"},
+        response_labels=result["_response_labels"], theme_label_sk="Elektrifikačné úsilie",
+    )
+    assert len(sk_pngs) == len(result["chart_pngs"])
+    assert all(isinstance(p, bytes) for p in sk_pngs)
+
+
+def test_rebuild_adhoc_charts_sk_falls_back_to_english_on_error():
+    """If rebuilding a chart raises, keep the original English PNG rather than dropping it."""
+    bad_spec = {
+        "question_id": "qe1",
+        "chart_df": None,  # will cause _build_adhoc_chart to raise internally when accessed
+        "is_continuous": False,
+        "effective_question_texts": {"a": "orig"},
+        "question_text": "orig",
+        "chart_png": b"ENGLISH_FALLBACK_PNG",
+    }
+    with patch("adhoc._build_adhoc_chart", side_effect=RuntimeError("boom")):
+        result = rebuild_adhoc_charts_sk([bad_spec], sk_question_texts={}, response_labels={})
+    assert result == [b"ENGLISH_FALLBACK_PNG"]
+
+
+def test_build_adhoc_spotlight_pixtral_fallback(
+    mock_con, mock_mistral_theme_with_pixtral_fallback
+):
+    """When no anthropic_client is passed, Phase 3 must fall back to Pixtral (vision-capable),
+    not Mistral Small text-only — the fallback must still receive chart images and produce
+    valid output, not silently degrade to a text-only prompt."""
+    cost = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
+    theme = {
+        "module_id": "qe1",
+        "theme_label": "Electrification Efforts",
+        "question_texts": {"a": "To what extent has your firm invested in electrification?"},
+    }
+
+    with patch("adhoc.SQL_DIR") as mock_sql_dir:
+        mock_sql_dir.__truediv__ = lambda self, other: mock_sql_dir
+        mock_sql_dir.read_text.return_value = (
+            "SELECT country_code, sub_item, response_raw, pct_wtd, n_firms, n_firms_wtd, n_total_wtd "
+            "FROM {schema}.mart_safe__adhoc_responses "
+            "WHERE wave_number = {wave_number} AND module_id = '{module_id}'"
+        )
+        result = build_adhoc_spotlight(
+            theme, 39, mock_con, "main_safe",
+            mistral_client=mock_mistral_theme_with_pixtral_fallback,
+            cost_tracker=cost,
+            anthropic_client=None,
+        )
+
+    assert result is not None
+    assert result["section_id"] == "adhoc_spotlight"
+    assert isinstance(result["finding"], str) and len(result["finding"]) > 0
+    assert isinstance(result["bullets"], list)
+    assert 2 <= len(result["bullets"]) <= 4
+
+    # Confirm the fallback call actually used Pixtral, with image_url blocks present
+    # (i.e. chart images were NOT dropped in favor of a text-only prompt).
+    calls = mock_mistral_theme_with_pixtral_fallback.chat.complete.call_args_list
+    spotlight_calls = [c for c in calls if c.kwargs.get("model") == "pixtral-12b-2409"]
+    assert len(spotlight_calls) == 1
+    user_msg = next(
+        m["content"] for m in spotlight_calls[0].kwargs["messages"] if m["role"] == "user"
+    )
+    assert isinstance(user_msg, list)
+    assert any(block.get("type") == "image_url" for block in user_msg)

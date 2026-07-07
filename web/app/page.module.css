@@ -34,6 +34,47 @@
   opacity: 0.8;
 }
 
+.langToggle {
+  display: flex;
+  gap: 2px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 5px;
+  padding: 2px;
+}
+
+.langActive,
+.langInactive {
+  border: none;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.langActive {
+  background: #fff;
+  color: #0777b3;
+}
+
+.langInactive {
+  background: transparent;
+  color: #fff;
+  opacity: 0.85;
+}
+
+.langInactive:hover:not(:disabled) {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.langActive:disabled,
+.langInactive:disabled {
+  cursor: not-allowed;
+}
+
 .signout {
   background: rgba(255, 255, 255, 0.15);
   border: 1px solid rgba(255, 255, 255, 0.4);

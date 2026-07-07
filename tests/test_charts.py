@@ -3,7 +3,10 @@ import pytest
 
 # _is_continuous lives in adhoc.py
 from adhoc import _is_continuous
-from charts import _select_panels, build_chart, build_financing_gap_chart
+from charts import (
+    COUNTRIES, INSTRUMENT_LABELS, SK_LABELS, _resolve_labels,
+    _select_panels, build_chart, build_financing_gap_chart,
+)
 
 
 # ── _is_continuous ────────────────────────────────────────────────────────────
@@ -190,3 +193,43 @@ def test_select_panels_no_panel_col():
     panels = _select_panels(sec, df, best_panel=None)
     # No panel_col → returns [None] sentinel
     assert panels == [None]
+
+
+# ── label override (SK translation) ──────────────────────────────────────────
+
+def test_resolve_labels_defaults_to_english():
+    countries, instruments, strings = _resolve_labels(None)
+    assert countries == COUNTRIES
+    assert instruments == INSTRUMENT_LABELS
+    assert strings["weighted_mean_pct"] == "Weighted mean (%)"
+
+
+def test_resolve_labels_applies_sk_override():
+    countries, instruments, strings = _resolve_labels(SK_LABELS)
+    assert countries["SK"] == "Slovensko"
+    assert countries["EA"] == "Eurozóna"
+    assert instruments["a"] == "Bankové úvery"
+    assert strings["weighted_mean_pct"] == "Vážený priemer (%)"
+    assert strings["financing_gap_title_tmpl"].format(label="Bankové úvery").startswith("Bankové úvery —")
+
+
+def test_build_chart_with_sk_labels_still_renders():
+    df = _make_chart_df(["a"])
+    sec = _make_section(pinned=["a"], max_panels=1)
+    png = build_chart(sec, df, "line", None,
+                       chart_title="Slovenské firmy čelia pretrvávajúcemu tlaku",
+                       chart_question="Ktoré problémy sú pre vás naliehavé?",
+                       labels=SK_LABELS)
+    assert isinstance(png, bytes)
+    assert png[:8] == _PNG_MAGIC
+
+
+def test_build_financing_gap_chart_with_sk_labels_still_renders():
+    df = _make_financing_gap_df()
+    sec = {"title": "Financing Gap"}
+    png = build_financing_gap_chart(sec, df,
+                                     chart_title="Slovenské firmy čelia rastúcej medzere",
+                                     chart_question="Získate potrebné financovanie?",
+                                     labels=SK_LABELS)
+    assert isinstance(png, bytes)
+    assert png[:8] == _PNG_MAGIC

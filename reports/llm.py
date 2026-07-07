@@ -1369,7 +1369,8 @@ def translate_to_slovak(
     rendered: list[dict],
     exec_bullets: list[dict],
     cost_tracker: dict,
-) -> tuple[list[dict], list[dict]]:
+    question_texts: dict | None = None,
+) -> tuple[list[dict], list[dict], dict]:
     exec_bullet_texts = [item.get("bullet", "") for item in exec_bullets]
 
     adhoc_s = next((s for s in rendered if s.get("section_id") == "adhoc_spotlight"), None)
@@ -1387,6 +1388,8 @@ def translate_to_slovak(
             for s in regular
         ],
     }
+    if question_texts:
+        payload["annex_questions"] = question_texts
     if adhoc_s:
         payload["adhoc"] = {
             "theme_label": adhoc_s.get("theme_label", ""),
@@ -1407,6 +1410,9 @@ def translate_to_slovak(
         "Translate the following ECB SAFE survey report content to Slovak. "
         "Keep all numbers, percentages, and proper nouns (Slovakia, Euro Area, Germany, ECB, "
         "SAFE) unchanged. Use formal economic Slovak (not colloquial). "
+        "If an \"annex_questions\" object is present, translate every question text value "
+        "(keep the keys, i.e. question IDs, unchanged) — these are official survey question "
+        "wordings shown in a glossary, translate them faithfully rather than paraphrasing. "
         "Return valid JSON only — no markdown fences — with exactly the same structure as the input.\n\n"
         + json.dumps(payload, ensure_ascii=False)
     )
@@ -1414,7 +1420,7 @@ def translate_to_slovak(
     _TRANSLATE_MODEL = "mistral-medium-2505"
     resp = client.chat.complete(
         model=_TRANSLATE_MODEL,
-        max_tokens=5500,
+        max_tokens=7000,
         messages=[{"role": "user", "content": prompt}],
     )
     if resp.usage:
@@ -1428,7 +1434,7 @@ def translate_to_slovak(
         translated = json.loads(repair_json(raw))
     except Exception:
         print("  [SK] Translation JSON parse failed — falling back to English content")
-        return rendered, exec_bullets
+        return rendered, exec_bullets, (question_texts or {})
 
     sk_rendered = []
     by_id = {s["id"]: s for s in translated.get("sections", [])}
@@ -1468,7 +1474,12 @@ def translate_to_slovak(
         {"bullet": str(text), "section_id": orig.get("section_id", "")}
         for text, orig in zip(sk_bullet_texts, exec_bullets)
     ]
-    return sk_rendered, sk_exec_bullets
+
+    sk_question_texts = translated.get("annex_questions") or (question_texts or {})
+    if question_texts and not translated.get("annex_questions"):
+        print("  [SK] Annex question translation missing from response — falling back to English annex text")
+
+    return sk_rendered, sk_exec_bullets, sk_question_texts
 
 
 def _fetch_ecb_context() -> tuple[str, str]:

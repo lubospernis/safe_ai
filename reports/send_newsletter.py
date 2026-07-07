@@ -1,8 +1,10 @@
 """
 SAFE Survey Newsletter — standard report digest email via Resend.
 
-Parses the standard report HTML (report_latest.html), extracts executive summary
-bullets and section findings, and sends a digest email to all subscribers.
+Parses the standard report HTML (report_latest.html / report_latest_sk.html),
+extracts executive summary bullets and section findings, and sends a digest
+email to each subscriber in their preferred language (subscriber "lang" field,
+defaults to "en" if absent).
 
 Adhoc special-focus emails are sent separately by send_adhoc_newsletter.py.
 
@@ -15,7 +17,7 @@ Required environment variables:
 Optional environment variables:
   NEWSLETTER_FROM  — sender address (default: placeholder, must be a verified
                      Resend domain before sending to non-test addresses)
-  PAGES_URL        — URL of the published report (default: lubospernis.github.io/safe_ai)
+  PAGES_URL        — URL of the published EN report (default: lubospernis.github.io/safe_ai)
 """
 
 import json
@@ -32,16 +34,29 @@ from bs4 import BeautifulSoup
 
 ROOT = Path(__file__).parent.parent
 REPORT_HTML = Path(__file__).parent / "output" / "report_latest.html"
+REPORT_HTML_SK = Path(__file__).parent / "output" / "report_latest_sk.html"
 SUBSCRIBERS_JSON = ROOT / "newsletter" / "subscribers.json"
 
 _PAGES_BASE = "https://lubospernis.github.io/safe_ai"
 _links_path = Path(__file__).parent / "output" / "latest_links.json"
 if _links_path.exists():
     _links = json.loads(_links_path.read_text())
-    PAGES_URL = os.environ.get("PAGES_URL", _links.get("en", f"{_PAGES_BASE}/"))
 else:
-    PAGES_URL = os.environ.get("PAGES_URL", f"{_PAGES_BASE}/")
+    _links = {}
+PAGES_URL = os.environ.get("PAGES_URL", _links.get("en", f"{_PAGES_BASE}/"))
+PAGES_URL_SK = _links.get("sk", f"{_PAGES_BASE}/sk.html")
 FROM_ADDRESS = os.environ.get("NEWSLETTER_FROM", "onboarding@resend.dev")
+
+_LABELS = {
+    "en": {"exec_summary": "Executive Summary", "findings": "Key Findings",
+           "cta": "View full report with charts →",
+           "footer": "You're receiving this because you're subscribed to the ECB SAFE survey digest. "
+                     "Source: ECB SAFE microdata. Net balance = % reporting increase minus % reporting decrease."},
+    "sk": {"exec_summary": "Zhrnutie", "findings": "Kľúčové zistenia",
+           "cta": "Zobraziť celú správu s grafmi →",
+           "footer": "Tento e-mail dostávate, pretože ste odberateľom prehľadu z prieskumu ECB SAFE. "
+                     "Zdroj: mikroúdaje ECB SAFE. Čisté saldo = % nárastu mínus % poklesu."},
+}
 
 
 # ---------------------------------------------------------------------------
@@ -112,7 +127,8 @@ _CTA = (
 _FOOTER = "padding:16px 32px 28px;font-size:11px;color:#adadad;border-top:1px solid #f0f0f0;"
 
 
-def build_email_html(data: dict, pages_url: str) -> str:
+def build_email_html(data: dict, pages_url: str, lang: str = "en") -> str:
+    labels = _LABELS.get(lang, _LABELS["en"])
     bullets_html = "\n".join(
         f'<li style="{_LI}">{b}</li>' for b in data["exec_bullets"]
     )
@@ -125,7 +141,7 @@ def build_email_html(data: dict, pages_url: str) -> str:
         )
 
     return f"""<!DOCTYPE html>
-<html lang="en">
+<html lang="{lang}">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="{_BODY}">
   <div style="{_WRAP}">
@@ -134,28 +150,27 @@ def build_email_html(data: dict, pages_url: str) -> str:
     <div style="{_SUBHEADER}">{data['meta']}</div>
 
     <div style="{_SECTION}">
-      <h2 style="{_H2}">Executive Summary</h2>
+      <h2 style="{_H2}">{labels['exec_summary']}</h2>
       <ul style="padding-left:18px;margin:0 0 8px;">
 {bullets_html}
       </ul>
     </div>
 
     <div style="{_CTA_WRAP}">
-      <a href="{pages_url}" style="{_CTA}">View full report with charts →</a>
+      <a href="{pages_url}" style="{_CTA}">{labels['cta']}</a>
     </div>
 
     <div style="{_SECTION}">
-      <h2 style="{_H2}">Key Findings</h2>
+      <h2 style="{_H2}">{labels['findings']}</h2>
 {findings_html}
     </div>
 
     <div style="{_CTA_WRAP}">
-      <a href="{pages_url}" style="{_CTA}">View full report with charts →</a>
+      <a href="{pages_url}" style="{_CTA}">{labels['cta']}</a>
     </div>
 
     <div style="{_FOOTER}">
-      You're receiving this because you're subscribed to the ECB SAFE survey digest.
-      Source: ECB SAFE microdata. Net balance = % reporting increase minus % reporting decrease.
+      {labels['footer']}
     </div>
 
   </div>
@@ -179,25 +194,40 @@ def send_newsletter() -> None:
         print(f"Report not found at {REPORT_HTML} — skipping.")
         sys.exit(1)
 
-    html = REPORT_HTML.read_text(encoding="utf-8")
-    data = parse_report(html)
-
-    if not data["exec_bullets"]:
-        print("No executive summary bullets found in report — skipping.")
-        sys.exit(1)
-
     subscribers = json.loads(SUBSCRIBERS_JSON.read_text())["subscribers"]
     if not subscribers:
         print("No subscribers — nothing to send.")
         sys.exit(0)
 
-    meta = data["meta"]
-    subject = f"{data['h1']} — Slovakia | {meta.split('|')[-1].strip()}"
+    have_sk = REPORT_HTML_SK.exists()
+    if not have_sk and any(sub.get("lang") == "sk" for sub in subscribers):
+        print(f"WARNING: SK report not found at {REPORT_HTML_SK} — SK subscribers will get the EN version.")
 
-    email_html = build_email_html(data, PAGES_URL)
+    # Build per-language email content once, reused across all matching subscribers.
+    email_html_by_lang: dict[str, tuple[str, str]] = {}  # lang -> (subject, html)
+    for lang, report_path, pages_url in (
+        ("en", REPORT_HTML, PAGES_URL),
+        ("sk", REPORT_HTML_SK if have_sk else REPORT_HTML, PAGES_URL_SK if have_sk else PAGES_URL),
+    ):
+        html = report_path.read_text(encoding="utf-8")
+        data = parse_report(html)
+        if not data["exec_bullets"]:
+            print(f"No executive summary bullets found in {lang.upper()} report — skipping {lang}.")
+            continue
+        meta = data["meta"]
+        subject = f"{data['h1']} — Slovakia | {meta.split('|')[-1].strip()}"
+        email_html_by_lang[lang] = (subject, build_email_html(data, pages_url, lang))
+
+    if "en" not in email_html_by_lang:
+        print("No usable EN report content — aborting send.")
+        sys.exit(1)
 
     sent, failed = 0, 0
     for sub in subscribers:
+        lang = sub.get("lang", "en")
+        if lang not in email_html_by_lang:
+            lang = "en"
+        subject, email_html = email_html_by_lang[lang]
         try:
             resend.Emails.send({
                 "from": FROM_ADDRESS,
@@ -205,7 +235,7 @@ def send_newsletter() -> None:
                 "subject": subject,
                 "html": email_html,
             })
-            print(f"  ✓ Sent to {sub['email']}")
+            print(f"  ✓ Sent to {sub['email']} ({lang})")
             sent += 1
         except Exception as e:
             print(f"  ✗ Failed for {sub['email']}: {e}")

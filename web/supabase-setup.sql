@@ -15,19 +15,30 @@
 -- 1. Create the allowed_emails table
 CREATE TABLE IF NOT EXISTS public.allowed_emails (
   email TEXT PRIMARY KEY,
+  lang TEXT NOT NULL DEFAULT 'en' CHECK (lang IN ('en', 'sk')),
   added_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- 1b. If the table already exists from before the lang column was added, run this:
+-- ALTER TABLE public.allowed_emails ADD COLUMN IF NOT EXISTS lang TEXT NOT NULL DEFAULT 'en' CHECK (lang IN ('en', 'sk'));
 
 -- 2. Enable Row Level Security
 ALTER TABLE public.allowed_emails ENABLE ROW LEVEL SECURITY;
 
--- 3. Policy: authenticated user can SELECT their own row only
+-- 3. Policies: authenticated user can SELECT and UPDATE their own row only
+--    (UPDATE is needed so a user can change their own `lang` preference)
 DROP POLICY IF EXISTS "self_read" ON public.allowed_emails;
 CREATE POLICY "self_read" ON public.allowed_emails
   FOR SELECT
   USING (email = auth.jwt() ->> 'email');
 
--- 4. Insert the initial allowed email list
+DROP POLICY IF EXISTS "self_update_lang" ON public.allowed_emails;
+CREATE POLICY "self_update_lang" ON public.allowed_emails
+  FOR UPDATE
+  USING (email = auth.jwt() ->> 'email')
+  WITH CHECK (email = auth.jwt() ->> 'email');
+
+-- 4. Insert the initial allowed email list (defaults to English; update lang manually as needed)
 INSERT INTO public.allowed_emails (email) VALUES
   ('marek.licak@nbs.sk'),
   ('pavol.jurca@nbs.sk'),

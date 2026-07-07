@@ -49,7 +49,7 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 
 from config import SECTIONS  # noqa: E402
 
-from charts import build_chart, build_financing_gap_chart
+from charts import SK_LABELS, build_chart, build_financing_gap_chart
 from cost import _mistral_client
 from db import DEV_SCHEMA, PROD_SCHEMA, _get_connection, build_mart_catalogue, fetch_all
 from html_builder import (
@@ -211,6 +211,7 @@ def main() -> None:
                     "finding": cached["finding"],
                     "bullets": cached["bullets"],
                     "chart_png": chart_png,
+                    "chart_subtitle": chart_subtitle,
                     "sign_note": sec["sign_note"],
                     "routed": sec.get("routed", False),
                     "has_missingness_caveat": sec.get("has_missingness_caveat", False),
@@ -268,6 +269,7 @@ def main() -> None:
                 "finding": content["finding"],
                 "bullets": content["bullets"],
                 "chart_png": chart_png,
+                "chart_subtitle": chart_subtitle,
                 "sign_note": sec["sign_note"],
                 "routed": sec.get("routed", False),
                 "has_missingness_caveat": sec.get("has_missingness_caveat", False),
@@ -329,8 +331,6 @@ def main() -> None:
 
     print("Building question annex...")
     annex_html = build_annex_html(con=tool_con)
-    sk_annex_html = build_annex_html(con=tool_con, ui=_SK_UI)
-    tool_con.close()
 
     print("Fetching painting thumbnail...")
     painting_inner_html = _fetch_painting_inner_html()
@@ -347,7 +347,41 @@ def main() -> None:
     print(f"WAVE_REPORT_EN={wave_en}")
 
     print("Translating to Slovak...")
-    sk_rendered, sk_exec_bullets = translate_to_slovak(rendered, exec_bullets, cost_tracker)
+    sk_rendered, sk_exec_bullets, sk_question_texts = translate_to_slovak(
+        rendered, exec_bullets, cost_tracker, question_texts=question_texts,
+    )
+    sk_annex_html = build_annex_html(con=tool_con, ui=_SK_UI, question_texts_override=sk_question_texts)
+    tool_con.close()
+
+    print("Rebuilding charts with Slovak labels...")
+    for sk_sec in sk_rendered:
+        sid = sk_sec.get("section_id")
+        if sid not in data or sid not in sections_by_id:
+            continue
+        r = interest[sid]
+        sec = sections_by_id[sid]
+        chart_title = sk_sec["finding"]
+        chart_question = chart_question_captions.get(sid, "")
+        chart_subtitle = sk_sec.get("chart_subtitle", "")
+        try:
+            if sid == "financing_gap":
+                sk_sec["chart_png"] = build_financing_gap_chart(
+                    sec, data[sid], chart_title=chart_title, chart_question=chart_question,
+                    labels=SK_LABELS,
+                )
+            elif sid == "bank_loan_terms":
+                sk_sec["chart_png"] = build_chart(
+                    sec, data[sid], "bar", r["best_panel"], chart_subtitle=chart_subtitle,
+                    chart_title=chart_title, chart_question=chart_question, labels=SK_LABELS,
+                )
+            else:
+                sk_sec["chart_png"] = build_chart(
+                    sec, data[sid], r["chart_type"], r["best_panel"], chart_subtitle=chart_subtitle,
+                    chart_title=chart_title, chart_question=chart_question, labels=SK_LABELS,
+                )
+        except Exception as e:
+            print(f"  SK chart rebuild failed for {sid} — keeping English chart: {e}")
+
     sk_toc_html = build_toc(sk_rendered, ui=_SK_UI)
     sk_html = build_html(sk_rendered, sk_annex_html, sk_exec_bullets, sk_toc_html,
                          painting_inner_html, latest_wave, ui=_SK_UI)

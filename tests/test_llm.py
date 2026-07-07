@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
@@ -7,7 +7,7 @@ from llm import (
     _check_numeric_grounding, _fmt_data_for_prompt, _parse_section_response,
     _shorten_question_llm, _sme_divergence_note, build_section_signals,
     classify_ecb_emphasis, direction_reversal, get_exec_summary, get_shortened_questions,
-    historical_extremity, reliable_n, sk_ea_gap,
+    historical_extremity, reliable_n, sk_ea_gap, translate_to_slovak,
 )
 
 
@@ -398,6 +398,44 @@ def test_classify_ecb_emphasis_api_exception_returns_empty():
         [{"id": "financing_gap", "title": "Financing Gap"}], client, tracker,
     )
     assert result == {}
+
+
+# ── translate_to_slovak ──────────────────────────────────────────────────────
+
+def test_translate_to_slovak_translates_annex_questions_when_provided():
+    client = _mock_mistral_response(
+        '{"exec_bullets": ["Preložený bod"], "sections": [], '
+        '"annex_questions": {"q5": "Preložená otázka"}}'
+    )
+    tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
+    with patch("llm._mistral_client", return_value=client):
+        sk_rendered, sk_exec_bullets, sk_question_texts = translate_to_slovak(
+            [], [{"bullet": "Original bullet", "section_id": "x"}], tracker,
+            question_texts={"q5": "Original question"},
+        )
+    assert sk_question_texts == {"q5": "Preložená otázka"}
+    assert sk_exec_bullets[0]["bullet"] == "Preložený bod"
+
+
+def test_translate_to_slovak_no_question_texts_returns_empty_dict():
+    client = _mock_mistral_response('{"exec_bullets": ["Bod"], "sections": []}')
+    tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
+    with patch("llm._mistral_client", return_value=client):
+        _, _, sk_question_texts = translate_to_slovak(
+            [], [{"bullet": "Original bullet", "section_id": "x"}], tracker,
+        )
+    assert sk_question_texts == {}
+
+
+def test_translate_to_slovak_parse_failure_falls_back_to_english_questions():
+    client = _mock_mistral_response("not valid json")
+    tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
+    with patch("llm._mistral_client", return_value=client):
+        sk_rendered, sk_exec_bullets, sk_question_texts = translate_to_slovak(
+            [], [{"bullet": "Original bullet", "section_id": "x"}], tracker,
+            question_texts={"q5": "Original question"},
+        )
+    assert sk_question_texts == {"q5": "Original question"}
 
 
 # ── build_section_signals ────────────────────────────────────────────────────

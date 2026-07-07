@@ -185,6 +185,10 @@ def main() -> None:
     _args = _parser.parse_args()
     REPORT_HTML = _args.html if _args.html else _DEFAULT_REPORT_HTML
     OUTPUT_DIR = REPORT_HTML.parent
+    # Derive a distinct scores filename per input report so EN/SK runs don't clobber
+    # each other's output (e.g. report_latest_sk.html -> quality_scores_sk.json).
+    _suffix = REPORT_HTML.stem.removeprefix("report_latest")
+    SCORES_PATH = OUTPUT_DIR / f"quality_scores{_suffix}.json"
 
     if not REPORT_HTML.exists():
         print(f"ERROR: {REPORT_HTML} not found — run the report generator first")
@@ -208,7 +212,7 @@ def main() -> None:
         print(f"  CHART FAIL: {chart_reason}")
         scores = {"readability": 1, "substance": 1, "coherence": 1, "sign_convention": 1,
                   "verdict": "fail", "reason": f"Chart rendering error: {chart_reason}"}
-        (OUTPUT_DIR / "quality_scores.json").write_text(json.dumps(scores))
+        SCORES_PATH.write_text(json.dumps(scores))
         print("Quality gate FAILED — chart rendering issues detected")
         sys.exit(1)
     print(f"  Charts OK")
@@ -230,7 +234,7 @@ def main() -> None:
         print(f"  Raw response: {raw[:200]}")
         fallback = {"readability": 10, "substance": 10, "coherence": 10,
                     "sign_convention": 10, "verdict": "pass", "reason": "parse error — assumed pass"}
-        (Path(__file__).parent / "output" / "quality_scores.json").write_text(json.dumps(fallback))
+        SCORES_PATH.write_text(json.dumps(fallback))
         sys.exit(0)
 
     r = result.get("readability", 10)
@@ -283,7 +287,7 @@ def main() -> None:
         except Exception as e:
             print(f"  Adhoc quality check error: {e} — assuming pass")
 
-    (OUTPUT_DIR / "quality_scores.json").write_text(json.dumps(scores))
+    SCORES_PATH.write_text(json.dumps(scores))
 
     if verdict == "fail" or min(r, s, c, sc) < PASS_THRESHOLD:
         print("Quality gate FAILED — blocking deploy")

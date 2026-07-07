@@ -2,11 +2,13 @@
   "subscribers": [
     {
       "email": "lubos.pernis@gmail.com",
-      "name": "Lubos"
+      "name": "Lubos",
+      "lang": "en"
     },
     {
       "email": "lubos.pernis@nbs.sk",
-      "subscribed_at": "2026-07-06T20:04:38.553Z"
+      "subscribed_at": "2026-07-06T20:04:38.553Z",
+      "lang": "en"
     }
   ]
 }

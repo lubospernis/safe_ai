@@ -65,6 +65,9 @@ _SK_UI = {
     "annex_col_id":        "ID",
     "annex_col_question":  "Otázka",
     "annex_col_module":    "Modul",
+    "key_finding_label":   "Kľúčové zistenie:",
+    "interest_label":      " (záujem: {score}/5)",
+    "chart_alt_suffix":    "graf",
     "annex_groups": {
         "Business situation":                 "Obchodná situácia",
         "Financing needs &amp; availability": "Potreba a dostupnosť financovania",
@@ -177,7 +180,7 @@ SECTION_TMPL = textwrap.dedent("""
   <ul>
 {bullets}
   </ul>
-{footnote}{agentic_footnote}  <img class="chart-img" src="data:image/png;base64,{chart_b64}" alt="{title} chart">
+{footnote}{agentic_footnote}  <img class="chart-img" src="data:image/png;base64,{chart_b64}" alt="{title} {chart_alt_suffix}">
 </section>
 """).strip()
 
@@ -275,8 +278,12 @@ def _load_annex_question_texts(con=None) -> dict[str, str]:
         return {}
 
 
-def build_annex_html(con=None, ui: dict | None = None) -> str:
+def build_annex_html(con=None, ui: dict | None = None, question_texts_override: dict | None = None) -> str:
+    """question_texts_override: optional {q_id_lower: translated_text} — when a question's
+    ID matches (case-insensitively), its text replaces the English text fetched from
+    MotherDuck. Used to render a translated (e.g. Slovak) annex without a second live query."""
     _ui = ui or {}
+    _override = question_texts_override or {}
     q_texts: dict[str, tuple[str, str]] = {}
 
     if con is None:
@@ -310,7 +317,9 @@ def build_annex_html(con=None, ui: dict | None = None) -> str:
                 if matched and matched not in q_texts:
                     text = next((v for v in row[2:] if v and v.strip()), "")
                     if text:
-                        q_texts[matched] = (sample, _clean_question_text(text.strip()))
+                        translated = _override.get(matched.lower())
+                        final_text = translated if translated else _clean_question_text(text.strip())
+                        q_texts[matched] = (sample, final_text)
     except Exception as exc:
         print(f"  Warning: MotherDuck annex table unavailable for HTML widget ({exc})")
         return ""
@@ -460,6 +469,7 @@ def build_html(
                     ),
                     agentic_footnote=fn_agentic if s.get("tool_calls", 0) > 0 else "",
                     chart_b64=base64.b64encode(s["chart_png"]).decode() if s.get("chart_png") else "",
+                    chart_alt_suffix=_ui.get("chart_alt_suffix", "chart"),
                 )
             )
 
@@ -484,7 +494,7 @@ def build_html(
                     ss_b64 = base64.b64encode(ss["chart_png"]).decode()
                     ss_chart_html = (
                         f'<img class="chart-img" src="data:image/png;base64,{ss_b64}" '
-                        f'alt="{ss["heading"]} chart" style="margin:8px 0 12px;">\n'
+                        f'alt="{ss["heading"]} {_ui.get("chart_alt_suffix", "chart")}" style="margin:8px 0 12px;">\n'
                     )
                 ss_bullets = "\n".join(
                     f"    <li>{_md_to_html(b.lstrip('• ').strip())}</li>"
@@ -531,7 +541,7 @@ def build_html(
                 if chart_pngs:
                     img_tags = "".join(
                         f'<img class="chart-img" src="data:image/png;base64,{base64.b64encode(png).decode()}" '
-                        f'alt="{theme_label} chart" style="max-width:calc(34% - 0.5rem);min-width:220px;flex:1 1 220px;">\n'
+                        f'alt="{theme_label} {_ui.get("chart_alt_suffix", "chart")}" style="max-width:calc(34% - 0.5rem);min-width:220px;flex:1 1 220px;">\n'
                         for png in chart_pngs
                     )
                     all_charts_html = (
@@ -558,7 +568,7 @@ def build_html(
                         b64 = base64.b64encode(chart_pngs[i]).decode()
                         chart_html = (
                             f'<img class="chart-img" src="data:image/png;base64,{b64}" '
-                            f'alt="{qid} chart" style="max-width:100%;margin:8px 0 10px;">\n'
+                            f'alt="{qid} {_ui.get("chart_alt_suffix", "chart")}" style="max-width:100%;margin:8px 0 10px;">\n'
                         )
 
                     q_bullets = bullets_by_q.get(qid, [])
@@ -602,8 +612,10 @@ def build_html(
                 qtext = qd.get("question_text", "") or qd.get("question_id", "").upper()
                 desc = qd.get("description", "")
                 kf = qd.get("key_finding", "")
-                score_label = f" (interest: {score}/5)" if isinstance(score, int) else ""
-                kf_html = f'<br><em>Key finding: {_md_to_html(kf)}</em>' if kf else ""
+                interest_tmpl = _ui.get("interest_label", " (interest: {score}/5)")
+                score_label = interest_tmpl.format(score=score) if isinstance(score, int) else ""
+                key_finding_label = _ui.get("key_finding_label", "Key finding:")
+                kf_html = f'<br><em>{key_finding_label} {_md_to_html(kf)}</em>' if kf else ""
                 q_items.append(
                     f'<li><strong>{qd["question_id"].upper()}</strong>{score_label} '
                     f'— {qtext}<br>{_md_to_html(desc)}{kf_html}</li>'

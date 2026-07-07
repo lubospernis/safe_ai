@@ -11,7 +11,7 @@ import anthropic
 import pandas as pd
 from json_repair import repair_json
 
-from charts import _build_adhoc_chart
+from charts import SK_LABELS, _build_adhoc_chart
 from cost import _Usage, _track_cost
 from db import ALLOWED_MART_TABLES, _WRITE_RE
 from llm import NBS_STYLE_GUIDE, _check_numeric_grounding
@@ -863,19 +863,26 @@ def build_adhoc_spotlight(
                 resp.usage.input_tokens, resp.usage.output_tokens,
             ))
         else:
-            # Fallback: text-only Mistral Small
-            model = "mistral-small-latest"
-            text_only_msg = (
-                f"Topic: {theme['theme_label']}\n\n"
-                f"Question summaries:\n{descriptions_block}\n\n"
-                "Write the spotlight as specified. Return valid JSON only."
-            )
+            # Fallback: Pixtral (vision-capable) when no Anthropic client is passed —
+            # keeps chart images in the prompt instead of silently dropping to text-only.
+            model = "pixtral-12b-2409"
+            mistral_content: list = []
+            for block in user_content:
+                if block["type"] == "text":
+                    mistral_content.append({"type": "text", "text": block["text"]})
+                elif block["type"] == "image":
+                    b64 = block["source"]["data"]
+                    media_type = block["source"]["media_type"]
+                    mistral_content.append({
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{media_type};base64,{b64}"},
+                    })
             resp = mistral_client.chat.complete(
                 model=model,
                 max_tokens=1000,
                 messages=[
                     {"role": "system", "content": _ADHOC_SPOTLIGHT_SYSTEM},
-                    {"role": "user", "content": text_only_msg},
+                    {"role": "user", "content": mistral_content},
                 ],
             )
             raw = resp.choices[0].message.content.strip()
@@ -986,17 +993,20 @@ def build_adhoc_spotlight(
     # Selected questions first (in order), then remaining ones (up to 3 total)
     q_by_id = {q["question_id"]: q for q in question_contexts}
     chart_pngs: list[bytes] = []
+    chart_rebuild_specs: list[dict] = []  # same order as chart_pngs — for SK chart rebuild
     for qid in selected_qids:
         if len(chart_pngs) >= 3:
             break
         q = q_by_id.get(qid)
         if q and q.get("chart_png"):
             chart_pngs.append(q["chart_png"])
+            chart_rebuild_specs.append(q)
     for q in question_contexts:
         if len(chart_pngs) >= 3:
             break
         if q["question_id"] not in selected_qids and q.get("chart_png"):
             chart_pngs.append(q["chart_png"])
+            chart_rebuild_specs.append(q)
 
     # ── Phase 4: critical review (Mistral Large, threshold ≥ 8) ─────────────
     review_scores: dict = {}
@@ -1074,6 +1084,49 @@ def build_adhoc_spotlight(
         "review_passed": review_passed,
         "grounding_warnings": grounding_warnings,
         "question_descriptions": question_descriptions,
+        # Ingredients for rebuild_adhoc_charts_sk() — not cache-serializable (holds
+        # DataFrames), so callers must rebuild SK charts in the same process run
+        # before this dict is persisted/cached, or skip if reloading from cache.
+        "_chart_rebuild_specs": chart_rebuild_specs,
+        "_response_labels": response_labels,
     }
+
+
+def rebuild_adhoc_charts_sk(
+    chart_rebuild_specs: list[dict],
+    sk_question_texts: dict,
+    response_labels: dict,
+    theme_label_sk: str = "",
+) -> list[bytes]:
+    """Re-render adhoc spotlight charts with Slovak labels/question text, in the same
+    order as the original chart_pngs list. Falls back to the original English chart_png
+    for any question that fails to rebuild, so a translation hiccup never drops a chart."""
+    sk_pngs: list[bytes] = []
+    for q in chart_rebuild_specs:
+        try:
+            qid = q["question_id"]
+            # sk_question_texts is keyed by top-level question id (from translate_to_slovak's
+            # annex_questions payload) — there's no per-sub-item SK translation available, so
+            # every sub-item panel falls back to the same translated top-level question text.
+            translated_qt = sk_question_texts.get(qid.lower(), "")
+            sk_effective_qt = {k: translated_qt for k in (q.get("effective_question_texts") or {})} \
+                if translated_qt else dict(q.get("effective_question_texts") or {})
+            chart_theme = {
+                "module_id": qid,
+                "question_text": translated_qt or q.get("question_text", ""),
+                "question_texts": sk_effective_qt,
+                "theme_label": theme_label_sk or qid,
+            }
+            png = _build_adhoc_chart(
+                q["chart_df"], chart_theme,
+                is_continuous=q["is_continuous"],
+                response_labels=response_labels,
+                labels=SK_LABELS,
+            )
+            sk_pngs.append(png if png else q["chart_png"])
+        except Exception as e:
+            print(f"  SK chart rebuild failed for {q.get('question_id', '?')} — keeping English chart: {e}")
+            sk_pngs.append(q["chart_png"])
+    return sk_pngs
 
 

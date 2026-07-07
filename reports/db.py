@@ -10,8 +10,6 @@ import pandas as pd
 import yaml
 
 PROD_SCHEMA = "main_safe"
-DEV_SCHEMA = "main_safe_safe"
-DEV_DB_PATH = Path(__file__).parent.parent / "dev.duckdb"
 SQL_DIR = Path(__file__).parent / "sql"
 MARTS_SCHEMA_YML = Path(__file__).parent.parent / "dbt_project" / "models" / "marts" / "schema.yml"
 
@@ -119,22 +117,18 @@ MART_QUERY_TEMPLATES = textwrap.dedent("""
 """).strip()
 
 
-def _get_connection(dev: bool) -> duckdb.DuckDBPyConnection:
-    if dev:
-        return duckdb.connect(str(DEV_DB_PATH))
+def _get_connection() -> duckdb.DuckDBPyConnection:
     motherduck_token = os.environ["MOTHERDUCK_TOKEN"]
     return duckdb.connect(f"md:my_db?motherduck_token={motherduck_token}")
 
 
-def fetch_all(dev: bool = False, sections=None) -> dict[str, pd.DataFrame]:
+def fetch_all(sections=None) -> dict[str, pd.DataFrame]:
     from config import SECTIONS as _SECTIONS
     _sections = sections or _SECTIONS
-    schema = DEV_SCHEMA if dev else PROD_SCHEMA
-    con = _get_connection(dev)
+    con = _get_connection()
     results = {}
     for sec in _sections:
         sql = (SQL_DIR / sec["sql_file"]).read_text()
-        sql = sql.replace(f"{PROD_SCHEMA}.", f"{schema}.")
         results[sec["id"]] = con.execute(sql).df()
     con.close()
     return results
@@ -148,7 +142,6 @@ def _run_query_tool(sql: str, con, schema: str) -> str:
     disallowed = referenced - ALLOWED_MART_TABLES
     if disallowed:
         return f"ERROR: table(s) not in whitelist: {disallowed}"
-    sql = sql.replace(f"{PROD_SCHEMA}.", f"{schema}.")
     try:
         df = con.execute(sql).df()
     except Exception as e:

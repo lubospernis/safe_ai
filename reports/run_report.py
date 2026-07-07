@@ -2,7 +2,7 @@
 SAFE Survey Report Generator — standard sections only.
 
 Loops over SECTIONS in config.py:
-  1. Fetch data for all sections via MotherDuck (prod) or local dev.duckdb (dev)
+  1. Fetch data for all sections via MotherDuck
   2. Parallel interest checks — returns interesting flag, chart_type, best_panel
   3. For interesting sections: build chart + generate Sonnet bullets
   4. Generate executive summary from all rendered sections
@@ -12,12 +12,13 @@ Loops over SECTIONS in config.py:
 Adhoc spotlight is handled separately by run_adhoc_report.py.
 
 Usage:
-  python run_report.py           # prod (MotherDuck, requires MOTHERDUCK_TOKEN)
-  python run_report.py --dev     # local dev.duckdb, no token needed
+  python run_report.py                # latest wave
+  python run_report.py --wave 37      # retrospective report capped at wave 37
 
 Required environment variables:
-  MOTHERDUCK_TOKEN   — MotherDuck service token (prod only)
+  MOTHERDUCK_TOKEN   — MotherDuck service token
   ANTHROPIC_API_KEY  — Anthropic API key
+  MISTRAL_API_KEY    — Mistral API key
 """
 
 import argparse
@@ -51,7 +52,7 @@ from config import SECTIONS  # noqa: E402
 
 from charts import SK_LABELS, build_chart, build_financing_gap_chart
 from cost import _mistral_client
-from db import DEV_SCHEMA, PROD_SCHEMA, _get_connection, build_mart_catalogue, fetch_all
+from db import PROD_SCHEMA, _get_connection, build_mart_catalogue, fetch_all
 from html_builder import (
     _SK_UI, _fetch_painting_inner_html, build_annex_html, build_html, build_toc,
     _load_annex_question_texts,
@@ -71,8 +72,6 @@ def main() -> None:
     _run_start = _dt.now()
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dev", action="store_true",
-                        help="Use local dev.duckdb instead of MotherDuck (no MOTHERDUCK_TOKEN needed)")
     parser.add_argument("--wave", type=int, default=None,
                         help="Cap data at this wave number for retrospective reports (e.g. --wave 37)")
     parser.add_argument("--refresh-chart-titles", action="store_true",
@@ -84,13 +83,8 @@ def main() -> None:
     args = parser.parse_args()
     _force_rerun = set(s.strip() for s in args.rerun_sections.split(",")) if args.rerun_sections else set()
 
-    if args.dev:
-        print(f"[DEV] Using local DuckDB")
-    else:
-        print("[PROD] Using MotherDuck")
-
     print("Fetching data for all sections...")
-    data = fetch_all(dev=args.dev)
+    data = fetch_all()
 
     if args.wave is not None:
         print(f"  [RETROSPECTIVE] Capping data at wave {args.wave}")
@@ -107,12 +101,12 @@ def main() -> None:
     mistral_client = _mistral_client()
     cost_lock = threading.Lock()
 
-    schema = DEV_SCHEMA if args.dev else PROD_SCHEMA
-    tool_con = _get_connection(args.dev)
+    schema = PROD_SCHEMA
+    tool_con = _get_connection()
 
     rendered: list[dict] = []
     ecb_context = ""
-    historical_context = ""  # populated below for full runs only
+    historical_context = ""
 
     print("Running interest checks (parallel)...")
     interest = check_all_interest(SECTIONS, data, cost_tracker)
@@ -120,38 +114,35 @@ def main() -> None:
         flag = "✓" if r["interesting"] else "✗"
         print(f"  {flag} {sid}: {r['reason']} [chart={r['chart_type']}, best_panel={r['best_panel']}]")
 
-    historical_context = ""
-    if not args.dev:
-        try:
-            rows = tool_con.execute("""
-                SELECT wave_number, notable_summary
-                FROM main_safe.ref_safe__wave_memory
-                ORDER BY wave_number DESC LIMIT 3
-            """).fetchall()
-            if rows:
-                historical_context = (
-                    "\n\n## Historical context (prior waves — for trend awareness only)\n"
-                    + "\n".join(f"  Wave {r[0]}: {r[1]}" for r in rows)
-                )
-        except Exception:
-            pass
-        interp_path = Path(__file__).parent / "output" / "interpretation_context.md"
-        if interp_path.exists():
-            interp_text = interp_path.read_text().strip()
-            if interp_text:
-                historical_context += (
-                    "\n\n## Interpretation notes from prior gap analysis\n" + interp_text
-                )
-        if historical_context:
-            print(f"  Loaded historical context ({len(historical_context)} chars)")
+    try:
+        rows = tool_con.execute("""
+            SELECT wave_number, notable_summary
+            FROM main_safe.ref_safe__wave_memory
+            ORDER BY wave_number DESC LIMIT 3
+        """).fetchall()
+        if rows:
+            historical_context = (
+                "\n\n## Historical context (prior waves — for trend awareness only)\n"
+                + "\n".join(f"  Wave {r[0]}: {r[1]}" for r in rows)
+            )
+    except Exception:
+        pass
+    interp_path = Path(__file__).parent / "output" / "interpretation_context.md"
+    if interp_path.exists():
+        interp_text = interp_path.read_text().strip()
+        if interp_text:
+            historical_context += (
+                "\n\n## Interpretation notes from prior gap analysis\n" + interp_text
+            )
+    if historical_context:
+        print(f"  Loaded historical context ({len(historical_context)} chars)")
 
-    if not args.dev:
-        print("Fetching ECB publication for sharpener pass...")
-        _, ecb_context = _fetch_ecb_context()
-        if ecb_context:
-            print(f"  Fetched {len(ecb_context):,} chars")
-        else:
-            print("  ECB fetch failed or unavailable — sharpener pass skipped")
+    print("Fetching ECB publication for sharpener pass...")
+    _, ecb_context = _fetch_ecb_context()
+    if ecb_context:
+        print(f"  Fetched {len(ecb_context):,} chars")
+    else:
+        print("  ECB fetch failed or unavailable — sharpener pass skipped")
 
     print("Building mart schema catalogue...")
     mart_catalogue = build_mart_catalogue(tool_con, schema)
@@ -219,7 +210,7 @@ def main() -> None:
                     "grounding_warnings": cached.get("grounding_warnings", []),
                 }
 
-        thread_con = _get_connection(args.dev)
+        thread_con = _get_connection()
         try:
             local_tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
             print(f"  Generating finding + bullets for {sid}...")
@@ -321,7 +312,7 @@ def main() -> None:
     for item in exec_bullets:
         print(f"  [{item.get('section_id', '?')}] {item.get('bullet', '')}")
 
-    if not args.dev and exec_bullets and rendered:
+    if exec_bullets and rendered:
         print("Writing wave memory...")
         _write_wave_memory(latest_wave, exec_bullets, rendered,
                            mistral_client, tool_con, cost_tracker)

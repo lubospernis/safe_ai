@@ -1,0 +1,101 @@
+name: SAFE — Generate Report (Manual, Past Wave)
+
+# Manual-only workflow for regenerating the report against a specific past wave,
+# without touching production state (does NOT overwrite report_latest.html, does NOT
+# push to git, does NOT publish to GitHub Pages). Output is uploaded as a downloadable
+# workflow artifact instead — safe to run anytime without risk to the live report.
+on:
+  workflow_dispatch:
+    inputs:
+      wave:
+        description: "Wave number to cap the report at (e.g. 37). Leave blank for the latest wave."
+        required: false
+        type: string
+      adhoc:
+        description: "Also generate the adhoc spotlight report for this wave"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  report:
+    name: Generate report for a past wave
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Pre-cache MotherDuck extension
+        run: |
+          DUCKDB_VERSION=$(python -c "import duckdb; print(duckdb.__version__)")
+          EXT_DIR="$HOME/.duckdb/extensions/v${DUCKDB_VERSION}/linux_amd64"
+          mkdir -p "$EXT_DIR"
+          curl -fsSL \
+            "https://extensions.duckdb.org/v${DUCKDB_VERSION}/linux_amd64/motherduck.duckdb_extension.gz" \
+            | gunzip > "$EXT_DIR/motherduck.duckdb_extension"
+
+      - name: Run report
+        env:
+          MOTHERDUCK_TOKEN:  ${{ secrets.MOTHERDUCK_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MISTRAL_API_KEY:   ${{ secrets.MISTRAL_API_KEY }}
+        run: |
+          if [ -n "${{ inputs.wave }}" ]; then
+            python reports/run_report.py --wave "${{ inputs.wave }}"
+          else
+            python reports/run_report.py
+          fi
+
+      - name: Run adhoc report
+        if: inputs.adhoc == 'true'
+        env:
+          MOTHERDUCK_TOKEN:  ${{ secrets.MOTHERDUCK_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MISTRAL_API_KEY:   ${{ secrets.MISTRAL_API_KEY }}
+        run: |
+          if [ -n "${{ inputs.wave }}" ]; then
+            python reports/run_adhoc_report.py --wave "${{ inputs.wave }}"
+          else
+            python reports/run_adhoc_report.py
+          fi
+
+      - name: Quality check (EN)
+        if: always()
+        continue-on-error: true
+        env:
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+        run: |
+          if [ -f reports/output/report_latest.html ]; then
+            python reports/quality_check.py --html reports/output/report_latest.html
+          fi
+
+      - name: Quality check (SK)
+        if: always()
+        continue-on-error: true
+        env:
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+        run: |
+          if [ -f reports/output/report_latest_sk.html ]; then
+            python reports/quality_check.py --html reports/output/report_latest_sk.html
+          fi
+
+      - name: Upload report output (not published — download from this run's artifacts)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-wave-${{ inputs.wave || 'latest' }}
+          path: |
+            reports/output/*.html
+            reports/output/quality_scores*.json
+            reports/output/latest_links.json
+          retention-days: 30

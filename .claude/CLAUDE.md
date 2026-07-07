@@ -32,7 +32,7 @@ Benchmark: Production data pipelines at tier-1 institutions have retry logic on 
 
 ### Dimension 3 — Weak Links (weight ×1)
 Identify the top 3 single points of failure and their blast radius:
-- What breaks if MotherDuck is unavailable? (no fallback to dev.duckdb in prod)
+- What breaks if MotherDuck is unavailable? (no fallback — the pipeline is MotherDuck-only by design)
 - What breaks if Mistral API is down? (quality gate, sharpener, interest checks all fail)
 - What breaks if ECB changes their website structure? (URL parsing in gap_agent.py)
 - Is there a wave detection failure mode? (detect_adhoc_theme fails silently on mart absence)
@@ -108,27 +108,28 @@ after a `cd` in the same session. Default to absolute path.
 
 ---
 
-## Testing Without MotherDuck
+## Running the Pipeline (MotherDuck-only)
 
-Use the **dev target** (local DuckDB) for all testing — no `MOTHERDUCK_TOKEN` needed.
+There is no local-DuckDB dev mode — every run (local or CI) connects to MotherDuck
+(`main_safe` schema) and requires `MOTHERDUCK_TOKEN`.
 
 ```bash
-# 1. Rebuild dev marts after any dbt model change
-cd dbt_project && ../env/bin/dbt run --profiles-dir . --target dev
-
-# 2. Run the report against local DuckDB
-cd ..
-source .env && env/bin/python3 reports/run_report.py --dev
+source .env && env/bin/python3 reports/run_report.py            # latest wave
+source .env && env/bin/python3 reports/run_report.py --wave 37  # retrospective, capped at wave 37
 ```
 
-**API keys for local testing**: stored in `.env` (gitignored). `source .env` loads
-`ANTHROPIC_API_KEY` into the shell before running the report script.
-
-**Dev vs prod schema**: dbt's dev target writes to `main_safe_safe` (DuckDB file: `dev.duckdb`);
-prod writes to `main_safe` on MotherDuck. `run_report.py --dev` rewrites the schema name
-automatically — SQL files always reference `main_safe.*`.
+**API keys**: stored in `.env` (gitignored). `source .env` loads `MOTHERDUCK_TOKEN`,
+`ANTHROPIC_API_KEY`, and `MISTRAL_API_KEY` into the shell before running the report script.
+Use `set -a && source .env && set +a` if you need those vars exported to a Python subprocess
+(plain `source` only sets shell variables, it doesn't export them).
 
 **Python env**: use `env/bin/python3` (the project venv). matplotlib is installed there.
+
+**Retrospective/past-wave runs**: use `--wave N` (already supported by both `run_report.py`
+and `run_adhoc_report.py`) to cap data at a specific past wave — useful for regenerating an
+older report or testing against historical data without touching a separate database. This
+is also exposed as a manual `workflow_dispatch` input on the GitHub Actions report workflow
+(see `.github/workflows/generate_report_manual.yml`).
 
 ---
 

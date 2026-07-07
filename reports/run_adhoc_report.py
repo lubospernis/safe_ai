@@ -11,8 +11,7 @@ When adhoc data is found, runs the full 5-phase agentic pipeline and produces:
 Standard section content is handled separately by run_report.py.
 
 Usage:
-  python run_adhoc_report.py           # prod (MotherDuck, requires MOTHERDUCK_TOKEN)
-  python run_adhoc_report.py --dev     # local dev.duckdb, no token needed
+  python run_adhoc_report.py           # latest wave
   python run_adhoc_report.py --wave 37 # retrospective adhoc report for wave 37
 
 Required environment variables:
@@ -49,7 +48,7 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 
 from adhoc import build_adhoc_spotlight, detect_adhoc_theme, rebuild_adhoc_charts_sk
 from cost import _mistral_client
-from db import DEV_SCHEMA, PROD_SCHEMA, _get_connection, fetch_all
+from db import PROD_SCHEMA, _get_connection, fetch_all
 from html_builder import (
     _SK_UI, _fetch_painting_inner_html, _load_annex_question_texts, build_annex_html, build_html, build_toc,
 )
@@ -64,8 +63,6 @@ def main() -> None:
     _run_start = _dt.now()
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dev", action="store_true",
-                        help="Use local dev.duckdb instead of MotherDuck (no MOTHERDUCK_TOKEN needed)")
     parser.add_argument("--wave", type=int, default=None,
                         help="Cap data at this wave number for retrospective reports (e.g. --wave 37)")
     parser.add_argument("--no-cache", action="store_true",
@@ -75,14 +72,9 @@ def main() -> None:
     args = parser.parse_args()
     _force_rerun = set(s.strip() for s in args.rerun_sections.split(",")) if args.rerun_sections else set()
 
-    if args.dev:
-        print("[DEV] Using local DuckDB")
-    else:
-        print("[PROD] Using MotherDuck")
-
     # We still need wave context — fetch a minimal dataset to find latest_wave
     print("Fetching data to determine latest wave...")
-    data = fetch_all(dev=args.dev)
+    data = fetch_all()
     if args.wave is not None:
         print(f"  [RETROSPECTIVE] Capping data at wave {args.wave}")
         data = {sid: df[df["wave_number"] <= args.wave].copy() for sid, df in data.items()}
@@ -94,8 +86,8 @@ def main() -> None:
     anthropic_client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     mistral_client = _mistral_client()
 
-    schema = DEV_SCHEMA if args.dev else PROD_SCHEMA
-    tool_con = _get_connection(args.dev)
+    schema = PROD_SCHEMA
+    tool_con = _get_connection()
 
     # ── Detect adhoc theme ────────────────────────────────────────────────────
     print("Detecting adhoc module...")
@@ -166,13 +158,12 @@ def main() -> None:
     if not adhoc_section.get("review_passed", True):
         print("  WARNING: Adhoc review scored < 8 on at least one dimension — investigate before publishing")
 
-    if not args.dev:
-        adhoc_ecb_url = _find_ecb_focus_article(
-            adhoc_theme["theme_label"], mistral_client, cost_tracker
-        )
-        if adhoc_ecb_url:
-            adhoc_section["ecb_article_url"] = adhoc_ecb_url
-            print(f"  ECB focus article: {adhoc_ecb_url}")
+    adhoc_ecb_url = _find_ecb_focus_article(
+        adhoc_theme["theme_label"], mistral_client, cost_tracker
+    )
+    if adhoc_ecb_url:
+        adhoc_section["ecb_article_url"] = adhoc_ecb_url
+        print(f"  ECB focus article: {adhoc_ecb_url}")
 
     rendered = [adhoc_section]
 

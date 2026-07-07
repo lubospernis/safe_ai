@@ -1,15 +1,13 @@
 {
   "section_id": "expectations_risk",
   "wave_number": 38,
-  "finding": "Slovak firms report the highest upside five-year inflation risk balance",
+  "finding": "Slovak firms lead euro area peers in upside inflation risk perceptions",
   "bullets": [
-    "A net 59% of Slovak firms (n=229) saw upside risks to five-year inflation expectations in wave 38, rising notably by 5.80 pp from a net 53% in the prior wave — the highest reading among the three regions, signalling heightened long-term pricing pressures for firms.",
-    "The euro area closed the gap moderately, with its net balance rising more sharply by 9.90 pp to a net 55% (n=5,278), compared with Slovak firms' smaller 5.80 pp increase, leaving Slovakia above the EA by 3.61 pp — implying Slovak firms remain more concerned about persistent inflation than their peers.",
-    "Germany's net upside inflation risk balance rose 9.67 pp to a net 51%, confirming a broad regional shift toward elevated inflation risk perceptions, though still below both SK and EA."
+    "A net 59% of Slovak firms (n=229) saw upside risks to five-year inflation expectations, exceeding the euro area's net 55% (n=5,278) and Germany's net 51%, maintaining SK's position as the most inflation-risk-sensitive economy in the comparison — suggesting heightened sensitivity to inflation dynamics among Slovak firms.",
+    "Slovak upside inflation risk perceptions rose moderately by 5.8 pp from the previous quarter's net 53%, while the euro area recorded a stronger increase of 9.9 pp from net 45%, narrowing the SK–EA gap from approximately 7.7 pp to 3.6 pp.",
+    "All three economies reported materially positive net balances, indicating that a clear majority of firms across Slovakia, the euro area, and Germany perceived inflation risks as skewed to the upside over a five-year horizon — implying broad-based inflation concerns across the region."
   ],
-  "chart_subtitle": "Slovak firms' upside inflation risk balance reached net 59%.",
-  "grounding_warnings": [
-    "'38' not found in source data"
-  ],
+  "chart_subtitle": "A net 59% of Slovak firms see upside inflation risk.",
+  "grounding_warnings": [],
   "tool_calls": 0
 }

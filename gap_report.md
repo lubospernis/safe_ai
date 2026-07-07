@@ -4,28 +4,18 @@ _Generated 07 Jul 2026 — ECB source: [https://www.ecb.europa.eu/stats/ecb_surv
 
 ## Structural Gaps
 
-**Missing SK credit line demand data:** No granular breakdown of Slovak credit line demand by firm size, though ECB Table 1 includes this for other countries—critical for assessing SME vs. large firm liquidity stress in Slovakia.
-
-**Lack of SK financing gap by instrument:** ECB reports composite financing gap (Chart 4) and bank loan gap (Table 1), but Slovak report omits instrument-level gaps (e.g., trade credit, credit lines) for SK, limiting cross-instrument analysis.
-
-**No SK wage growth expectations by sector:** ECB provides sectoral breakdowns (e.g., construction vs. industry) for wage expectations (Section 3), but Slovak report lacks this, obscuring sector-specific labour cost pressures.
-
-**Missing SK inflation risk balance by size:** ECB includes size-class breakdowns for inflation risk perceptions (Chart 20), but Slovak report aggregates all firms, masking SME vs. large firm differences in long-term inflation concerns.
-
-**No SK public support usage data:** ECB does not report public financial support usage, but Slovak report highlights its deterioration—missing ECB benchmark to contextualise SK’s reliance vs. peers.
-
-**Absent SK turnover by size:** ECB notes SME vs. large firm turnover divergence (Section 3), but Slovak report lacks size-class turnover data, limiting comparison of SK’s SME underperformance.
-
-**No SK investment by size:** ECB provides size-class investment trends (Section 3), but Slovak report omits this, hiding whether SK’s capex resilience is SME- or large-firm-driven.
-
-**Missing SK financing purpose by size:** ECB breaks down financing use (Chart 5) by size, but Slovak report lacks this, obscuring whether SK’s working capital focus is SME-specific.
-
----
+**Missing SK sectoral breakdown:** No sector-specific data (e.g., construction vs. industry) for financing conditions, limiting comparison with ECB’s sectoral insights (Section 3).
+**No SK inflation expectation horizons:** Lacks 1-year/3-year/5-year inflation expectation splits for Slovakia, critical for ECB’s inflation risk analysis (Chart 18).
+**Missing SK employment growth data:** ECB reports 1% average employment growth expectation; Slovak figures absent in automated report.
+**No SK vulnerable firms metric:** ECB tracks financially vulnerable firms (4% EA-wide); Slovak equivalent missing (Chart 12).
+**Missing SK financing obstacles detail:** ECB reports 6% EA firms faced loan obstacles; Slovak obstacle rate and breakdown not captured (Table 1, Chart 10).
+**No SK trade credit/overdraft terms:** ECB includes collateral/non-price terms for all instruments; Slovak report omits these for trade credit/overdrafts (Section 2.1).
+**Missing SK composite financing gap:** ECB’s composite gap (Chart 4) not replicated for Slovakia, obscuring multi-instrument stress comparison.
 
 ## Interpretation Notes
 
-- Compare SK’s credit line gap (+14.8pp) against EA (+12.6pp) to highlight liquidity strain as a *Slovak-specific* stress point.
-- Emphasise SK’s 20pp+ labour cost net increase vs. EA’s 63% to frame margin squeeze as uniquely severe for Slovak firms.
-- Contrast SK’s 59% upside inflation risk balance (highest) with EA’s 55% to underscore entrenched long-term inflation fears in Slovakia.
-- Note SK’s fixed investment expectations (15%) outpacing EA (9%) despite weaker turnover—flag potential overoptimism or strategic divergence.
-- Highlight SK’s regulation burden (6.18/10) vs. EA (5.89/10) as a structural drag on financing conditions.
+- Compare SK’s 8.57% 5-year inflation expectation (highest in EA) against ECB’s 3.0% median to highlight divergence.
+- Contrast SK’s -26% turnover decline with EA’s +1% growth to emphasize demand shock severity.
+- Note SK’s 44.4% economic outlook deterioration vs. EA’s 26.1% to frame macro headwind context.
+- Benchmark SK’s 55.7% inventory financing against EA’s 39% to stress working capital reliance.
+- Highlight SK’s 33.8% public support deterioration vs. EA’s 15.5% as a policy sensitivity signal.

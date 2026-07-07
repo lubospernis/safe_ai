@@ -1,22 +1,13 @@
 {
   "section_id": "business_problems",
   "wave_number": 38,
-  "finding": "Regulation overtakes skilled staff as Slovak firms' second most pressing problem",
+  "finding": "Regulation overtakes EA average as Slovak cost pressures ease marginally",
   "bullets": [
-    "Regulation rose marginally to 6.18/10 (n=225), overtaking skilled staff availability (6.07/10, n=228) to become Slovakia's second most pressing problem among the seven tested — while the EA scored regulation lower at 5.89/10, highlighting a relatively higher regulatory burden on Slovak firms.",
-    "Costs of production or labour remained the most pressing problem among the seven tested for Slovak firms (n=228), scoring 6.19/10, though easing marginally by 0.15 points from the previous wave's 6.34/10, and remaining below the EA score of 6.48/10, suggesting some relief but still a dominant concern.",
-    "Availability of skilled staff or experienced managers eased notably by 0.50 points to 6.07/10 (n=228), the largest decline across all seven problems for Slovakia, yet still reflecting a moderate burden on a 1–10 scale — indicating persistent challenges despite recent improvements."
+    "Regulation rose marginally to 6.18/10 (n=225), up 0.12 points from wave 37, exceeding the EA average of 5.89 — the only problem among the seven tested where Slovakia scores above the euro area, as EA scores eased by 0.15 points, suggesting Slovak firms now face relatively greater regulatory burden compared to peers.",
+    "Costs of production or labour scored 6.19/10 (n=228) — the highest among the seven problems tested for Slovak firms — easing marginally by 0.15 points from wave 37, yet remaining below the EA average of 6.48, indicating some relief but still a dominant concern.",
+    "Access to finance was the only problem to worsen for Slovak firms, rising 0.19 points to 3.91/10 (n=223); at below 5/10, it remains a low priority in absolute terms, though it diverges from the EA and DE trends, which both eased, signalling potential tightening conditions for Slovak firms."
   ],
-  "chart_subtitle": "Regulation scores 6.18/10 for Slovak firms, above EA's 5.89.",
-  "grounding_warnings": [
-    "'10' not found in source data",
-    "'10' not found in source data",
-    "'10' not found in source data",
-    "'10' not found in source data",
-    "'10' not found in source data",
-    "'10' not found in source data",
-    "'10' not found in source data",
-    "'10' not found in source data"
-  ],
+  "chart_subtitle": "Slovak regulation scores 6.18/10, above EA's 5.89.",
+  "grounding_warnings": [],
   "tool_calls": 0
 }

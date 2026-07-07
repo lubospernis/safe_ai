@@ -1,13 +1,13 @@
 {
   "section_id": "outlook",
   "wave_number": 38,
-  "finding": "Slovak turnover outlook fell sharply while euro area firms grew more optimistic",
+  "finding": "Slovak turnover outlook deteriorated sharply while EA firms grew more optimistic",
   "bullets": [
-    "A net 7% of Slovak firms (n=228) expected turnover to increase over the coming quarters, declining 14.15 pp from a net 21% in the previous wave — suggesting a significant erosion in confidence among Slovak firms — while euro area peers grew more optimistic, rising to a net 26% (n=5,266) from a net 23%, widening the SK–EA gap to nearly 19 pp.",
-    "In a notable contrast, Slovak firms' fixed investment expectations improved moderately to a net 15% (n=228, Δ +3.88 pp vs the prior wave), surpassing the euro area's net 9% (n=5,266), which itself eased by 3.13 pp from the prior wave — indicating Slovak firms are outpacing peers in capex despite weaker turnover expectations.",
-    "German firms' turnover expectations rose marginally to a net 19% (Δ +2.28 pp vs the prior wave), while fixed investment expectations slipped to a net −2% — underscoring that weak investment sentiment was concentrated outside Slovakia."
+    "A net 7% of Slovak firms (n=228) expected turnover to increase over the next quarter, falling 14 pp from the net 21% in wave 36 — against an EA net 26% (n=5,266) that rose 3 pp, widening the SK–EA divergence to approximately 19 pp, suggesting a growing confidence gap in demand expectations.",
+    "Slovak fixed investment expectations bucked the EA trend, rising 4 pp to a net 15% of firms (n=228) anticipating increased capital spending, compared with the EA net balance easing 3 pp to a net 9% — placing Slovakia 5 pp above the euro area average on this metric, signalling firms' willingness to invest despite weaker demand outlooks.",
+    "The contrast between Slovakia's weakening turnover outlook and its firmer investment intentions points to diverging near-term trajectories between Slovak and euro area firms, with Slovak businesses less optimistic about demand conditions ahead."
   ],
-  "chart_subtitle": "Slovak turnover outlook fell to a net 7%, vs EA net 26%.",
+  "chart_subtitle": "Slovak turnover outlook fell to net 7%, EA reached net 26%.",
   "grounding_warnings": [],
   "tool_calls": 0
 }

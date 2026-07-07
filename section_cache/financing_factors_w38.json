@@ -1,17 +1,16 @@
 {
   "section_id": "financing_factors",
   "wave_number": 38,
-  "finding": "Slovak bank willingness remained positive but eased marginally in wave 38",
+  "finding": "Banks' willingness to lend stayed positive in Slovakia but eased",
   "bullets": [
-    "A net 7.8% of Slovak firms (n=306) reported that banks' willingness to provide credit improved, easing marginally by 2.6 pp from a net 10.4% in the prior wave, yet remaining above the euro area's net 5.5% and well above Germany's net 4.4% deterioration — suggesting continued, though slightly weaker, support for Slovak firms' financing access.",
-    "Access to public financial support deteriorated notably for a net 33.8% of Slovak firms (n=298), worsening by 8.8 pp from a net 25.0% in wave 37, compared with a near-unchanged net 15.5% deterioration across the euro area — putting pressure on firms reliant on state-backed financing.",
-    "The general economic outlook deteriorated further for a net 44.4% of Slovak firms (n=442), declining by 6.1 pp from a net 38.3% in the prior wave and remaining 18.3 pp worse than the euro area's net 26.1% — indicating heightened macro headwinds for external financing conditions."
+    "A net 7.8% of Slovak firms (n=306) reported that banks' willingness to provide credit improved, easing 2.6 pp from a net 10.4% in the previous wave, yet remaining above the EA's net 5.5% — suggesting a still-favourable but weakening credit supply environment for firms.",
+    "Access to public financial support deteriorated notably for a net 33.8% of Slovak firms (n=298), worsening by 8.8 pp from a net 25.0% in the prior wave, far exceeding the EA's broadly unchanged net 15.5% — putting pressure on firms reliant on state-backed financing.",
+    "The general economic outlook deteriorated further for a net 44.4% of Slovak firms (n=442), worsening by 6.1 pp from a net 38.3% — 18.3 pp more adverse than the EA's net 26.1%."
   ],
-  "chart_subtitle": "Net 7.8% of Slovak firms reported improved bank willingness.",
+  "chart_subtitle": "Bank willingness to lend remained positive at net 7.8% in Slovakia.",
   "grounding_warnings": [
     "'33.8' not found in source data",
     "'25.0' not found in source data",
-    "'37' not found in source data",
     "'15.5' not found in source data",
     "'44.4' not found in source data",
     "'38.3' not found in source data",

@@ -1,13 +1,13 @@
 {
   "section_id": "financing_purpose",
   "wave_number": 38,
-  "finding": "Slovak firms prioritise working capital over investment amid hiring push",
+  "finding": "Slovak firms increasingly financed hiring while fixed investment retreated",
   "bullets": [
-    "Inventory and working capital remained the dominant financing purpose for Slovak firms, cited by 55.7% (n=229) — 16.2 pp above the euro area's 39.5% and broadly unchanged from the prior quarter's 55.8%, suggesting liquidity pressures persist despite stable demand.",
-    "Hiring and training of employees rose to 31.1% of Slovak firms (n=227), up 4.2 pp from the previous quarter, contrasting with a 3.1 pp decline to 24.3% across the euro area, indicating a strategic focus on expansion despite tighter financing conditions.",
-    "Fixed investment financing fell 6.1 pp to 34.2% (n=229), leaving Slovak firms below the euro area average of 36.8%, having exceeded it in the prior quarter at 40.3% versus 39.4%, reflecting caution amid economic uncertainty."
+    "The share of Slovak firms (n=227) citing hiring and training as a financing purpose rose to 31.1%, up 4.2 pp from wave 37, while the euro area share fell to 24.3% (down 3.1 pp), widening the SK–EA gap to 6.8 pp — suggesting a growing focus on workforce expansion over peers.",
+    "Slovak firms continued to rely heavily on inventory and working capital financing, with 55.7% (n=229) citing this purpose — 16.2 pp above the EA's 39.5% — a persistent structural divergence that was broadly stable versus wave 37.",
+    "The share of Slovak firms citing fixed investment as a financing purpose declined by 6.1 pp to 34.2% (n=229), falling below the EA average of 36.8% — indicating a potential slowdown in capacity expansion or modernization efforts."
   ],
-  "chart_subtitle": "55.7% of Slovak firms cited working capital financing.",
+  "chart_subtitle": "55.7% of Slovak firms cited working capital financing",
   "grounding_warnings": [],
   "tool_calls": 0
 }

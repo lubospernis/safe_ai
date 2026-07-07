@@ -1,18 +1,15 @@
 {
   "section_id": "expectations_quantitative",
   "wave_number": 38,
-  "finding": "Slovak firms face persistent margin squeeze as input costs far outpace selling prices",
+  "finding": "Slovak firms face persistent margin compression as input costs outpace selling prices",
   "bullets": [
-    "Slovak firms anticipated non-labour input price rises of 8.31% (n=417), 2.47 pp above the EA's 5.84%, while selling price expectations of 4.27% (n=418) eased marginally by 0.36 pp from wave 37's 4.63%, leaving a near 4 pp wedge between costs and revenues — squeezing profit margins further.",
-    "Wage growth expectations for Slovak firms eased moderately to 4.21% (n=441), down 1.28 pp from wave 37's 5.49%, yet still 1.41 pp above the EA average of 2.80%, compounding margin compression alongside elevated input costs — eroding competitiveness.",
-    "Slovak firms' five-year inflation expectations rose to 8.57% (n=163), up 1.51 pp from wave 37's 7.06%, widening the gap to the EA's 6.28% and indicating that longer-run price pressures remain more entrenched in Slovakia than across the euro area — raising uncertainty for investment planning."
+    "Slovak firms anticipated average selling price growth of 4.27% over the next 12 months (n=418), easing 0.36 pp from wave 37's 4.63%, yet non-labour input prices were expected to rise 8.31% (n=417) — a gap of 4.04 pp signalling continued margin compression.",
+    "Wage growth expectations for Slovak firms fell moderately to 4.21% (n=441), down 1.28 pp from 5.49% in the previous wave, but remained well above the EA average of 2.80%, compounding cost pressures alongside the elevated input price outlook.",
+    "Slovak firms' five-year inflation expectations rose 1.51 pp to 8.57% (n=163), the largest increase across all horizons and countries in wave 38, widening the gap above the EA's 6.28% and pointing to persistently higher domestic price expectations."
   ],
-  "chart_subtitle": "Slovak firms expect input prices to rise 8.31% in 12 months.",
+  "chart_subtitle": "Slovak firms expect 8.31% input price rises vs 4.27% selling prices.",
   "grounding_warnings": [
-    "'37' not found in source data",
-    "'37' not found in source data",
-    "'163' not found in source data",
-    "'37' not found in source data"
+    "'12' not found in source data"
   ],
   "tool_calls": 0
 }

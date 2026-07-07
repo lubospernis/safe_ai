@@ -64,13 +64,49 @@ def test_build_toc_contains_section_id():
     assert "Rates tightened" in toc
 
 
-def test_build_toc_adhoc_spotlight_appended():
+def test_build_toc_adhoc_spotlight_appended_alongside_regular_sections():
+    sections = [
+        {"section_id": "bank_loan_terms", "finding": "Rates tightened", "group": "Financing Conditions"},
+        {"section_id": "adhoc_spotlight", "finding": "AI adoption", "theme_label": "AI Adoption", "group": "Other"},
+    ]
+    toc = build_toc(sections)
+    assert "adhoc_spotlight" in toc
+    assert "AI Adoption" in toc
+
+
+def test_build_toc_standalone_adhoc_report_still_renders_toc():
+    """A standalone adhoc-only report (no regular sections) still gets a TOC now
+    that every adhoc question is its own <section> — falls back to a single
+    "Special Focus" link when question_descriptions isn't provided."""
     sections = [
         {"section_id": "adhoc_spotlight", "finding": "AI adoption", "theme_label": "AI Adoption", "group": "Other"},
     ]
     toc = build_toc(sections)
     assert "adhoc_spotlight" in toc
     assert "AI Adoption" in toc
+
+
+def test_build_toc_lists_every_adhoc_question_as_its_own_entry():
+    """Since every adhoc question renders as its own <section id="{qid}">, the TOC
+    must link to each one individually (nested under the theme), not just to the
+    spotlight as a whole."""
+    sections = [{
+        "section_id": "adhoc_spotlight",
+        "finding": "AI adoption",
+        "theme_label": "AI Adoption",
+        "group": "Other",
+        "question_descriptions": [
+            {"question_id": "qa1", "question_text": "How would you assess the use of AI technologies?"},
+            {"question_id": "qb1", "question_text": "- What percentage of similar firms invested in AI?"},
+        ],
+    }]
+    toc = build_toc(sections)
+    assert '<a href="#qa1">QA1' in toc
+    assert '<a href="#qb1">QB1' in toc
+    assert "How would you assess the use of AI technologies?" in toc
+    # Leading bullet/dash artefacts must be stripped from the TOC label.
+    assert "- What percentage" not in toc
+    assert "What percentage of similar firms invested in AI?" in toc
 
 
 # ── _fetch_painting_inner_html retry behaviour ──────────────────────────────

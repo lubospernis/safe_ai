@@ -417,13 +417,32 @@ def build_toc(rendered_sections: list[dict], ui: dict | None = None) -> str:
         )
         items.append(f"    <li><strong>{label}</strong>\n      <ul>\n{inner}\n      </ul>\n    </li>")
 
+    # Adhoc spotlight: since every question now renders as its own <section id="{qid}">,
+    # list each question as its own TOC entry (nested under the theme), rather than one
+    # link to the spotlight as a whole — mirrors how regular sections are grouped above.
     adhoc_s = next((s for s in rendered_sections if s.get("section_id") == "adhoc_spotlight"), None)
     if adhoc_s:
         theme_label = adhoc_s.get("theme_label", "Special Focus")
         special_focus_label = _ui.get("adhoc_special_focus", "Special Focus")
-        items.append(
-            f'    <li><a href="#adhoc_spotlight">⭐ {special_focus_label}: {theme_label}</a></li>'
-        )
+        q_descs = adhoc_s.get("question_descriptions") or []
+        if q_descs:
+            def _toc_question_text(qd: dict) -> str:
+                qt = re.sub(r"^[-–•]\s*", "", qd.get("question_text", "")).strip()
+                return _clean_question_text(qt) if qt else ""
+
+            inner = "\n".join(
+                f'        <li><a href="#{qd["question_id"]}">{qd["question_id"].upper()}'
+                f'{" — " + _toc_question_text(qd) if _toc_question_text(qd) else ""}</a></li>'
+                for qd in q_descs
+            )
+            items.append(
+                f'    <li><strong>⭐ {special_focus_label}: {theme_label}</strong>\n'
+                f'      <ul>\n{inner}\n      </ul>\n    </li>'
+            )
+        else:
+            items.append(
+                f'    <li><a href="#adhoc_spotlight">⭐ {special_focus_label}: {theme_label}</a></li>'
+            )
 
     if not items:
         return ""
@@ -530,14 +549,10 @@ def build_html(
                     </div>
                 """).strip())
             spotlight_html = textwrap.dedent(f"""
-                <details id="adhoc_spotlight" data-theme="{theme_label}" open>
-                  <summary>
-                    <h2>{special_focus_label}: {theme_label}</h2>
-                  </summary>
-                  <section>
+                <section id="adhoc_spotlight" data-theme="{theme_label}">
+                  <h2>{special_focus_label}: {theme_label}</h2>
                 {"".join(sub_section_parts)}
-                {ecb_link_html}  </section>
-                </details>
+                {ecb_link_html}</section>
             """).strip()
         else:
             # Per-question blocks: one heading + chart + bullets per selected question
@@ -575,7 +590,7 @@ def build_html(
                     f'    <ul>\n{flat_bullets_html}\n    </ul>\n'
                 )
             else:
-                # Cross-cutting synthesis, above the per-question blocks — connects
+                # Cross-cutting synthesis, above the per-question sections — connects
                 # findings across questions rather than repeating any one question's
                 # own bullets (see get_adhoc_synthesis() in llm.py).
                 synthesis_bullets = adhoc_s.get("synthesis_bullets") or []
@@ -589,9 +604,11 @@ def build_html(
                         f'    <ul class="adhoc-synthesis">\n{synthesis_items}\n    </ul>\n'
                     )
 
-                # Build one block per question — every question in this wave's adhoc
-                # module gets its own chart + bullets, not just the top 1-3.
-                q_blocks = []
+                # Each question is its own independent <section>, exactly like the main
+                # report's regular sections (SECTION_TMPL) — not nested inside one big
+                # adhoc-spotlight wrapper. Every question in this wave's adhoc module
+                # gets its own chart + bullets, not just a top-1-3 selection.
+                q_sections = []
                 for i, qid in enumerate(selected_qids):
                     qd = q_descs_by_id.get(qid, {})
                     qt = qd.get("question_text", "") or qid.upper()
@@ -613,30 +630,26 @@ def build_html(
                     )
                     bullets_block = f'    <ul>\n{bullets_html}\n    </ul>\n' if bullets_html else ""
 
-                    q_blocks.append(
-                        f'<div class="adhoc-question-block" style="margin-bottom:1.5rem;">\n'
-                        f'  <h3 style="margin-bottom:0.4rem;">{heading}</h3>\n'
+                    q_sections.append(
+                        f'<section id="{qid}" class="adhoc-question-section">\n'
+                        f'  <h3>{heading}</h3>\n'
                         f'{chart_html}'
                         f'{bullets_block}'
-                        f'</div>'
+                        f'</section>'
                     )
 
                 inner_html = (
                     f'    <p class="section-subtitle" style="margin-bottom:1rem;">'
                     f'{adhoc_s["finding"]}</p>\n'
                     + synthesis_html
-                    + "\n".join(q_blocks) + "\n"
+                    + "\n".join(q_sections) + "\n"
                 )
 
             spotlight_html = textwrap.dedent(f"""
-                <details id="adhoc_spotlight" data-theme="{theme_label}" open>
-                  <summary>
-                    <h2>{special_focus_label}: {theme_label}</h2>
-                  </summary>
-                  <section>
+                <div id="adhoc_spotlight" data-theme="{theme_label}">
+                  <h2>{special_focus_label}: {theme_label}</h2>
                 {inner_html}
-                {ecb_link_html}  </section>
-                </details>
+                {ecb_link_html}</div>
             """).strip()
 
         # Collapsible "All adhoc questions" fallback — every question already gets its

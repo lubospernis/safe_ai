@@ -1,9 +1,12 @@
 name: SAFE — Generate Report (Manual, Past Wave)
 
-# Manual-only workflow for regenerating the report against a specific past wave,
+# Manual-only workflow for regenerating the MAIN report against a specific past wave,
 # without touching production state (does NOT overwrite report_latest.html, does NOT
 # push to git, does NOT publish to GitHub Pages). Output is uploaded as a downloadable
 # workflow artifact instead — safe to run anytime without risk to the live report.
+#
+# For the adhoc spotlight report, use "SAFE — Generate Adhoc Report (Manual, Past Wave)"
+# instead — main report and adhoc spotlight are treated as two separate outputs/workflows.
 on:
   workflow_dispatch:
     inputs:
@@ -11,20 +14,10 @@ on:
         description: "Wave number to cap the report at (e.g. 37). Leave blank for the latest wave."
         required: false
         type: string
-      adhoc:
-        description: "Also generate the adhoc spotlight report for this wave"
-        required: false
-        type: boolean
-        default: false
-      spotlight_only:
-        description: "Skip the main report entirely — only generate the adhoc spotlight report"
-        required: false
-        type: boolean
-        default: false
 
 jobs:
   report:
-    name: Generate report for a past wave
+    name: Generate main report for a past wave
     runs-on: ubuntu-latest
 
     steps:
@@ -50,7 +43,6 @@ jobs:
             | gunzip > "$EXT_DIR/motherduck.duckdb_extension"
 
       - name: Run report
-        if: inputs.spotlight_only != 'true'
         env:
           MOTHERDUCK_TOKEN:  ${{ secrets.MOTHERDUCK_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -60,19 +52,6 @@ jobs:
             python reports/run_report.py --wave "${{ inputs.wave }}"
           else
             python reports/run_report.py
-          fi
-
-      - name: Run adhoc report
-        if: inputs.adhoc == 'true' || inputs.spotlight_only == 'true'
-        env:
-          MOTHERDUCK_TOKEN:  ${{ secrets.MOTHERDUCK_TOKEN }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          MISTRAL_API_KEY:   ${{ secrets.MISTRAL_API_KEY }}
-        run: |
-          if [ -n "${{ inputs.wave }}" ]; then
-            python reports/run_adhoc_report.py --wave "${{ inputs.wave }}"
-          else
-            python reports/run_adhoc_report.py
           fi
 
       - name: Quality check (EN)
@@ -95,33 +74,16 @@ jobs:
             python reports/quality_check.py --html reports/output/report_latest_sk.html
           fi
 
-      - name: Quality check (adhoc spotlight, EN)
-        if: always()
-        continue-on-error: true
-        env:
-          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
-        run: |
-          if [ -f reports/output/report_adhoc_latest.html ]; then
-            python reports/quality_check.py --html reports/output/report_adhoc_latest.html
-          fi
-
-      - name: Quality check (adhoc spotlight, SK)
-        if: always()
-        continue-on-error: true
-        env:
-          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
-        run: |
-          if [ -f reports/output/report_adhoc_latest_sk.html ]; then
-            python reports/quality_check.py --html reports/output/report_adhoc_latest_sk.html
-          fi
-
       - name: Upload report output (not published — download from this run's artifacts)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: report-wave-${{ inputs.wave || 'latest' }}
           path: |
-            reports/output/*.html
-            reports/output/quality_scores*.json
+            reports/output/report_q*.html
+            reports/output/report_latest.html
+            reports/output/report_latest_sk.html
+            reports/output/quality_scores.json
+            reports/output/quality_scores_sk.json
             reports/output/latest_links.json
           retention-days: 30

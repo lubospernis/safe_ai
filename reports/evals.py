@@ -31,6 +31,10 @@ _MAG_WORDS: dict[str, tuple[str, float]] = {
 }
 _PP_RE = re.compile(r"(\d+(?:\.\d+)?)\s*pp", re.IGNORECASE)
 
+# Matches "code 2", "code 3", "on code 3", "response code 4" — a raw survey response
+# code number cited with no label, meaningless to a reader who hasn't seen the annex.
+_BARE_CODE_RE = re.compile(r"\b(?:response\s+)?code\s+\d+\b", re.IGNORECASE)
+
 
 def check_sign_language(bullet: str) -> list[str]:
     """Flag recovery/rebound language when paired with a negative value in the same bullet."""
@@ -59,4 +63,14 @@ def check_magnitude_calibration(bullet: str) -> list[str]:
             errors.append(
                 f"'{word}' used for {max_pp}pp change (implies ≥{threshold}pp): {bullet[:80]}"
             )
+    return errors
+
+
+def check_bare_response_codes(bullet: str) -> list[str]:
+    """Flag a raw survey response code number (e.g. "code 2") cited with no label —
+    meaningless to a reader who hasn't seen the ECB SAFE annex."""
+    errors = []
+    m = _BARE_CODE_RE.search(bullet)
+    if m:
+        errors.append(f"Bare response code cited without a label ('{m.group(0)}'): {bullet[:120]}")
     return errors

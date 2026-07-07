@@ -141,8 +141,8 @@ def mock_anthropic_spotlight():
             "finding": "Slovak firms lag Euro Area peers in electrification readiness.",
             "bullets": {
                 "qe1": [
-                    "**SK readiness gap:** 35% of Slovak firms report low electrification readiness (code 1), vs 28% in the EA.",
-                    "**EA more advanced:** 31% of EA firms report moderate readiness (code 2), slightly above Slovakia's 28%.",
+                    "**SK readiness gap:** 35% of Slovak firms report low electrification readiness, vs 28% in the EA.",
+                    "**EA more advanced:** 31% of EA firms report moderate readiness, slightly above Slovakia's 28%.",
                 ],
             },
         })
@@ -171,8 +171,8 @@ def mock_mistral_theme_with_pixtral_fallback():
             resp.choices[0].message.content = json.dumps({
                 "finding": "Slovak firms lag Euro Area peers in electrification readiness.",
                 "bullets": [
-                    "**SK readiness gap:** 35% of Slovak firms report low electrification readiness (code 1), vs 28% in the EA.",
-                    "**EA more advanced:** 31% of EA firms report moderate readiness (code 2), slightly above Slovakia's 28%.",
+                    "**SK readiness gap:** 35% of Slovak firms report low electrification readiness, vs 28% in the EA.",
+                    "**EA more advanced:** 31% of EA firms report moderate readiness, slightly above Slovakia's 28%.",
                 ],
                 "chart_sub_items": ["a"],
             })

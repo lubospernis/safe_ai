@@ -135,25 +135,30 @@ _DESCRIBE_QUESTION_SYSTEM = textwrap.dedent("""
 
     GROUNDING RULES:
     - Every comparative claim (e.g. "SK higher", "broadly comparable", "SK leads") MUST cite
-      the exact percentage from the data table. Do NOT generalise across codes — if SK code 2
-      is higher but code 3 is lower, say so explicitly; do NOT say "SK leads overall."
+      the exact percentage from the data table. Do NOT generalise across response options — if
+      SK is higher on "very infrequent/pilot use" but lower on "moderate use", say so explicitly;
+      do NOT say "SK leads overall."
+    - NEVER write a bare response code number (e.g. "code 2", "code 3") in the description or
+      key_finding — the reader has no reference for what a code number means. Always name the
+      response option using its label from "Response codes" (e.g. "very infrequent/pilot use",
+      not "code 2").
     - Sub-item labels (e.g. "In your country", "In Germany, France and Italy") describe the
       geographic scope of the question — they do NOT indicate the question is about exports or
       trade. Always use the full question text to determine what is being measured.
-    - "broadly comparable" is only acceptable when ALL gaps are < 3pp. If any code differs by
-      ≥ 5pp, name the specific code and gap rather than using a summary phrase.
+    - "broadly comparable" is only acceptable when ALL gaps are < 3pp. If any response option
+      differs by ≥ 5pp, name that option's label and the gap rather than using a summary phrase.
 
     Return JSON only (no markdown):
     {
-      "description": "<1-2 sentence plain-English summary — cite specific codes and percentages>",
+      "description": "<1-2 sentence plain-English summary — cite specific response-option labels and percentages, never bare code numbers>",
       "interest_score": <integer 1-5>,
-      "key_finding": "<the single most striking number or gap, e.g. 'SK 30% vs EA 18% on code 3'>",
+      "key_finding": "<the single most striking number or gap, e.g. 'SK 30% vs EA 18% on moderate use'>",
       "routing_note": "<who was asked this question, e.g. 'all firms' or 'firms using AI', or '' if unknown>"
     }
 
     interest_score rubric:
-    1 = SK and EA nearly identical (< 3pp gap on ALL codes/values)
-    2 = minor difference (3–5pp on one code)
+    1 = SK and EA nearly identical (< 3pp gap on ALL response options/values)
+    2 = minor difference (3–5pp on one response option)
     3 = notable difference (5–10pp) or clear majority/minority pattern
     4 = striking difference (10–20pp) or surprising result
     5 = very large gap (> 20pp) or result that directly contradicts expectations
@@ -177,10 +182,17 @@ _ADHOC_SPOTLIGHT_SYSTEM = textwrap.dedent(f"""
     GROUNDING RULES — CRITICAL:
     - Every comparative claim ("SK leads EA", "broadly comparable", "higher/lower than EA")
       MUST cite the exact number from the key_finding or description for that question.
-    - Do NOT generalise across response codes. If SK code 2 (pilot use) is higher but code 3
-      (moderate use) is lower, state both explicitly. Do NOT say "SK leads in AI use overall."
+    - Do NOT generalise across response options. If SK is higher on "pilot/very infrequent
+      use" but lower on "moderate use", state both explicitly. Do NOT say "SK leads in AI
+      use overall."
+    - NEVER write a bare response code number (e.g. "code 2", "code 3") in a bullet — the
+      reader has no reference for what a code number means. Always name the response option
+      using its label (e.g. "pilot/very infrequent use", not "code 2"). If the key_finding or
+      description you're given only has a bare code number, look up its label from the
+      question's response codes and use that instead.
     - "broadly comparable" is only acceptable when ALL gaps are < 3pp. If the key_finding
-      shows a gap ≥ 5pp, name the specific code and percentage — never summarise it away.
+      shows a gap ≥ 5pp, name the specific response option's label and percentage — never
+      summarise it away.
     - Sub-item labels like "In your country" / "In Germany, France and Italy" describe
       geographic scope of the question, not the subject matter. Never infer the question is
       about exports or trade from these labels alone — use the question text.

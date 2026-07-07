@@ -20,7 +20,7 @@ from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from mistralai import Mistral
 
-from evals import check_magnitude_calibration, check_sign_language
+from evals import check_bare_response_codes, check_magnitude_calibration, check_sign_language
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
@@ -162,7 +162,8 @@ def extract_all_bullets(html: str) -> list[str]:
 
 
 def run_deterministic_checks(html: str) -> list[str]:
-    """Code-enforced style checks — sign-language and magnitude-calibration mismatches.
+    """Code-enforced style checks — sign-language, magnitude-calibration, and bare
+    survey-response-code mismatches.
 
     Unlike the Mistral supervisor scores below, these are regex-based and cannot be
     talked out of failing by an LLM having a good day.
@@ -171,6 +172,7 @@ def run_deterministic_checks(html: str) -> list[str]:
     for bullet in extract_all_bullets(html):
         errors.extend(check_sign_language(bullet))
         errors.extend(check_magnitude_calibration(bullet))
+        errors.extend(check_bare_response_codes(bullet))
     return errors
 
 

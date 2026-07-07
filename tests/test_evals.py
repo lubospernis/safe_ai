@@ -10,7 +10,7 @@ from pathlib import Path
 
 import yaml
 
-from evals import check_magnitude_calibration, check_sign_language
+from evals import check_bare_response_codes, check_magnitude_calibration, check_sign_language
 
 GOLDEN_DIR = Path(__file__).parent / "golden"
 
@@ -111,6 +111,29 @@ def test_magnitude_passes_notably_for_large_pp():
 def test_magnitude_passes_no_pp_in_bullet():
     good = "Access to finance remains the third most pressing concern for Slovak SMEs."
     assert not check_magnitude_calibration(good)
+
+
+def test_bare_response_code_flags_code_number():
+    bad = (
+        "Slovakia has a higher share of firms using AI very infrequently or experimentally "
+        "(SK 46.5% vs EA 32.7% on code 2) and a lower share with moderate use "
+        "(SK 17.1% vs EA 31.2% on code 3)."
+    )
+    errors = check_bare_response_codes(bad)
+    assert errors, "Should flag bare 'code 2'/'code 3' citations"
+
+
+def test_bare_response_code_passes_labelled_bullet():
+    good = (
+        "Slovakia has a higher share of firms using AI very infrequently or experimentally "
+        "(SK 46.5% vs EA 32.7%) and a lower share with moderate use (SK 17.1% vs EA 31.2%)."
+    )
+    assert not check_bare_response_codes(good)
+
+
+def test_bare_response_code_passes_unrelated_bullet():
+    good = "Loan application rates held steady at 32% across the euro area."
+    assert not check_bare_response_codes(good)
 
 
 # ── pytest tests — Layer 2 (golden YAML) ────────────────────────────────────

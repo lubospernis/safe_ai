@@ -1,5 +1,5 @@
 import { createServerSideClient } from "@/lib/supabase-server";
-import { getSubscribers } from "@/lib/github";
+import { getSubscriptions } from "@/lib/subscriptions";
 import { getLatestLinks } from "@/lib/latestLinks";
 import { NEWSLETTERS } from "@/lib/newsletters";
 import { STRINGS, type NewsletterId } from "@/lib/strings";
@@ -28,14 +28,14 @@ export default async function Home() {
 
   if (!user?.email) redirect("/auth");
 
-  let subscribers: string[] = [];
+  const email = user.email;
+
+  let subscribedIds: Set<string> = new Set();
   try {
-    subscribers = await getSubscribers();
+    subscribedIds = await getSubscriptions(supabase, email);
   } catch {
     // Non-fatal — show buttons in unknown state
   }
-
-  const email = user.email;
 
   const { data: allowedRow } = await supabase
     .from("allowed_emails")
@@ -62,7 +62,7 @@ export default async function Home() {
 
       <section className={styles.list}>
         {NEWSLETTERS.map((nl) => {
-          const isSubscribed = subscribers.includes(email);
+          const isSubscribed = subscribedIds.has(nl.id);
           const nlText = t.newsletters[nl.id as NewsletterId] ?? nl;
           return (
             <div key={nl.id} className={styles.card}>

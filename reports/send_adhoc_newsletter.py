@@ -2,15 +2,19 @@
 SAFE Survey — Adhoc Special Focus Newsletter via Gmail SMTP.
 
 Parses report_adhoc_latest.html, extracts the adhoc spotlight section, and sends
-a focused "Special Focus" email to all subscribers. Runs only on adhoc waves
+a focused "Special Focus" email to subscribers of the separate "safe-adhoc"
+newsletter (distinct from the regular quarterly digest — see
+reports/send_newsletter.py and subscriptions_db.py). Runs only on adhoc waves
 (the generate_adhoc_report workflow produces the HTML only when adhoc data exists).
 
 Usage:
   GMAIL_ADDRESS=you@gmail.com GMAIL_16CHAR=xxxxxxxxxxxxxxxx python reports/send_adhoc_newsletter.py
 
 Required environment variables:
-  GMAIL_ADDRESS    — Gmail address to send from
-  GMAIL_16CHAR     — Gmail App Password (16 chars, see email_smtp.py docstring)
+  GMAIL_ADDRESS         — Gmail address to send from
+  GMAIL_16CHAR          — Gmail App Password (16 chars, see email_smtp.py docstring)
+  SUPABASE_URL          — Supabase project URL
+  SUPABASE_SECRET_KEY   — Supabase secret key (see subscriptions_db.py)
 
 Optional environment variables:
   PAGES_URL        — URL of the published adhoc report
@@ -25,10 +29,9 @@ from pathlib import Path
 from bs4 import BeautifulSoup
 
 from email_smtp import send_email
+from subscriptions_db import NEWSLETTER_ADHOC, get_subscribers
 
-ROOT = Path(__file__).parent.parent
 REPORT_HTML = Path(__file__).parent / "output" / "report_adhoc_latest.html"
-SUBSCRIBERS_JSON = ROOT / "newsletter" / "subscribers.json"
 
 _PAGES_BASE = "https://lubospernis.github.io/safe_ai"
 _links_path = Path(__file__).parent / "output" / "latest_adhoc_links.json"
@@ -171,7 +174,7 @@ def send_adhoc_newsletter() -> None:
         print("Adhoc spotlight has no finding — skipping.")
         sys.exit(0)
 
-    subscribers = json.loads(SUBSCRIBERS_JSON.read_text())["subscribers"]
+    subscribers = get_subscribers(NEWSLETTER_ADHOC)
     if not subscribers:
         print("No subscribers — nothing to send.")
         sys.exit(0)

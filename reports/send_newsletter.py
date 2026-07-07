@@ -3,17 +3,21 @@ SAFE Survey Newsletter — standard report digest email via Gmail SMTP.
 
 Parses the standard report HTML (report_latest.html / report_latest_sk.html),
 extracts executive summary bullets and section findings, and sends a digest
-email to each subscriber in their preferred language (subscriber "lang" field,
-defaults to "en" if absent).
+email to each subscriber of the "safe-regular" newsletter in their preferred
+language (looked up from Supabase allowed_emails.lang, defaults to "en" if
+absent — see subscriptions_db.py).
 
-Adhoc special-focus emails are sent separately by send_adhoc_newsletter.py.
+Adhoc special-focus emails are sent separately by send_adhoc_newsletter.py,
+to subscribers of the separate "safe-adhoc" newsletter.
 
 Usage:
   GMAIL_ADDRESS=you@gmail.com GMAIL_16CHAR=xxxxxxxxxxxxxxxx python reports/send_newsletter.py
 
 Required environment variables:
-  GMAIL_ADDRESS    — Gmail address to send from
-  GMAIL_16CHAR     — Gmail App Password (16 chars, see email_smtp.py docstring)
+  GMAIL_ADDRESS         — Gmail address to send from
+  GMAIL_16CHAR          — Gmail App Password (16 chars, see email_smtp.py docstring)
+  SUPABASE_URL          — Supabase project URL
+  SUPABASE_SECRET_KEY   — Supabase secret key (see subscriptions_db.py)
 
 Optional environment variables:
   PAGES_URL        — URL of the published EN report (default: lubospernis.github.io/safe_ai)
@@ -27,15 +31,14 @@ from pathlib import Path
 from bs4 import BeautifulSoup
 
 from email_smtp import send_email
+from subscriptions_db import NEWSLETTER_REGULAR, get_subscribers
 
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
 
-ROOT = Path(__file__).parent.parent
 REPORT_HTML = Path(__file__).parent / "output" / "report_latest.html"
 REPORT_HTML_SK = Path(__file__).parent / "output" / "report_latest_sk.html"
-SUBSCRIBERS_JSON = ROOT / "newsletter" / "subscribers.json"
 
 _PAGES_BASE = "https://lubospernis.github.io/safe_ai"
 _links_path = Path(__file__).parent / "output" / "latest_links.json"
@@ -190,7 +193,7 @@ def send_newsletter() -> None:
         print(f"Report not found at {REPORT_HTML} — skipping.")
         sys.exit(1)
 
-    subscribers = json.loads(SUBSCRIBERS_JSON.read_text())["subscribers"]
+    subscribers = get_subscribers(NEWSLETTER_REGULAR)
     if not subscribers:
         print("No subscribers — nothing to send.")
         sys.exit(0)

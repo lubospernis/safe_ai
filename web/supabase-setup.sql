@@ -49,3 +49,46 @@ INSERT INTO public.allowed_emails (email) VALUES
   ('daniel.hajdiak@nbs.sk'),
   ('viktor.lintner@nbs.sk')
 ON CONFLICT (email) DO NOTHING;
+
+-- ============================================================
+-- Subscriptions — one row per (email, newsletter_id). Replaces the old
+-- GitHub-committed newsletter/subscribers.json file. lang is NOT stored here —
+-- it lives solely on allowed_emails.lang and is looked up by email at send
+-- time (reports/subscriptions_db.py), since every subscriber must already be
+-- a logged-in (hence allowed_emails) user.
+-- ============================================================
+
+-- 5. Create the subscriptions table
+CREATE TABLE IF NOT EXISTS public.subscriptions (
+  id             BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  email          TEXT NOT NULL,
+  newsletter_id  TEXT NOT NULL CHECK (newsletter_id IN ('safe-regular', 'safe-adhoc')),
+  subscribed_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (email, newsletter_id)
+);
+
+CREATE INDEX IF NOT EXISTS subscriptions_newsletter_id_idx
+  ON public.subscriptions (newsletter_id);
+
+-- 6. Enable Row Level Security
+ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
+
+-- 7. Policies: authenticated user can read/insert/delete only their own rows.
+--    No UPDATE policy — subscribe/unsubscribe is insert/delete, not update.
+--    No policy is needed for the service role: service_role bypasses RLS
+--    entirely by default, so reports/subscriptions_db.py (using the
+--    service-role key) can read all rows unrestricted with zero extra policy.
+DROP POLICY IF EXISTS "self_read" ON public.subscriptions;
+CREATE POLICY "self_read" ON public.subscriptions
+  FOR SELECT
+  USING (email = auth.jwt() ->> 'email');
+
+DROP POLICY IF EXISTS "self_insert" ON public.subscriptions;
+CREATE POLICY "self_insert" ON public.subscriptions
+  FOR INSERT
+  WITH CHECK (email = auth.jwt() ->> 'email');
+
+DROP POLICY IF EXISTS "self_delete" ON public.subscriptions;
+CREATE POLICY "self_delete" ON public.subscriptions
+  FOR DELETE
+  USING (email = auth.jwt() ->> 'email');

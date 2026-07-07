@@ -1,8 +1,9 @@
 import { createServerSideClient } from "@/lib/supabase-server";
-import { removeSubscriber } from "@/lib/github";
+import { unsubscribe } from "@/lib/subscriptions";
+import { NEWSLETTERS } from "@/lib/newsletters";
 import { NextResponse } from "next/server";
 
-export async function POST() {
+export async function POST(request: Request) {
   const supabase = await createServerSideClient();
   const {
     data: { user },
@@ -13,8 +14,13 @@ export async function POST() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { newsletterId } = await request.json();
+  if (!NEWSLETTERS.some((n) => n.id === newsletterId)) {
+    return NextResponse.json({ error: "Invalid newsletter" }, { status: 400 });
+  }
+
   try {
-    await removeSubscriber(user.email);
+    await unsubscribe(supabase, user.email, newsletterId);
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("unsubscribe error:", err);

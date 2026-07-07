@@ -1,8 +1,9 @@
 import { createServerSideClient } from "@/lib/supabase-server";
-import { addSubscriber } from "@/lib/github";
+import { subscribe } from "@/lib/subscriptions";
+import { NEWSLETTERS } from "@/lib/newsletters";
 import { NextResponse } from "next/server";
 
-export async function POST() {
+export async function POST(request: Request) {
   const supabase = await createServerSideClient();
   const {
     data: { user },
@@ -13,15 +14,13 @@ export async function POST() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: allowedRow } = await supabase
-    .from("allowed_emails")
-    .select("lang")
-    .eq("email", user.email)
-    .maybeSingle();
-  const lang = allowedRow?.lang === "sk" ? "sk" : "en";
+  const { newsletterId } = await request.json();
+  if (!NEWSLETTERS.some((n) => n.id === newsletterId)) {
+    return NextResponse.json({ error: "Invalid newsletter" }, { status: 400 });
+  }
 
   try {
-    await addSubscriber(user.email, lang);
+    await subscribe(supabase, user.email, newsletterId);
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("subscribe error:", err);

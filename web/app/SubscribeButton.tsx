@@ -12,6 +12,7 @@ interface Props {
 }
 
 export default function SubscribeButton({
+  newsletterId,
   isSubscribed: initial,
   subscribeLabel,
   unsubscribeLabel,
@@ -26,7 +27,11 @@ export default function SubscribeButton({
     setError("");
     const endpoint = subscribed ? "/api/unsubscribe" : "/api/subscribe";
     try {
-      const res = await fetch(endpoint, { method: "POST" });
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ newsletterId }),
+      });
       if (!res.ok) throw new Error(await res.text());
       setSubscribed((s) => !s);
     } catch (err) {

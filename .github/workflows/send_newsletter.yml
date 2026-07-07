@@ -20,7 +20,7 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
 
     steps:
-      - name: Checkout repository (main branch — for script and subscribers)
+      - name: Checkout repository (main branch — for the send script)
         uses: actions/checkout@v4
 
       - name: Checkout gh-pages for report HTML
@@ -47,4 +47,6 @@ jobs:
         env:
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_16CHAR:  ${{ secrets.GMAIL_16CHAR }}
+          SUPABASE_URL:        ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         run: python reports/send_newsletter.py

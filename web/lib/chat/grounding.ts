@@ -21,6 +21,22 @@ const decimalPlaces = (numStr: string): number => {
   return i === -1 ? 0 : numStr.length - i - 1;
 };
 
+// Matches "scale of 1 to 10", "1-10 scale", "scale from 1 to 10", etc. — these
+// describe the measurement scale (e.g. Q0B pressingness is rated 1-10), not a
+// cited data value, but the bare numbers inside the phrase still match
+// NUMBER_RE and would otherwise be flagged as ungrounded since a tool result
+// table of labels+scores rarely contains the literal scale endpoints.
+const SCALE_PHRASE_RE = /\bscale\s+(?:of|from)?\s*\d+\s*(?:to|-|–)\s*\d+|\b\d+\s*(?:to|-|–)\s*\d+\s*scale\b/gi;
+
+function findScaleDescriptionRanges(text: string): Array<[number, number]> {
+  const ranges: Array<[number, number]> = [];
+  for (const m of text.matchAll(SCALE_PHRASE_RE)) {
+    const start = m.index ?? 0;
+    ranges.push([start, start + m[0].length]);
+  }
+  return ranges;
+}
+
 function extractNumbers(text: string): Set<string> {
   const nums = new Set<string>();
   for (const m of text.matchAll(NUMBER_RE)) {
@@ -41,6 +57,7 @@ function extractNumbers(text: string): Set<string> {
 export function checkNumericGrounding(answerText: string, toolResultsText: string): string[] {
   const groundedNumbers = extractNumbers(toolResultsText);
   const ungrounded: string[] = [];
+  const scaleRanges = findScaleDescriptionRanges(answerText);
 
   for (const m of answerText.matchAll(NUMBER_RE)) {
     const numStr = m[1];
@@ -49,10 +66,14 @@ export function checkNumericGrounding(answerText: string, toolResultsText: strin
     const isInteger = !numStr.includes(".");
     if (isInteger && value < SKIP_INTEGER_BELOW) continue;
 
-    // Sample-size citation "n=62" / "(n=62)" — not a data value being asserted.
     const start = m.index ?? 0;
+
+    // Sample-size citation "n=62" / "(n=62)" — not a data value being asserted.
     const preceding = answerText.slice(Math.max(0, start - 3), start);
     if (/n\s*=\s*$/.test(preceding)) continue;
+
+    // "on a scale of 1 to 10" — describes the measurement scale, not a cited value.
+    if (scaleRanges.some(([rStart, rEnd]) => start >= rStart && start < rEnd)) continue;
 
     const variant = decimalPlaces(numStr) === 0 ? `${numStr}.0` : numStr;
     if (!groundedNumbers.has(numStr) && !groundedNumbers.has(variant)) {

@@ -29,6 +29,12 @@ interface DbtSchema {
 
 let cachedCatalogue: string | null = null;
 
+// Marts with a structured tool (web/lib/chat/tools/martToolSpecs.ts) are
+// excluded from this prose catalogue entirely — the model uses the tool,
+// which builds correct SQL itself, rather than writing SQL for these marts
+// via query_mart. Keep this list in sync with MART_TOOL_SPECS.
+const MARTS_WITH_STRUCTURED_TOOLS = new Set(["mart_safe__business_problems", "mart_safe__financing_conditions"]);
+
 /** Builds the compact mart catalogue string, verified against the live DB
  * (skips any mart whose table isn't actually queryable, in case schema.yml has
  * drifted from the real database). Cached for the process lifetime — schema.yml
@@ -40,15 +46,16 @@ export async function buildMartCatalogue(con: DuckDBConnection, schema: string):
   const dbtSchema = parseYaml(raw) as DbtSchema;
 
   const lines: string[] = [
-    "Available mart tables (all contain only 3m reference period data, waves 30+).",
+    "Available mart tables for query_mart (all contain only 3m reference period data, waves 30+).",
     "Default filters: WHERE firm_size = 'all' AND country_code IN ('SK','EA','DE').",
-    "EXCEPTION: mart_safe__financing_purpose and mart_safe__business_problems keep",
-    "  both periods — always add: AND reference_period = '3m' for those two tables.",
+    "Note: business_problems and financing_conditions are NOT listed here — use the",
+    "  get_business_problems / get_financing_conditions structured tools for those instead.",
     "",
   ];
 
   for (const model of dbtSchema.models ?? []) {
     if (!model.name.startsWith("mart_safe__")) continue;
+    if (MARTS_WITH_STRUCTURED_TOOLS.has(model.name)) continue;
     const fullName = `${schema}.${model.name}`;
     try {
       await con.run(`SELECT 1 FROM ${fullName} LIMIT 1`);

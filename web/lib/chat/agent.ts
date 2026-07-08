@@ -13,6 +13,7 @@ import { runQueryTool, fetchTableForDisplay, type QueryToolResult } from "./duck
 import { newCostTracker, trackCost, type CostTracker } from "./cost";
 import { MART_QUERY_TEMPLATES } from "./martQueryTemplates";
 import { checkNumericGrounding } from "./grounding";
+import { STRUCTURED_MART_TOOLS, findMartTool } from "./tools";
 import type { DuckDBConnection } from "@duckdb/node-api";
 
 const UNVERIFIABLE_ANSWER =
@@ -21,19 +22,23 @@ const UNVERIFIABLE_ANSWER =
 const MODEL = "mistral-large-2512";
 const MAX_TOOL_TURNS = 2;
 
+// Fallback tool for anything the structured mart tools (STRUCTURED_MART_TOOLS,
+// built from web/lib/chat/tools/martToolSpecs.ts) don't cover — pre-wave-30
+// history, unusual cross-mart questions, or a mart without a dedicated tool
+// yet. Prefer a structured tool whenever one exists for the mart in question:
+// it builds pre-verified SQL itself, so the model can't misname a column the
+// way it repeatedly did when this was the only tool available.
 const QUERY_MART_TOOL: Tool & { type: "function" } = {
   type: "function",
   function: {
     name: "query_mart",
     description:
-      "Execute a read-only DuckDB SELECT against the SAFE mart tables. " +
-      "Only call this when: (1) you need data before wave 30 (use int_safe__core_questions_long), " +
-      "(2) you need a sub_item, country, or column not already given to you in a prior tool result, or " +
-      "(3) you need to verify a historical extreme (e.g. highest since wave X). " +
+      "Execute a read-only DuckDB SELECT against the SAFE mart tables. Only use this when no " +
+      "structured tool covers the mart you need — e.g. pre-wave-30 history (int_safe__core_questions_long), " +
+      "or a mart without a dedicated tool. Do NOT use this for business problems or financing " +
+      "conditions/need/availability/terms — use get_business_problems or get_financing_conditions instead. " +
       "Do NOT use this to discover table or column names — see the schema catalogue in the system prompt. " +
-      "Always use fully-qualified names: main_safe.mart_safe__<name>. " +
-      "For mart_safe__financing_purpose and mart_safe__business_problems, always add " +
-      "AND reference_period = '3m'. Only SELECT is permitted.",
+      "Always use fully-qualified names: main_safe.mart_safe__<name>. Only SELECT is permitted.",
     parameters: {
       type: "object",
       properties: {
@@ -72,22 +77,31 @@ const EMIT_ANSWER_TOOL: Tool & { type: "function" } = {
 };
 
 function systemPrompt(catalogue: string): string {
-  return `You are an analyst answering ad hoc questions about ECB SAFE survey data for Slovakia, using the query_mart tool to fetch real data from MotherDuck.
+  return `You are an analyst answering ad hoc questions about ECB SAFE survey data for Slovakia, using tools to fetch real data from MotherDuck.
 
 CRITICAL DATA RULE:
-Only cite numbers that appear verbatim in a query_mart tool result you actually ran in this session. Do NOT invent, estimate, or paraphrase percentages, net balances, or counts. If you cannot find the data to answer the question, say so plainly rather than guessing.
+Only cite numbers that appear verbatim in a tool result you actually got back in this session. Do NOT invent, estimate, or paraphrase percentages, net balances, or counts. If you cannot find the data to answer the question, say so plainly rather than guessing.
 If the question compares two or more groups (e.g. Slovakia vs euro area, two waves, two countries), your query MUST return a row for EVERY group being compared — never state a value for a group you did not actually fetch, even if a similar-looking number appeared in a query for a different group. A comparison with one side unverified must say so rather than filling in the missing side.
 
-Default filters unless the question says otherwise: country_code IN ('SK','EA','DE'), firm_size = 'all'.
+Default filters unless the question says otherwise: countries SK, EA, DE; firmSize "all".
 
-Available mart tables and columns:
+Tool selection:
+- Prefer a structured tool (get_business_problems, get_financing_conditions, etc.) whenever the
+  question is about that tool's metric — it takes typed arguments (countries, wave range, firm size,
+  and a dimension code where relevant) and builds correct SQL itself. You never need to know column
+  names for a mart that has a structured tool.
+- Only fall back to query_mart for marts with no structured tool, or pre-wave-30 history
+  (int_safe__core_questions_long). See the schema catalogue below for what query_mart covers.
+
+Available mart tables and columns for query_mart (marts with a structured tool are not listed
+here — use the structured tool instead):
 ${catalogue}
 
-Query templates (fill in UPPER_CASE placeholders only):
+Query templates for query_mart (fill in UPPER_CASE placeholders only):
 ${MART_QUERY_TEMPLATES}
 
 Process:
-1. Call query_mart (at most a couple of times) to fetch the data needed to answer the question.
+1. Call the tool(s) needed to fetch the data for the question (at most a couple of turns).
 2. Once you have what you need, call emit_answer with a concise, grounded answer.
 Do not call query_mart to explore table/column names — the catalogue above is complete.
 Do not call emit_answer until you've either fetched the data you need or determined the question can't be answered from these tables.`;
@@ -139,11 +153,16 @@ export async function runChatAgent(
   let lastExecutedSql: string | null = null;
   const toolResultsText: string[] = [];
 
+  const availableTools: (Tool & { type: "function" })[] = [
+    ...STRUCTURED_MART_TOOLS.map((t) => t.tool),
+    QUERY_MART_TOOL,
+  ];
+
   for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
     const response = await mistralClient.chat.complete({
       model: MODEL,
       maxTokens: 600,
-      tools: [QUERY_MART_TOOL],
+      tools: availableTools,
       messages,
     });
     trackCost(cost, MODEL, response.usage);
@@ -162,12 +181,24 @@ export async function runChatAgent(
     });
 
     for (const call of toolCalls) {
-      if (call.function.name !== "query_mart") continue;
       const args = parseToolArgs(call);
-      const sql = typeof args.sql === "string" ? args.sql : "";
-      const result: QueryToolResult = await runQueryTool(sql, con);
+      const structuredTool = findMartTool(call.function.name);
+
+      let result: QueryToolResult & { sql?: string };
+      if (structuredTool) {
+        result = await structuredTool.run(args, con);
+      } else if (call.function.name === "query_mart") {
+        const sql = typeof args.sql === "string" ? args.sql : "";
+        result = { ...(await runQueryTool(sql, con)), sql };
+      } else {
+        // Unrecognized tool name — Mistral requires a response for every tool
+        // call in the same turn, so this must still get a tool-role message
+        // rather than being silently dropped.
+        result = { ok: false, error: `ERROR: unknown tool "${call.function.name}"` };
+      }
+
       if (result.ok) {
-        lastExecutedSql = sql;
+        lastExecutedSql = result.sql ?? null;
         toolResultsText.push(result.markdown);
       }
       messages.push({

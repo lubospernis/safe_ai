@@ -41,6 +41,20 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   ]);
 }
 
+// DuckDB's getRowsJS() can return bigint (e.g. wave_number, n_respondents) and
+// Date values — neither is JSON-serializable, and NextResponse.json() throws
+// "Do not know how to serialize a BigInt" if one reaches it unconverted. This
+// hit in production: every successful structured-tool query returns
+// wave_number, which comes back as a bigint. Converting to Number is safe here
+// (these are wave/count columns, always far below Number.MAX_SAFE_INTEGER).
+function sanitizeRow(row: unknown[]): unknown[] {
+  return row.map((v) => {
+    if (typeof v === "bigint") return Number(v);
+    if (v instanceof Date) return v.toISOString();
+    return v;
+  });
+}
+
 function toMarkdownTable(columns: string[], rows: unknown[][], truncated: boolean): string {
   if (rows.length === 0) return "Query returned 0 rows.";
   const header = `| ${columns.join(" | ")} |`;
@@ -65,7 +79,7 @@ export async function runQueryTool(sql: string, con: DuckDBConnection): Promise<
   try {
     const reader = await withTimeout(con.runAndReadAll(sql), QUERY_TIMEOUT_MS, "Query execution");
     const columns = reader.columnNames();
-    const allRows = reader.getRowsJS();
+    const allRows = reader.getRowsJS().map(sanitizeRow);
     const truncated = allRows.length > MAX_TOOL_ROWS;
     const rows = allRows.slice(0, MAX_TOOL_ROWS);
     return { ok: true, markdown: toMarkdownTable(columns, rows, truncated), columns, rows };
@@ -86,7 +100,7 @@ export async function fetchTableForDisplay(
   try {
     const reader = await withTimeout(con.runAndReadAll(sql), QUERY_TIMEOUT_MS, "Query execution");
     const columns = reader.columnNames();
-    const rows = reader.getRowsJS().slice(0, MAX_TABLE_ROWS);
+    const rows = reader.getRowsJS().slice(0, MAX_TABLE_ROWS).map(sanitizeRow);
     return { columns, rows };
   } catch {
     return null;

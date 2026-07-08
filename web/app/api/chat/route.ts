@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const MAX_QUESTION_LENGTH = 2000;
-const MAX_HISTORY_TURNS = 4;
+const MAX_HISTORY_TURNS = 10;
 
 interface ChatRequestBody {
   question?: unknown;

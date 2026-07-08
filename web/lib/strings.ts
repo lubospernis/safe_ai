@@ -48,6 +48,7 @@ export const STRINGS = {
       introExampleCountry: "How does Slovakia's bank loan rejection rate compare to the euro area?",
       introExampleFirmSize: "Is the financing gap different for SMEs than for large firms in Slovakia?",
       introExampleTrend: "How has Slovakia's investment outlook changed over the last 4 waves?",
+      showSql: "Show SQL",
     },
   },
   sk: {
@@ -97,6 +98,7 @@ export const STRINGS = {
       introExampleCountry: "Ako sa miera zamietnutia bankových úverov na Slovensku porovnáva s eurozónou?",
       introExampleFirmSize: "Líši sa medzera vo financovaní pre MSP a veľké firmy na Slovensku?",
       introExampleTrend: "Ako sa zmenil výhľad investícií na Slovensku za posledné 4 vlny?",
+      showSql: "Zobraziť SQL",
     },
   },
 } as const;

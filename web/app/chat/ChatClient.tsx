@@ -25,6 +25,7 @@ interface ChatStrings {
   introExampleCountry: string;
   introExampleFirmSize: string;
   introExampleTrend: string;
+  showSql: string;
 }
 
 interface Highlight {
@@ -42,11 +43,12 @@ interface Turn {
   question: string;
   answerText: string;
   table: Table | null;
+  sql: string | null;
   costUsd: number;
   error?: string;
 }
 
-const MAX_HISTORY_TURNS = 4;
+const MAX_HISTORY_TURNS = 10;
 
 export default function ChatClient({
   email,
@@ -82,17 +84,20 @@ export default function ChatClient({
       const data = await res.json();
       if (!res.ok) {
         const message = res.status === 429 ? strings.errorRateLimit : data.error || strings.errorGeneric;
-        setTurns((prev) => [...prev, { question, answerText: "", table: null, costUsd: 0, error: message }]);
+        setTurns((prev) => [
+          ...prev,
+          { question, answerText: "", table: null, sql: null, costUsd: 0, error: message },
+        ]);
       } else {
         setTurns((prev) => [
           ...prev,
-          { question, answerText: data.answerText, table: data.table, costUsd: data.costUsd },
+          { question, answerText: data.answerText, table: data.table, sql: data.sql, costUsd: data.costUsd },
         ]);
       }
     } catch {
       setTurns((prev) => [
         ...prev,
-        { question, answerText: "", table: null, costUsd: 0, error: strings.errorGeneric },
+        { question, answerText: "", table: null, sql: null, costUsd: 0, error: strings.errorGeneric },
       ]);
     } finally {
       setLoading(false);
@@ -191,6 +196,12 @@ export default function ChatClient({
                       </tbody>
                     </table>
                   </div>
+                ) : null}
+                {turn.sql ? (
+                  <details className={styles.sqlDetails}>
+                    <summary className={styles.sqlSummary}>{strings.showSql}</summary>
+                    <pre className={styles.sqlPre}>{turn.sql}</pre>
+                  </details>
                 ) : null}
                 <span className={styles.cost}>
                   {strings.costLabel.replace("{cost}", turn.costUsd.toFixed(4))}

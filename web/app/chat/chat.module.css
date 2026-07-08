@@ -166,6 +166,30 @@
   border-radius: 12px;
 }
 
+.sqlDetails {
+  margin: 8px 0 12px;
+}
+
+.sqlSummary {
+  cursor: pointer;
+  font-size: 12px;
+  color: #0777b3;
+  user-select: none;
+}
+
+.sqlPre {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  background: #f5f7fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: #333;
+  overflow-x: auto;
+  white-space: pre;
+}
+
 .loading {
   font-size: 13px;
   color: #777;
@@ -255,6 +279,14 @@
   .cost {
     background: #1a3a50;
     color: #5ab0d8;
+  }
+  .sqlSummary {
+    color: #5ab0d8;
+  }
+  .sqlPre {
+    background: #1a1d23;
+    border-color: #3a3f47;
+    color: #ccc;
   }
   .loading {
     color: #999;

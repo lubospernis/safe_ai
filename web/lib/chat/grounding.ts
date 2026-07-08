@@ -72,6 +72,20 @@ export function checkNumericGrounding(answerText: string, toolResultsText: strin
     const preceding = answerText.slice(Math.max(0, start - 3), start);
     if (/n\s*=\s*$/.test(preceding)) continue;
 
+    // Wave reference: "wave 38", "wave 37" — the wave number itself is a filter
+    // criterion echoed back in prose, not a data value that needs to appear in
+    // the tool result's SELECT columns (a query can filter WHERE wave_number = 38
+    // without ever projecting wave_number into the output). Ported from
+    // reports/llm.py::_check_numeric_grounding, which has this exact skip and
+    // was the source of a real false positive here before this was added.
+    const precedingWord = answerText.slice(Math.max(0, start - 6), start);
+    if (/wave\s*$/i.test(precedingWord)) continue;
+
+    // Pressingness-scale denominator: "6.19/10" or "6.19 out of 10" — the "10"
+    // is the fixed scale denominator, not a separately-cited data value.
+    if (start > 0 && answerText[start - 1] === "/") continue;
+    if (/out\s+of\s*$/i.test(answerText.slice(Math.max(0, start - 10), start))) continue;
+
     // "on a scale of 1 to 10" — describes the measurement scale, not a cited value.
     if (scaleRanges.some(([rStart, rEnd]) => start >= rStart && start < rEnd)) continue;
 

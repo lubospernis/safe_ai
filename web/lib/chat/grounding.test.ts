@@ -50,4 +50,25 @@ describe("checkNumericGrounding", () => {
     const ungrounded = checkNumericGrounding(answer, businessProblemsResult);
     expect(ungrounded).toContain("4.75");
   });
+
+  it("does not flag a wave number mentioned in prose when the query never projected wave_number", () => {
+    // Regression test: a real production bug. The tool result table here has
+    // NO wave_number column at all (the query filtered WHERE wave_number = 38
+    // without selecting it) — "wave 38" in the answer text was being flagged
+    // as an ungrounded number, discarding an otherwise fully-grounded answer.
+    const businessProblemsResult = `| problem_label | avg_pressingness_wtd |
+| --- | --- |
+| Costs of production or labour | 6.19 |`;
+    const answer =
+      "The biggest problem for Slovak firms in wave 38 is Costs of production or labour, with an average pressingness score of 6.19.";
+    expect(checkNumericGrounding(answer, businessProblemsResult)).toEqual([]);
+  });
+
+  it("does not flag the '10' in 'rated X out of 10' phrasing", () => {
+    const businessProblemsResult = `| problem_label | avg_pressingness_wtd |
+| --- | --- |
+| Costs of production or labour | 6.19 |`;
+    const answer = "Costs of production or labour was rated 6.19 out of 10.";
+    expect(checkNumericGrounding(answer, businessProblemsResult)).toEqual([]);
+  });
 });

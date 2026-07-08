@@ -16,10 +16,16 @@ export async function getConnection(): Promise<DuckDBConnection> {
   if (!token) {
     throw new Error("MOTHERDUCK_TOKEN env var not set");
   }
-  // Vercel's Node serverless runtime has a read-only filesystem except /tmp.
-  // DuckDB looks up a home directory (for its config/extension cache) even
-  // though we never read/write local files here — without this it throws
-  // "IO Error: Can't find the home directory at ''" at connection time.
+  // Vercel's Node serverless runtime has a read-only filesystem except /tmp,
+  // AND leaves the HOME env var unset/empty. DuckDB's home-directory lookup
+  // resolves from $HOME directly in some code paths — passing home_directory
+  // via config alone is documented to be a no-op when $HOME itself is unset
+  // (https://github.com/duckdb/duckdb/issues/12837) — so HOME must be set on
+  // process.env directly, with the config option kept as a second, redundant
+  // signal for whichever code path does honor it.
+  if (!process.env.HOME) {
+    process.env.HOME = "/tmp";
+  }
   const instance = await DuckDBInstance.create(`md:my_db?motherduck_token=${token}`, {
     home_directory: "/tmp",
   });

@@ -13,6 +13,24 @@ interface ChatStrings {
   errorRateLimit: string;
   noTableData: string;
   navLink: string;
+  introDescription: string;
+  introDimensionsTitle: string;
+  introDimensionCountry: string;
+  introDimensionFirmSize: string;
+  introDimensionTime: string;
+  introTrendingTitle: string;
+  introTrendingWorsened: string;
+  introTrendingImproved: string;
+  introExamplesTitle: string;
+  introExampleCountry: string;
+  introExampleFirmSize: string;
+  introExampleTrend: string;
+}
+
+interface Highlight {
+  label: string;
+  deltaPp: number;
+  latest: number;
 }
 
 interface Table {
@@ -30,14 +48,21 @@ interface Turn {
 
 const MAX_HISTORY_TURNS = 4;
 
-export default function ChatClient({ email, strings }: { email: string; strings: ChatStrings }) {
+export default function ChatClient({
+  email,
+  strings,
+  highlights,
+}: {
+  email: string;
+  strings: ChatStrings;
+  highlights: Highlight[];
+  lang: "en" | "sk";
+}) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const question = input.trim();
+  async function ask(question: string) {
     if (!question || loading) return;
 
     setInput("");
@@ -74,6 +99,13 @@ export default function ChatClient({ email, strings }: { email: string; strings:
     }
   }
 
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    ask(input.trim());
+  }
+
+  const exampleQuestions = [strings.introExampleCountry, strings.introExampleFirmSize, strings.introExampleTrend];
+
   return (
     <main className={styles.main}>
       <header className={styles.header}>
@@ -85,6 +117,51 @@ export default function ChatClient({ email, strings }: { email: string; strings:
       </header>
 
       <div className={styles.thread}>
+        {turns.length === 0 && (
+          <div className={styles.intro}>
+            <p className={styles.introText}>{strings.introDescription}</p>
+
+            <p className={styles.introSectionTitle}>{strings.introDimensionsTitle}</p>
+            <ul className={styles.introList}>
+              <li>{strings.introDimensionCountry}</li>
+              <li>{strings.introDimensionFirmSize}</li>
+              <li>{strings.introDimensionTime}</li>
+            </ul>
+
+            {highlights.length > 0 && (
+              <>
+                <p className={styles.introSectionTitle}>{strings.introTrendingTitle}</p>
+                <ul className={styles.introList}>
+                  {highlights.map((h) => {
+                    const template = h.deltaPp >= 0 ? strings.introTrendingImproved : strings.introTrendingWorsened;
+                    const deltaText = template.replace("{delta}", Math.abs(h.deltaPp).toFixed(1));
+                    return (
+                      <li key={h.label}>
+                        {h.label}: {deltaText}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
+            )}
+
+            <p className={styles.introSectionTitle}>{strings.introExamplesTitle}</p>
+            <div className={styles.exampleList}>
+              {exampleQuestions.map((q) => (
+                <button
+                  key={q}
+                  type="button"
+                  className={styles.exampleBtn}
+                  onClick={() => ask(q)}
+                  disabled={loading}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {turns.map((turn, i) => (
           <div key={i} className={styles.turn}>
             <p className={styles.question}>{turn.question}</p>

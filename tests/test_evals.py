@@ -113,6 +113,33 @@ def test_magnitude_passes_no_pp_in_bullet():
     assert not check_magnitude_calibration(good)
 
 
+def test_magnitude_uses_local_not_global_max_pp():
+    # A dense bullet reports several unrelated pp figures for different
+    # sub-claims (real style found in production, wave 38 financing_gap
+    # bullets). "notably" correctly describes the nearby 12.3pp figure, but
+    # the original implementation compared EVERY word in the bullet against
+    # the bullet's single global max (58.2pp) instead of the figure it's
+    # actually next to — wrongly flagging a correct usage.
+    good = (
+        "The credit line gap widened to +58.2pp in wave 38, driven by need rising "
+        "notably to a net +12.3pp while availability held broadly flat."
+    )
+    assert not check_magnitude_calibration(good)
+
+
+def test_magnitude_still_flags_mismatch_in_multi_clause_bullet():
+    # A dense bullet with multiple pp figures must still catch a genuine
+    # mismatch on ONE of them — the local-proximity fix must not blanket-
+    # suppress real errors elsewhere in the same bullet.
+    bad = (
+        "The credit line gap widened to +14.8pp in wave 38 from +4.8pp in wave 37, "
+        "while availability marginally deteriorated to a striking -19.5pp shift."
+    )
+    errors = check_magnitude_calibration(bad)
+    assert errors
+    assert any("19.5" in e for e in errors)
+
+
 def test_bare_response_code_flags_code_number():
     bad = (
         "Slovakia has a higher share of firms using AI very infrequently or experimentally "

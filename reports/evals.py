@@ -44,25 +44,55 @@ def check_sign_language(bullet: str) -> list[str]:
     return errors
 
 
+# How far (chars) from a magnitude word to look for "its" pp figure. A dense
+# bullet often reports several unrelated pp changes for different sub-claims
+# ("X rose 9.2pp ... Y deteriorated marginally to -2.5pp ... Z gap of
+# +12.6pp") — comparing every word against the bullet's single largest pp
+# figure (the original implementation) produces both false positives (a word
+# validly describing a small local figure gets flagged against an unrelated
+# larger figure elsewhere) and false negatives (a real mismatch gets masked
+# by an even-larger unrelated figure). Found via a real wave-38 run.
+#
+# Known remaining limitation: proximity alone can't distinguish a LEVEL
+# ("deteriorated to a net -2.5pp") from a DELTA ("deteriorated by 2.5pp") —
+# a word can validly describe either quantity, and only the delta is a "change
+# magnitude" in the sense these thresholds are calibrated for. A bullet citing
+# both a level and a small true delta near the same word may still occasionally
+# mis-flag; this proximity fix only closes the "wrong number entirely" class of
+# false positive, not this narrower level-vs-delta ambiguity.
+_PROXIMITY_WINDOW = 60
+
+
 def check_magnitude_calibration(bullet: str) -> list[str]:
-    """Flag mismatch between intensity adverb and pp change magnitude."""
+    """Flag mismatch between an intensity adverb and the pp change it actually
+    describes (the nearest pp figure within _PROXIMITY_WINDOW chars), not the
+    bullet's global max pp figure."""
     errors = []
     bullet_lower = bullet.lower()
-    pp_matches = [float(m) for m in _PP_RE.findall(bullet)]
-    if not pp_matches:
+    pp_spans = [(float(m.group(1)), m.start(), m.end()) for m in _PP_RE.finditer(bullet)]
+    if not pp_spans:
         return errors
-    max_pp = max(pp_matches)
     for word, (direction, threshold) in _MAG_WORDS.items():
-        if word not in bullet_lower:
-            continue
-        if direction == "max" and max_pp > threshold:
-            errors.append(
-                f"'{word}' used for {max_pp}pp change (implies ≤{threshold}pp): {bullet[:80]}"
-            )
-        elif direction == "min" and max_pp < threshold:
-            errors.append(
-                f"'{word}' used for {max_pp}pp change (implies ≥{threshold}pp): {bullet[:80]}"
-            )
+        for wm in re.finditer(re.escape(word), bullet_lower):
+            w_start, w_end = wm.span()
+            # pp figures within the proximity window of this occurrence of the word,
+            # each with its distance so we can pick the truly nearest one.
+            nearby = [
+                (pp, min(abs(p_start - w_end), abs(w_start - p_end)))
+                for pp, p_start, p_end in pp_spans
+                if p_start - _PROXIMITY_WINDOW <= w_end and w_start <= p_end + _PROXIMITY_WINDOW
+            ]
+            if not nearby:
+                continue
+            local_pp = min(nearby, key=lambda t: t[1])[0]
+            if direction == "max" and local_pp > threshold:
+                errors.append(
+                    f"'{word}' used for {local_pp}pp change (implies ≤{threshold}pp): {bullet[:80]}"
+                )
+            elif direction == "min" and local_pp < threshold:
+                errors.append(
+                    f"'{word}' used for {local_pp}pp change (implies ≥{threshold}pp): {bullet[:80]}"
+                )
     return errors
 
 

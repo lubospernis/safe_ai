@@ -52,21 +52,32 @@ _LEAKED_PATTERNS = re.compile(
 _NUMBER_RE = re.compile(r'(?<!\d)(\d+(?:\.\d+)?)(?!\d)')
 
 # "13.8 pp above the EA's 32.7%" / "1.5 pp below the EA average of 15.6%" /
-# "gap of 6.8 pp" style phrasing — the pp figure is a CORRECTLY COMPUTED
-# difference of two other numbers in the same bullet (e.g. 46.5 - 32.7 = 13.8),
-# not a raw value that appears anywhere in the source DataFrame. Confirmed via a
-# real run (wave 37 adhoc): "46.5% ... 13.8 pp above the EA's 32.7%" flagged as
-# ungrounded even though 46.5 - 32.7 = 13.8 exactly — this is arithmetic on two
-# already-grounded numbers, not a fabrication.
-_PP_DELTA_RE = re.compile(r'pp\s+(?:above|below|higher|lower)|gap\s+of\s*$', re.IGNORECASE)
+# "gap of 6.8 pp" / "worsening 8.8 pp from a net 25.0%" / "up 21.78 pp from" /
+# "by 12.6 pp" / "worsening by 11.60 pp" style phrasing — the pp figure is a
+# CORRECTLY COMPUTED difference of two other numbers in the same bullet (e.g.
+# 46.5 - 32.7 = 13.8), not a raw value that appears anywhere in the source
+# DataFrame. Confirmed via two real runs: wave 37 adhoc ("46.5% ... 13.8 pp
+# above the EA's 32.7%") and wave 38 main report, which surfaced several more
+# phrasings the first version of this pattern missed ("worsening 8.8 pp from",
+# "up 21.78 pp from", "outpacing ... by 12.6 pp").
+_PP_DELTA_RE = re.compile(
+    r'pp\s+(?:above|below|higher|lower)'          # "13.8 pp above/below/higher/lower"
+    r'|gap\s+of\s*$'                              # "... a gap of 13.8"
+    r'|^\s*(?:pp\s+)?(?:from|vs)\b'                # "13.8 pp from ..." / "13.8 vs ..."
+    r'|(?:worsening|deteriorating|easing|up|down|rising|falling|rose|fell)'
+    r'\s+(?:by\s+)?$'                              # "worsening/up/down/by ... 13.8"
+    r'|by\s*$',                                    # "outpacing ... by 13.8 pp"
+    re.IGNORECASE,
+)
 
 
 def _is_verified_pp_delta(bullet: str, num_str: str, start: int, end: int) -> bool:
-    """True if num_str at [start:end] is immediately followed by pp-delta phrasing
-    ("13.8 pp above ...") and equals the absolute difference of two OTHER numbers
-    already present in the bullet, within 0.15 rounding tolerance."""
+    """True if num_str at [start:end] is adjacent to pp-delta phrasing ("13.8 pp
+    above ...", "up 21.78 pp from ...", "worsening by 11.60 pp") and equals the
+    absolute difference of two OTHER numbers already present in the bullet,
+    within 0.15 rounding tolerance."""
     following = bullet[end:end + 15]
-    preceding = bullet[max(0, start - 10):start]
+    preceding = bullet[max(0, start - 20):start]
     if not (_PP_DELTA_RE.match(following.lstrip()) or _PP_DELTA_RE.search(preceding)):
         return False
     try:
@@ -90,11 +101,15 @@ def _check_numeric_grounding(bullets: list[str], df: pd.DataFrame, value_cols: l
     Monitoring-only: callers log warnings but do not block on these errors.
     Numbers <= single digit or > 200 are skipped (wave numbers, counts, not cited values).
     Also skipped: sample-size citations ("n=62"), wave references ("wave 37"),
-    pressingness-scale denominators ("6.19/10"), and pp-deltas that are a verified
-    difference of two other numbers in the same bullet ("13.8 pp above ...", where
-    13.8 = the two other cited percentages' difference) — these are legitimate
-    non-data-value numbers that previously produced a high false-positive rate
-    (see ROADMAP.md A8).
+    time-period references ("next 12 months"), pressingness-scale denominators
+    ("6.19/10"), pp-deltas that are a verified difference of two other numbers
+    in the same bullet ("13.8 pp above ...", where 13.8 = the two other cited
+    percentages' difference), and sign-stripped net-balance citations (a
+    DataFrame value of -33.8 cited in prose as "a net 33.8%" — the negative
+    sign is conveyed by a word like "deteriorated"/"declined" instead of a
+    minus sign, which is legitimate English, not a fabrication) — these are
+    legitimate non-data-value numbers that previously produced a high
+    false-positive rate (see ROADMAP.md A8).
     """
     data_numbers: set[str] = set()
     for col in value_cols:
@@ -104,6 +119,12 @@ def _check_numeric_grounding(bullets: list[str], df: pd.DataFrame, value_cols: l
                     fv = float(v)
                     data_numbers.add(f"{fv:.1f}")
                     data_numbers.add(str(int(round(fv))))
+                    # Absolute value too — a negative net balance is often cited
+                    # in prose with the sign implied by a direction word rather
+                    # than a literal minus sign (e.g. "-33.8" -> "deteriorated ...
+                    # a net 33.8%"). See docstring above.
+                    data_numbers.add(f"{abs(fv):.1f}")
+                    data_numbers.add(str(int(round(abs(fv)))))
                 except (ValueError, TypeError):
                     pass
     if "n_respondents" in df.columns:
@@ -131,6 +152,12 @@ def _check_numeric_grounding(bullets: list[str], df: pd.DataFrame, value_cols: l
             # Wave reference: "wave 37", "prior wave" style mentions right before the number
             preceding_word = bullet[max(0, start - 6):start]
             if re.search(r"wave\s*$", preceding_word, re.IGNORECASE):
+                continue
+
+            # Time-period reference: "next 12 months", "24-month horizon" —
+            # the number of months is a horizon label, not a cited data value.
+            following_word = bullet[end:end + 10]
+            if re.match(r"[\s-]*months?\b", following_word, re.IGNORECASE):
                 continue
 
             # Verified pp-delta: "13.8 pp above the EA's 32.7%" where 13.8 is the

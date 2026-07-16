@@ -224,6 +224,73 @@ def test_grounding_check_still_flags_incorrect_pp_delta():
     assert "25.0" in warnings[0]
 
 
+def test_grounding_check_accepts_worsening_by_pp_phrasing():
+    # Real false positive found in production (wave 38 main report,
+    # financing_factors): "worsening 8.8 pp from a net 25.0%" and
+    # "worsening by 11.60 pp from a net 22.43%" — pp-delta phrasing the
+    # original _PP_DELTA_RE pattern (only "pp above/below") didn't match.
+    df = pd.DataFrame([{"net_balance_wtd": -33.8, "wave_number": 38}, {"net_balance_wtd": -25.0, "wave_number": 37}])
+    warnings = _check_numeric_grounding(
+        ["Access to public support deteriorated for a net 33.8% of firms, worsening 8.8 pp from a net 25.0% in the prior wave"],
+        df, ["net_balance_wtd"],
+    )
+    assert warnings == []
+
+
+def test_grounding_check_accepts_up_from_phrasing():
+    df = pd.DataFrame([{"net_balance_wtd": -83.62, "wave_number": 38}, {"net_balance_wtd": -61.84, "wave_number": 37}])
+    warnings = _check_numeric_grounding(
+        ["Labour costs rose for a net 83.62% of firms, up 21.78 pp from a net 61.84% in wave 37"],
+        df, ["net_balance_wtd"],
+    )
+    assert warnings == []
+
+
+def test_grounding_check_accepts_outpacing_by_phrasing():
+    df = pd.DataFrame([{"pct_wtd": 32.8, "wave_number": 38}, {"pct_wtd": 20.2, "wave_number": 38}])
+    warnings = _check_numeric_grounding(
+        ["Slovak firms rose to 32.8%, outpacing the euro area's 20.2% by 12.6 pp"],
+        df, ["pct_wtd"],
+    )
+    assert warnings == []
+
+
+def test_grounding_check_accepts_sign_stripped_negative_net_balance():
+    # Real false positive found in production (wave 38, financing_factors):
+    # DataFrame has net_balance_wtd = -33.8, but the bullet cites it as
+    # "a net 33.8%" (sign conveyed by "deteriorated" instead of a minus sign)
+    # — legitimate English, not a fabrication.
+    df = pd.DataFrame([{"net_balance_wtd": -33.8, "wave_number": 38}])
+    warnings = _check_numeric_grounding(
+        ["Access to public support deteriorated for a net 33.8% of Slovak firms"],
+        df, ["net_balance_wtd"],
+    )
+    assert warnings == []
+
+
+def test_grounding_check_skips_month_horizon_reference():
+    # Real false positive found in production (wave 38, expectations_quantitative):
+    # "over the next 12 months" — a time horizon, not a cited data value.
+    df = pd.DataFrame([{"net_balance_wtd": 5.0, "wave_number": 38}])
+    warnings = _check_numeric_grounding(
+        ["Slovak firms expected input prices to rise over the next 12 months"],
+        df, ["net_balance_wtd"],
+    )
+    assert warnings == []
+
+
+def test_grounding_check_still_flags_invented_number_despite_new_skips():
+    # Ensure the new sign-stripped / month-horizon / broadened pp-delta skips
+    # don't blanket-suppress genuine fabrications elsewhere in the same bullet.
+    df = pd.DataFrame([{"net_balance_wtd": -33.8, "wave_number": 38}])
+    warnings = _check_numeric_grounding(
+        ["Access to public support deteriorated for a net 33.8% of firms over the next 12 months, an invented 77.2% swing"],
+        df, ["net_balance_wtd"],
+    )
+    assert len(warnings) == 1
+    assert "77.2" in warnings[0]
+
+
 # ── _shorten_question_llm ────────────────────────────────────────────────────
 
 def _mock_mistral_response(content: str, prompt_tokens=20, completion_tokens=8):

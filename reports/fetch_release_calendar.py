@@ -20,6 +20,7 @@ Required env: MOTHERDUCK_TOKEN
 import os
 import re
 import sys
+import time
 from datetime import date, datetime
 
 import duckdb
@@ -47,11 +48,21 @@ _UPSERT = """
 
 def fetch_safe_release() -> dict | None:
     """Scrape the ECB stats calendar and return the next SAFE release info, or None."""
-    try:
-        resp = requests.get(STATSCAL_URL, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
-        resp.raise_for_status()
-    except Exception as e:
-        print(f"  WARNING: could not fetch ECB stats calendar: {e}")
+    resp = None
+    last_error: Exception | None = None
+    for attempt in range(3):
+        try:
+            resp = requests.get(STATSCAL_URL, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
+            resp.raise_for_status()
+            last_error = None
+            break
+        except Exception as e:
+            last_error = e
+            resp = None
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+    if resp is None:
+        print(f"  WARNING: could not fetch ECB stats calendar: {last_error}")
         return None
 
     soup = BeautifulSoup(resp.text, "lxml")
@@ -92,7 +103,16 @@ def main() -> None:
         sys.exit(1)
 
     token = os.environ["MOTHERDUCK_TOKEN"]
-    con = duckdb.connect(f"md:my_db?motherduck_token={token}")
+    con = None
+    for attempt in range(3):
+        try:
+            con = duckdb.connect(f"md:my_db?motherduck_token={token}")
+            break
+        except Exception:
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+            else:
+                raise
     con.execute(_DDL)
     con.execute(_UPSERT, [
         "SAFE",

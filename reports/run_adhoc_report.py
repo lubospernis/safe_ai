@@ -26,7 +26,6 @@ import os
 import sys
 from pathlib import Path
 
-import anthropic
 import matplotlib
 
 matplotlib.use("Agg")
@@ -53,7 +52,7 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 from adhoc import (
     build_adhoc_spotlight, detect_adhoc_theme, rebuild_adhoc_charts_en, rebuild_adhoc_charts_sk,
 )
-from cost import _mistral_client
+from cost import _anthropic_client, _mistral_client
 from db import PROD_SCHEMA, _get_connection, fetch_all
 from html_builder import (
     _SK_UI, _fetch_painting_inner_html, _load_annex_question_texts, build_annex_html, build_html, build_toc,
@@ -111,7 +110,7 @@ def main() -> None:
 
     cost_tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
 
-    anthropic_client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    anthropic_client = _anthropic_client()
     mistral_client = _mistral_client()
 
     schema = PROD_SCHEMA

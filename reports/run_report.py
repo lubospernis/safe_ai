@@ -28,7 +28,6 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-import anthropic
 import matplotlib
 
 matplotlib.use("Agg")
@@ -55,7 +54,7 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 from config import SECTIONS  # noqa: E402
 
 from charts import CHART_STRINGS, SK_LABELS, build_chart, build_financing_gap_chart
-from cost import _mistral_client
+from cost import _anthropic_client, _mistral_client
 from db import PROD_SCHEMA, _get_connection, build_mart_catalogue, fetch_all
 from html_builder import (
     _SK_UI, _fetch_painting_inner_html, build_annex_html, build_html, build_toc,
@@ -116,7 +115,7 @@ def main() -> None:
 
     cost_tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
 
-    anthropic_client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    anthropic_client = _anthropic_client()
     mistral_client = _mistral_client()
     cost_lock = threading.Lock()
 

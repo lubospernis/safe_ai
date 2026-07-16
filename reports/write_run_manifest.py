@@ -23,6 +23,7 @@ Schema (ref_safe__run_log):
 import json
 import os
 import subprocess
+import time
 from datetime import date, datetime
 from pathlib import Path
 
@@ -92,7 +93,16 @@ def main() -> None:
     run_id = f"{wave}_{now.strftime('%Y%m%d_%H%M%S')}"
 
     token = os.environ["MOTHERDUCK_TOKEN"]
-    con = duckdb.connect(f"md:my_db?motherduck_token={token}")
+    con = None
+    for attempt in range(3):
+        try:
+            con = duckdb.connect(f"md:my_db?motherduck_token={token}")
+            break
+        except Exception:
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+            else:
+                raise
 
     # Drop and recreate with the canonical schema on first run after schema change.
     # Safe because old rows weren't load-bearing (wave 38 test runs only).

@@ -12,7 +12,7 @@ import anthropic
 import pandas as pd
 from json_repair import repair_json
 
-from cost import _Usage, _mistral_client, _track_cost
+from cost import _Usage, _anthropic_client, _mistral_client, _track_cost
 from db import (
     MART_QUERY_TEMPLATES, MAX_TOOL_TURNS, PROD_SCHEMA, QUERY_MART_TOOL, _get_connection,
     _run_query_tool,
@@ -767,7 +767,7 @@ def get_section_content_agentic(
     initial_msg = q_text_block + section_header + base_data + (f"\n\nSME divergence check:\n{divergence}" if divergence else "")
 
     if client is None:
-        client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+        client = _anthropic_client()
     messages = [{"role": "user", "content": initial_msg}]
     tool_calls_made = 0
 

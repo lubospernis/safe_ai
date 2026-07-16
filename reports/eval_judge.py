@@ -20,6 +20,8 @@ from pathlib import Path
 import anthropic
 import yaml
 
+from cost import _anthropic_client
+
 ROOT = Path(__file__).parent.parent
 OUTPUT_DIR = ROOT / "output"
 GOLDEN_DIR = ROOT / "tests" / "golden"
@@ -100,7 +102,7 @@ def main() -> None:
         print("ANTHROPIC_API_KEY not set. Run: source .env", file=sys.stderr)
         sys.exit(1)
 
-    client = anthropic.Anthropic(api_key=api_key)
+    client = _anthropic_client()
     golden = _load_golden(args.wave)
     if not golden:
         print(f"No golden file for wave {args.wave} at {GOLDEN_DIR}/wave_{args.wave}.yaml")

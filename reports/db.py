@@ -3,6 +3,7 @@
 import os
 import re
 import textwrap
+import time
 from pathlib import Path
 
 import duckdb
@@ -118,8 +119,19 @@ MART_QUERY_TEMPLATES = textwrap.dedent("""
 
 
 def _get_connection() -> duckdb.DuckDBPyConnection:
+    """Connect to MotherDuck, retrying transient connection failures (3 attempts,
+    1s/2s backoff) — the pipeline is MotherDuck-only by design, so a flaky
+    connection shouldn't abort a whole run on the first hiccup."""
     motherduck_token = os.environ["MOTHERDUCK_TOKEN"]
-    return duckdb.connect(f"md:my_db?motherduck_token={motherduck_token}")
+    last_error: Exception | None = None
+    for attempt in range(3):
+        try:
+            return duckdb.connect(f"md:my_db?motherduck_token={motherduck_token}")
+        except Exception as e:
+            last_error = e
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+    raise last_error
 
 
 def fetch_all(sections=None) -> dict[str, pd.DataFrame]:

@@ -19,6 +19,7 @@ import argparse
 import os
 import re
 import sys
+import time
 from datetime import date
 from pathlib import Path
 
@@ -37,10 +38,24 @@ ECB_BASE  = "https://www.ecb.europa.eu"
 MAX_CHARS = 24_000  # ~6k tokens each; stay well within context
 
 
+def _get_with_retry(url: str, *, attempts: int = 3, timeout: int = 30) -> requests.Response:
+    """GET with exponential backoff (1s, 2s, 4s) on transient network/5xx failures.
+    Raises the last exception if every attempt fails."""
+    for attempt in range(attempts):
+        try:
+            resp = requests.get(url, timeout=timeout, headers={"User-Agent": "Mozilla/5.0"})
+            resp.raise_for_status()
+            return resp
+        except requests.RequestException:
+            if attempt == attempts - 1:
+                raise
+            time.sleep(2 ** attempt)
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
 def discover_ecb_url() -> str:
     """Scrape the ECB SAFE index page and return the URL of the latest report."""
-    resp = requests.get(ECB_INDEX, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
-    resp.raise_for_status()
+    resp = _get_with_retry(ECB_INDEX)
     soup = BeautifulSoup(resp.text, "lxml")
     seen = set()
     for a in soup.find_all("a", href=True):
@@ -55,8 +70,7 @@ def discover_ecb_url() -> str:
 
 def fetch_ecb_text(url: str) -> str:
     """Fetch ECB report page and return clean plain text."""
-    resp = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
-    resp.raise_for_status()
+    resp = _get_with_retry(url)
     soup = BeautifulSoup(resp.text, "lxml")
     for tag in soup(["nav", "footer", "script", "style", "aside"]):
         tag.decompose()
@@ -136,7 +150,16 @@ def _persist_structural_gaps(md_text: str, wave_number: int) -> None:
         return
     try:
         import duckdb
-        con = duckdb.connect(f"md:my_db?motherduck_token={token}")
+        con = None
+        for attempt in range(3):
+            try:
+                con = duckdb.connect(f"md:my_db?motherduck_token={token}")
+                break
+            except Exception:
+                if attempt < 2:
+                    time.sleep(2 ** attempt)
+                else:
+                    raise
         con.execute("""
             CREATE TABLE IF NOT EXISTS main_safe.ref_safe__gap_log (
                 gap_title       TEXT,

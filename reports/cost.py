@@ -1,8 +1,10 @@
-"""Cost tracking and Mistral client initialisation."""
+"""Cost tracking and LLM client initialisation."""
 
 import os
 
+import anthropic
 from mistralai import Mistral
+from mistralai.utils import BackoffStrategy, RetryConfig
 
 _PRICE = {
     "claude-sonnet-4-6":         {"input": 3.00,  "output": 15.00},
@@ -54,5 +56,24 @@ def _track_cost(tracker: dict, model: str, usage) -> None:
     m["cache_read"] += cache_read
 
 
+# Exponential backoff on transient failures (5xx, connection errors) for every
+# Mistral call in the pipeline — applied once here since every call site uses
+# this single factory. 3 retries, 500ms-8s backoff, capped at 30s total.
+_MISTRAL_RETRY_CONFIG = RetryConfig(
+    strategy="backoff",
+    backoff=BackoffStrategy(
+        initial_interval=500, max_interval=8_000, exponent=2.0, max_elapsed_time=30_000,
+    ),
+    retry_connection_errors=True,
+)
+
+
 def _mistral_client() -> Mistral:
-    return Mistral(api_key=os.environ["MISTRAL_API_KEY"])
+    return Mistral(api_key=os.environ["MISTRAL_API_KEY"], retry_config=_MISTRAL_RETRY_CONFIG)
+
+
+# Anthropic's SDK retries transient failures by default (max_retries=2) — bumped
+# to 4 here for consistency with the Mistral config above, and made explicit
+# rather than relying on the implicit default.
+def _anthropic_client() -> anthropic.Anthropic:
+    return anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"], max_retries=4)

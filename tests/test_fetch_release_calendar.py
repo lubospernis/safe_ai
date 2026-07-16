@@ -57,6 +57,19 @@ def test_fetch_safe_release_returns_none_when_no_safe_row():
 
 
 def test_fetch_safe_release_returns_none_on_request_failure():
-    with patch("requests.get", side_effect=ConnectionError("network down")):
+    with patch("requests.get", side_effect=ConnectionError("network down")), \
+         patch("time.sleep"):
         result = fetch_safe_release()
     assert result is None
+
+
+def test_fetch_safe_release_retries_then_succeeds():
+    with patch(
+        "requests.get",
+        side_effect=[ConnectionError("transient"), ConnectionError("transient"), _mock_response(_CALENDAR_HTML)],
+    ) as mock_get, patch("time.sleep") as mock_sleep:
+        result = fetch_safe_release()
+    assert result is not None
+    assert result["next_release_date"].isoformat() == "2026-07-20"
+    assert mock_get.call_count == 3
+    assert mock_sleep.call_count == 2

@@ -92,39 +92,3 @@ DROP POLICY IF EXISTS "self_delete" ON public.subscriptions;
 CREATE POLICY "self_delete" ON public.subscriptions
   FOR DELETE
   USING (email = auth.jwt() ->> 'email');
-
--- ============================================================
--- Chat query log — one row per chatbot question (success or failure). Used
--- for both audit (question, generated SQL, answer, cost) and the app-side
--- rate limiter (web/lib/chat/log.ts::checkRateLimit).
--- ============================================================
-
--- 8. Create the query_log table
-CREATE TABLE IF NOT EXISTS public.query_log (
-  id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  email         TEXT NOT NULL,
-  question      TEXT NOT NULL,
-  sql_generated TEXT,
-  answer_text   TEXT,
-  cost_usd      NUMERIC(10, 6) NOT NULL DEFAULT 0,
-  error         TEXT,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS query_log_email_idx ON public.query_log (email);
-CREATE INDEX IF NOT EXISTS query_log_created_at_idx ON public.query_log (created_at);
-
--- 9. Enable Row Level Security
-ALTER TABLE public.query_log ENABLE ROW LEVEL SECURITY;
-
--- 10. Policies: authenticated user can read/insert only their own rows.
---     No UPDATE/DELETE policy — logs are append-only, matching subscriptions.
-DROP POLICY IF EXISTS "self_insert" ON public.query_log;
-CREATE POLICY "self_insert" ON public.query_log
-  FOR INSERT
-  WITH CHECK (email = auth.jwt() ->> 'email');
-
-DROP POLICY IF EXISTS "self_read" ON public.query_log;
-CREATE POLICY "self_read" ON public.query_log
-  FOR SELECT
-  USING (email = auth.jwt() ->> 'email');

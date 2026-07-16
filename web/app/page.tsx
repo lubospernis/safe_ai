@@ -62,7 +62,6 @@ export default async function Home() {
           <h1 className={styles.headerTitle}>NBS Monitors</h1>
           <p className={styles.headerSub}>{t.subscriptionService} · {email}</p>
         </div>
-        <a href="/chat" className={styles.signout}>{t.chat.navLink}</a>
         <LanguageToggle initialLang={lang} />
         <SignOutForm label={t.signOut} />
       </header>

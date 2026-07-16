@@ -105,6 +105,20 @@ List each gap as: **Short title (max 6 words):** One sentence — what is missin
 which ECB question/section it relates to, and why it matters specifically for Slovakia.
 Maximum 8 gaps. Focus on the highest analytical value.
 
+Do NOT list a gap for content that is structurally ABSENT from our SAFE microdata source,
+not merely "not yet ingested":
+- "Financially vulnerable firms" (ECB's own Q12), public financial support usage/guarantees-
+  vs-subsidies detail (Q13/Q14) — these are European Commission-exclusive questions, not
+  part of the ECB Common wave our microdata comes from. There is no way to compute them
+  from this dataset, ever, regardless of pipeline changes.
+- Euro area Bank Lending Survey cross-references — a separate ECB survey entirely, not
+  present in SAFE microdata under any question code.
+- Pre/post-event (e.g. geopolitical shock) daily or timestamped response splits — SAFE
+  microdata has no usable interview-date granularity for this.
+If the ECB publication discusses one of these, note it (if genuinely notable) under
+Interpretation Notes as a known, permanent data-source limitation instead — not as a
+Structural Gap implying it's fixable.
+
 ## Interpretation Notes
 Framing, comparison angles, or emphasis shifts that the NEXT REPORT RUN could incorporate
 WITHOUT any structural data changes — e.g. "compare SK labour cost trend against EA",

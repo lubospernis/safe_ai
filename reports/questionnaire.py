@@ -69,15 +69,9 @@ def _suffix_from_period(period_label: str) -> str | None:
 
 def _wave_period_label(wave_number: int, con, schema: str) -> str | None:
     """Look up survey_period_label for a given wave_number from the mart."""
-    try:
-        row = con.execute(
-            f"SELECT survey_period_label FROM {schema}.mart_safe__slovakia_kpis "
-            f"WHERE wave_number = {wave_number} LIMIT 1"
-        ).fetchone()
-        val = row[0] if row else None
-        return str(val) if val and not hasattr(val, "_mock_name") else None
-    except Exception:
-        return None
+    from db import wave_period_label
+    val = wave_period_label(wave_number, con, schema)
+    return val if val and not hasattr(val, "_mock_name") else None
 
 
 def _dlt_load_month(con) -> str | None:

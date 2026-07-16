@@ -496,6 +496,18 @@ def build_toc(rendered_sections: list[dict], ui: dict | None = None) -> str:
 """).strip()
 
 
+def _format_period_suffix(period_label: str | None) -> str:
+    """"2026Q1" -> " (Q1 2026)" for the report title/h1. Empty string if period_label
+    is missing/malformed — the wave number alone still identifies the report."""
+    if not period_label:
+        return ""
+    m = re.match(r"^(\d{4})(Q[1-4])$", period_label)
+    if not m:
+        return ""
+    year, quarter = m.group(1), m.group(2)
+    return f" ({quarter} {year})"
+
+
 def build_html(
     rendered_sections: list[dict],
     annex_html: str,
@@ -504,10 +516,11 @@ def build_html(
     painting_inner_html: str = "",
     latest_wave: int = 0,
     ui: dict | None = None,
+    period_label: str | None = None,
 ) -> str:
     _ui = ui or {}
     today = date.today().strftime("%d %b %Y")
-    wave_str = str(latest_wave)
+    wave_str = str(latest_wave) + _format_period_suffix(period_label)
 
     group_labels = {
         "Financing Conditions":        _ui.get("group_financing", "Financing Conditions"),
@@ -744,11 +757,13 @@ def build_html(
         if (painting_slot or exec_summary_div) else ""
     )
 
+    # index.html is now the SK (default/primary) report, en.html is EN — see
+    # generate_report.yml's "Rename reports for Pages" step.
     is_slovak = _ui.get("lang", "en") == "sk"
     lang_switch = (
-        '<a class="lang-switch" href="index.html">🇬🇧 EN</a>\n'
+        '<a class="lang-switch" href="en.html">🇬🇧 EN</a>\n'
         if is_slovak
-        else '<a class="lang-switch" href="sk.html">🇸🇰 SK</a>\n'
+        else '<a class="lang-switch" href="index.html">🇸🇰 SK</a>\n'
     )
 
     return HTML_PAGE.format(

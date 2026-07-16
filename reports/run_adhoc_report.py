@@ -53,7 +53,7 @@ from adhoc import (
     build_adhoc_spotlight, detect_adhoc_theme, rebuild_adhoc_charts_en, rebuild_adhoc_charts_sk,
 )
 from cost import _anthropic_client, _mistral_client
-from db import PROD_SCHEMA, _get_connection, fetch_all
+from db import PROD_SCHEMA, _get_connection, fetch_all, wave_period_label
 from html_builder import (
     _SK_UI, _fetch_painting_inner_html, _load_annex_question_texts, build_annex_html, build_html, build_toc,
 )
@@ -131,6 +131,7 @@ def main() -> None:
 
     schema = PROD_SCHEMA
     tool_con = _get_connection()
+    period_label = wave_period_label(latest_wave, tool_con, schema)
 
     # ── Detect adhoc theme ────────────────────────────────────────────────────
     print("Detecting adhoc module...")
@@ -260,7 +261,8 @@ def main() -> None:
     painting_inner_html = _fetch_painting_inner_html()
 
     print("Assembling HTML (EN)...")
-    html = build_html(rendered, annex_html, exec_bullets, toc_html, painting_inner_html, latest_wave)
+    html = build_html(rendered, annex_html, exec_bullets, toc_html, painting_inner_html, latest_wave,
+                       period_label=period_label)
 
     wave_en = f"report_adhoc_q{latest_wave}.html"
     wave_sk = f"report_adhoc_q{latest_wave}_sk.html"
@@ -303,7 +305,7 @@ def main() -> None:
 
     sk_toc_html = build_toc(sk_rendered, ui=_SK_UI)
     sk_html = build_html(sk_rendered, sk_annex_html, sk_exec_bullets, sk_toc_html,
-                         painting_inner_html, latest_wave, ui=_SK_UI)
+                         painting_inner_html, latest_wave, ui=_SK_UI, period_label=period_label)
     (OUTPUT_DIR / wave_sk).write_text(sk_html, encoding="utf-8")
     (OUTPUT_DIR / "report_adhoc_latest_sk.html").write_text(sk_html, encoding="utf-8")
     print(f"Saved → {OUTPUT_DIR / wave_sk}")

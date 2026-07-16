@@ -2,7 +2,8 @@ import re
 from unittest.mock import MagicMock, patch
 
 from html_builder import (
-    _fetch_painting_inner_html, _md_to_html, _clean_question_text, build_annex_html, build_html, build_toc,
+    _fetch_painting_inner_html, _format_period_suffix, _md_to_html, _clean_question_text,
+    build_annex_html, build_html, build_toc,
 )
 
 
@@ -224,6 +225,50 @@ def _adhoc_section_stub():
         ],
         "chart_pngs": [b"fake-png-bytes-1", b"fake-png-bytes-2"],
     }
+
+
+# ── _format_period_suffix / report title period label ───────────────────────
+
+def test_format_period_suffix_formats_quarter_and_year():
+    assert _format_period_suffix("2026Q1") == " (Q1 2026)"
+
+
+def test_format_period_suffix_empty_on_none():
+    assert _format_period_suffix(None) == ""
+
+
+def test_format_period_suffix_empty_on_malformed_label():
+    assert _format_period_suffix("not-a-period") == ""
+
+
+def test_build_html_title_includes_period_label_when_given():
+    html = build_html(
+        rendered_sections=[], annex_html="", exec_bullets=[], toc_html="",
+        latest_wave=38, period_label="2026Q1",
+    )
+    assert "Wave 38 (Q1 2026)" in html
+
+
+def test_build_html_title_falls_back_to_wave_only_without_period_label():
+    html = build_html(
+        rendered_sections=[], annex_html="", exec_bullets=[], toc_html="",
+        latest_wave=38,
+    )
+    assert "Wave 38 ·" in html
+    assert "(Q1" not in html
+
+
+# ── lang-switch link (SK is now the Pages root, en.html the secondary) ──────
+
+def test_build_html_en_report_links_to_sk_at_index():
+    html = build_html(rendered_sections=[], annex_html="", exec_bullets=[], toc_html="")
+    assert '<a class="lang-switch" href="index.html">🇸🇰 SK</a>' in html
+
+
+def test_build_html_sk_report_links_to_en_at_en_html():
+    from html_builder import _SK_UI
+    html = build_html(rendered_sections=[], annex_html="", exec_bullets=[], toc_html="", ui=_SK_UI)
+    assert '<a class="lang-switch" href="en.html">🇬🇧 EN</a>' in html
 
 
 def test_build_html_adhoc_per_question_chart_has_no_inline_width_style():

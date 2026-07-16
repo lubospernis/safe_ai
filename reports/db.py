@@ -146,6 +146,21 @@ def fetch_all(sections=None) -> dict[str, pd.DataFrame]:
     return results
 
 
+def wave_period_label(wave_number: int, con, schema: str = PROD_SCHEMA) -> str | None:
+    """Return the human-readable survey period for a wave (e.g. "2026Q1" for wave 38),
+    from mart_safe__slovakia_kpis.survey_period_label. None on any failure — callers
+    should fall back to showing just the wave number."""
+    try:
+        row = con.execute(
+            f"SELECT survey_period_label FROM {schema}.mart_safe__slovakia_kpis "
+            f"WHERE wave_number = {int(wave_number)} LIMIT 1"
+        ).fetchone()
+        val = row[0] if row else None
+        return str(val) if val else None
+    except Exception:
+        return None
+
+
 def _run_query_tool(sql: str, con, schema: str) -> str:
     """Validate and execute a tool-use SQL query. Returns markdown table or error string."""
     if _WRITE_RE.search(sql):

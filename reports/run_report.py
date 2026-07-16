@@ -55,7 +55,7 @@ from config import SECTIONS  # noqa: E402
 
 from charts import CHART_STRINGS, SK_LABELS, build_chart, build_financing_gap_chart
 from cost import _anthropic_client, _mistral_client
-from db import PROD_SCHEMA, _get_connection, build_mart_catalogue, fetch_all
+from db import PROD_SCHEMA, _get_connection, build_mart_catalogue, fetch_all, wave_period_label
 from html_builder import (
     _SK_UI, _fetch_painting_inner_html, build_annex_html, build_html, build_toc,
     _load_annex_question_texts,
@@ -146,6 +146,7 @@ def main() -> None:
 
     schema = PROD_SCHEMA
     tool_con = _get_connection()
+    period_label = wave_period_label(latest_wave, tool_con, schema)
 
     rendered: list[dict] = []
     ecb_context = ""
@@ -380,7 +381,8 @@ def main() -> None:
     painting_inner_html = _fetch_painting_inner_html()
 
     print("Assembling HTML (EN)...")
-    html = build_html(rendered, annex_html, exec_bullets, toc_html, painting_inner_html, latest_wave)
+    html = build_html(rendered, annex_html, exec_bullets, toc_html, painting_inner_html, latest_wave,
+                       period_label=period_label)
 
     # Always write both the wave-numbered archive copy and the _latest alias.
     wave_en = f"report_q{latest_wave}.html"
@@ -445,7 +447,7 @@ def main() -> None:
 
     sk_toc_html = build_toc(sk_rendered, ui=_SK_UI)
     sk_html = build_html(sk_rendered, sk_annex_html, sk_exec_bullets, sk_toc_html,
-                         painting_inner_html, latest_wave, ui=_SK_UI)
+                         painting_inner_html, latest_wave, ui=_SK_UI, period_label=period_label)
     (OUTPUT_DIR / wave_sk).write_text(sk_html, encoding="utf-8")
     (OUTPUT_DIR / "report_latest_sk.html").write_text(sk_html, encoding="utf-8")
     print(f"Saved → {OUTPUT_DIR / wave_sk}")

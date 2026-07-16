@@ -1,0 +1,78 @@
+name: SAFE — Check gh-pages Quality Gate
+
+# Safety net: quality_check.py normally only runs INSIDE generate_report.yml /
+# generate_adhoc_report.yml, on freshly-generated content, before it's published.
+# If content is ever published to gh-pages by any other path (a manual
+# `git push` to the branch, a hand-edited file, etc.), it bypasses that gate
+# entirely and nothing else in this repo would ever notice. This workflow
+# re-runs the same deterministic + LLM quality checks directly against
+# whatever is CURRENTLY live on gh-pages, on a schedule and on demand, so a
+# gate bypass gets caught after the fact instead of silently staying live
+# indefinitely.
+#
+# This does NOT re-publish or roll back anything automatically — it only
+# reports pass/fail. Treat a failure here as "go investigate and manually fix
+# or re-run the real generator", same as any other quality_check.py failure.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekly, Monday 06:00 UTC — content on gh-pages changes at most a few
+    # times a month, so this only needs to catch drift, not run frequently.
+    - cron: "0 6 * * 1"
+
+jobs:
+  check:
+    name: Quality-check live gh-pages content
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository (main branch — for quality_check.py)
+        uses: actions/checkout@v4
+
+      - name: Checkout gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check each published report
+        id: check
+        env:
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+        run: |
+          set +e
+          failed=0
+          for f in index.html en.html adhoc.html adhoc-en.html; do
+            if [ ! -f "gh-pages/$f" ]; then
+              echo "SKIP: gh-pages/$f does not exist"
+              continue
+            fi
+            echo "::group::Checking gh-pages/$f"
+            python reports/quality_check.py --html "gh-pages/$f"
+            status=$?
+            echo "::endgroup::"
+            if [ $status -ne 0 ]; then
+              echo "FAILED: $f"
+              failed=1
+            else
+              echo "PASSED: $f"
+            fi
+          done
+          exit $failed
+
+      - name: Summary
+        if: always()
+        run: |
+          if [ "${{ steps.check.outcome }}" = "failure" ]; then
+            echo "::error::One or more files currently live on gh-pages failed the quality gate — see the job log above for which file(s) and why. This means published content did not go through (or no longer passes) the normal generate_report.yml/generate_adhoc_report.yml quality check."
+          fi

@@ -1504,7 +1504,7 @@ def translate_to_slovak(
         + json.dumps(payload, ensure_ascii=False)
     )
     client = _mistral_client()
-    _TRANSLATE_MODEL = "mistral-medium-2505"
+    _TRANSLATE_MODEL = "mistral-large-2512"
     resp = client.chat.complete(
         model=_TRANSLATE_MODEL,
         max_tokens=7000,

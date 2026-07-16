@@ -1,0 +1,620 @@
+[
+  {
+    "run_type": "adhoc",
+    "run_date": "2026-07-07",
+    "run_time": "14:47:22",
+    "sections_summary": [
+      {
+        "section_id": "adhoc_spotlight",
+        "finding": "Slovak firms remain concentrated at pilot-stage AI use and plan lower AI investment shares than the euro area average.",
+        "bullets": [
+          "Slovak firms are notably more concentrated at the pilot/experimental stage than EA peers: 46.5% of SK firms report very infrequent or experimental AI use versus 32.7% in the EA, a gap of 13.8 pp.",
+          "Moderate AI use is correspondingly lower in Slovakia (17.1%) than in the EA (31.2%), a gap of 14.1 pp, while significant use is broadly comparable (SK 5.3% vs EA 6.4%).",
+          "Slovak firms estimate that 25.6% of peers in Germany, France and Italy have already invested in AI — notably above the EA average of 19.0% and Germany's own estimate of 18.4%.",
+          "For domestic peer adoption, Slovak firms estimate 14.1%, slightly below the EA average of 15.6%, a gap of 1.5 pp.",
+          "Slovak firms expect 35.0% of peers in Germany, France and Italy to invest in AI over the next 12 months (b_g4), exceeding the EA average of 29.4% by 5.6 pp.",
+          "For domestic peer investment expectations, Slovak firms report 23.7% (a_g3), notably below the EA average of 30.5%, a gap of 6.8 pp.",
+          "Incompatibility with existing systems is the leading barrier for Slovak firms not using AI more intensively (SK 28.4% vs EA 30.1%), broadly comparable to the EA average.",
+          "Lack of AI skills is cited more frequently in the EA (31.8%) than in Slovakia (25.7%), a gap of 6.1 pp, making it a relatively less prominent barrier domestically.",
+          "Slovak AI-using firms cite reducing personnel costs more frequently than EA peers (SK 31.2% vs EA 26.0%), a gap of 5.2 pp, while improving non-core processes is the top reason in both (SK 47.9% vs EA 42.2%).",
+          "Improving core area processes is notably less cited by Slovak firms than by EA peers as a second reason (SK 35.3% vs EA 38.0%), with the EA placing greater emphasis on core-process improvement overall.",
+          "Slovak firms expect to allocate 5.5% of total investment to AI over the next 12 months, below the EA average of 7.3% and Germany's 8.4%, a gap of 1.8 pp relative to the EA mean."
+        ]
+      }
+    ],
+    "wave_number": 37,
+    "total_cost_usd": 0.03422,
+    "input_tokens": 26451,
+    "output_tokens": 9355,
+    "cache_read_tokens": 0,
+    "model_sonnet": "claude-opus-4-8",
+    "model_mistral": "mistral-large-2512",
+    "cost_by_model": {
+      "claude-opus-4-8": {
+        "calls": 3,
+        "input_tokens": 5406,
+        "output_tokens": 868,
+        "usd": 0.0
+      },
+      "claude-sonnet-4-6": {
+        "calls": 1,
+        "input_tokens": 7742,
+        "output_tokens": 688,
+        "usd": 0.03355
+      },
+      "mistral-large-2512": {
+        "calls": 1,
+        "input_tokens": 2567,
+        "output_tokens": 74,
+        "usd": 0.0
+      },
+      "mistral-medium-2505": {
+        "calls": 1,
+        "input_tokens": 6194,
+        "output_tokens": 7000,
+        "usd": 0.0
+      },
+      "mistral-small-latest": {
+        "calls": 6,
+        "input_tokens": 4542,
+        "output_tokens": 725,
+        "usd": 0.00067
+      }
+    },
+    "n_sections": 1,
+    "duration_seconds": 329.1,
+    "context_sources": {
+      "adhoc_module": "qa1",
+      "adhoc_topic": "Artificial intelligence technologies",
+      "questionnaire_url": "https://www.ecb.europa.eu/stats/accesstofinancesofenterprises/pdf/questionnaire/ecb.safeq202602.en.pdf",
+      "questionnaire_labels_parsed": true
+    },
+    "grounding_warning_count": 4,
+    "review_scores": {
+      "grounding": 7,
+      "coverage": 8,
+      "readability": 9,
+      "chart_alignment": 6
+    },
+    "review_passed": false
+  },
+  {
+    "run_type": "adhoc",
+    "run_date": "2026-07-07",
+    "run_time": "14:58:20",
+    "sections_summary": [
+      {
+        "section_id": "adhoc_spotlight",
+        "finding": "Slovak firms remain concentrated at pilot-stage AI use and plan lower AI investment shares than the euro area average.",
+        "bullets": [
+          "Slovak firms are notably more concentrated at the pilot/experimental stage than EA peers: 46.5% of SK firms report very infrequent or experimental AI use versus 32.7% in the EA, a gap of 13.8 pp.",
+          "Moderate AI use is correspondingly lower in Slovakia (17.1%) than in the EA (31.2%), a gap of 14.1 pp, while significant use is broadly comparable (SK 5.3% vs EA 6.4%).",
+          "Slovak firms estimate that 25.6% of peers in Germany, France and Italy have already invested in AI — notably above the EA average of 19.0% and Germany's own estimate of 18.4%.",
+          "For domestic peer adoption, Slovak firms estimate 14.1%, slightly below the EA average of 15.6%, a gap of 1.5 pp.",
+          "Slovak firms expect 35.0% of peers in Germany, France and Italy to invest in AI over the next 12 months (b_g4), exceeding the EA average of 29.4% by 5.6 pp.",
+          "For domestic peer investment expectations, Slovak firms report 23.7% (a_g3), notably below the EA average of 30.5%, a gap of 6.8 pp.",
+          "Incompatibility with existing systems is the leading barrier for Slovak firms not using AI more intensively (SK 28.4% vs EA 30.1%), broadly comparable to the EA average.",
+          "Lack of AI skills is cited more frequently in the EA (31.8%) than in Slovakia (25.7%), a gap of 6.1 pp, making it a relatively less prominent barrier domestically.",
+          "Slovak AI-using firms cite reducing personnel costs more frequently than EA peers (SK 31.2% vs EA 26.0%), a gap of 5.2 pp, while improving non-core processes is the top reason in both (SK 47.9% vs EA 42.2%).",
+          "Improving core area processes is notably less cited by Slovak firms than by EA peers as a second reason (SK 35.3% vs EA 38.0%), with the EA placing greater emphasis on core-process improvement overall.",
+          "Slovak firms expect to allocate 5.5% of total investment to AI over the next 12 months, below the EA average of 7.3% and Germany's 8.4%, a gap of 1.8 pp relative to the EA mean."
+        ]
+      }
+    ],
+    "wave_number": 37,
+    "total_cost_usd": 0.0,
+    "input_tokens": 9734,
+    "output_tokens": 7292,
+    "cache_read_tokens": 0,
+    "model_sonnet": "claude-opus-4-8",
+    "model_mistral": "mistral-medium-2505",
+    "cost_by_model": {
+      "claude-opus-4-8": {
+        "calls": 2,
+        "input_tokens": 3540,
+        "output_tokens": 292,
+        "usd": 0.0
+      },
+      "mistral-medium-2505": {
+        "calls": 1,
+        "input_tokens": 6194,
+        "output_tokens": 7000,
+        "usd": 0.0
+      }
+    },
+    "n_sections": 1,
+    "duration_seconds": 189.7,
+    "context_sources": {
+      "adhoc_module": "qa1",
+      "adhoc_topic": "Artificial intelligence technologies",
+      "questionnaire_url": "https://www.ecb.europa.eu/stats/accesstofinancesofenterprises/pdf/questionnaire/ecb.safeq202602.en.pdf",
+      "questionnaire_labels_parsed": true
+    },
+    "grounding_warning_count": 4,
+    "review_scores": {
+      "grounding": 7,
+      "coverage": 8,
+      "readability": 9,
+      "chart_alignment": 6
+    },
+    "review_passed": false
+  },
+  {
+    "run_type": "adhoc",
+    "run_date": "2026-07-07",
+    "run_time": "15:06:15",
+    "sections_summary": [
+      {
+        "section_id": "adhoc_spotlight",
+        "finding": "Slovak firms remain concentrated in pilot-stage AI use, trailing the euro area on intensity, investment allocation, and forward-looking adoption expectations.",
+        "bullets": [
+          "Slovak firms are notably more concentrated in pilot or very infrequent AI use than EA peers: 46.5% of SK firms selected code 2 versus 32.7% in the EA, a gap of 13.8 pp.",
+          "Conversely, only 17.1% of Slovak firms reported moderate AI use compared with 31.2% in the EA, indicating that pilot-stage engagement has not yet translated into deeper integration.",
+          "Slovak firms estimated that 25.6% of similar firms in Germany, France and Italy had invested in AI by mid-2025, exceeding the EA average estimate of 19.0% by 6.6 pp — the largest cross-border perception gap observed across QB1 sub-items.",
+          "For domestic peers, Slovak firms estimated 14.1% had invested in AI, marginally below the EA average of 15.6%, a gap of 1.5 pp.",
+          "Slovak firms expected only 23.7% of domestic peers to invest in AI over the next 12 months (sub-item a_g3), compared with 30.5% in the EA — a gap of 6.8 pp, the widest domestic forward-looking shortfall in the module.",
+          "For investment expectations regarding Germany, France and Italy (sub-item b_g3), Slovak firms' estimate of 31.4% was broadly comparable to the EA average of 33.3%, a difference of 1.9 pp.",
+          "Incompatibility with existing systems was the leading first reason cited by Slovak firms for not using AI more intensively (SK 28.4% vs EA 30.1%), broadly comparable to the EA at a gap of 1.7 pp.",
+          "Lack of AI skills ranked first in the EA (31.8%) but second in Slovakia (25.7%), a difference of 6.1 pp, with Slovak firms instead placing greater relative weight on perceived irrelevance of AI for their activities (SK 31.6% vs EA 26.2% on code 1).",
+          "Among AI-using firms, improving non-core processes was the primary first reason in Slovakia (47.9% of firms) versus 42.2% in the EA, a gap of 5.7 pp, while improving core processes ranked higher as a second reason for EA firms (37.6%) than for Slovak firms (33.8%).",
+          "Slovak AI-using firms cited personnel cost reduction as a first reason more frequently (31.6%) than EA peers (26.0%), a difference of 5.6 pp, pointing to a cost-efficiency orientation in domestic AI adoption.",
+          "Slovak firms expected to allocate 5.5% of total investment to AI technologies over the next 12 months, compared with 7.3% in the EA and 8.4% in Germany — lower by 1.8 pp and 2.9 pp respectively.",
+          "Both SK and EA reported a median allocation of 5%, indicating the mean gap is driven by a smaller share of high-intensity AI investors in Slovakia rather than a broad-based shortfall."
+        ]
+      }
+    ],
+    "wave_number": 37,
+    "total_cost_usd": 0.03643,
+    "input_tokens": 28048,
+    "output_tokens": 9608,
+    "cache_read_tokens": 0,
+    "model_sonnet": "claude-opus-4-8",
+    "model_mistral": "mistral-large-2512",
+    "cost_by_model": {
+      "claude-opus-4-8": {
+        "calls": 3,
+        "input_tokens": 5346,
+        "output_tokens": 848,
+        "usd": 0.0
+      },
+      "claude-sonnet-4-6": {
+        "calls": 1,
+        "input_tokens": 7745,
+        "output_tokens": 824,
+        "usd": 0.0356
+      },
+      "mistral-large-2512": {
+        "calls": 1,
+        "input_tokens": 2687,
+        "output_tokens": 88,
+        "usd": 0.0
+      },
+      "mistral-medium-2505": {
+        "calls": 1,
+        "input_tokens": 6420,
+        "output_tokens": 7000,
+        "usd": 0.0
+      },
+      "mistral-small-latest": {
+        "calls": 12,
+        "input_tokens": 5850,
+        "output_tokens": 848,
+        "usd": 0.00084
+      }
+    },
+    "n_sections": 1,
+    "duration_seconds": 217.4,
+    "context_sources": {
+      "adhoc_module": "qa1",
+      "adhoc_topic": "Artificial intelligence technologies",
+      "questionnaire_url": "https://www.ecb.europa.eu/stats/accesstofinancesofenterprises/pdf/questionnaire/ecb.safeq202602.en.pdf",
+      "questionnaire_labels_parsed": true
+    },
+    "grounding_warning_count": 3,
+    "review_scores": {
+      "grounding": 9,
+      "coverage": 8,
+      "readability": 9,
+      "chart_alignment": 7
+    },
+    "review_passed": false
+  },
+  {
+    "run_type": "adhoc",
+    "run_date": "2026-07-07",
+    "run_time": "15:21:46",
+    "sections_summary": [
+      {
+        "section_id": "adhoc_spotlight",
+        "finding": "Slovak firms remain predominantly at pilot-stage AI use, with investment intentions and budgets trailing the euro area average.",
+        "bullets": [
+          "Slovak firms are concentrated at the pilot/experimental stage: 46.5% report very infrequent or pilot AI use, compared with 32.7% in the EA — a gap of 13.8 pp.",
+          "At the moderate-use stage, Slovakia lags notably: 17.1% of Slovak firms report moderate AI use versus 31.2% in the EA, a difference of 14.1 pp.",
+          "Slovak AI-using firms cite reducing personnel costs more frequently than EA peers (SK 31.2% vs EA 26.0%), a gap of 5.2 pp.",
+          "Improving non-core area processes is the leading adoption reason in both Slovakia (47.9%) and the EA (42.2%), with Slovakia 5.7 pp higher.",
+          "Incompatibility with existing systems is the top barrier to deeper AI adoption in Slovakia (SK 28.4% vs EA 30.1%), broadly comparable to the EA average.",
+          "Lack of AI skills is a less prominent barrier in Slovakia (25.7%) than in the EA (31.8%), a gap of 6.1 pp, while 'AI is not useful for my firm' is cited more often by Slovak firms (SK 31.6% vs EA 26.2% per chart).",
+          "Slovak firms expect to allocate 5.5% of total investment to AI technologies over the next 12 months, compared with 7.3% in the EA and 8.4% in Germany, leaving Slovakia 1.8 pp below the EA mean.",
+          "Slovak firms estimate that only 14.1% of similar domestic firms had invested in AI by mid-2025, 1.5 pp below the EA average of 15.6%.",
+          "In contrast, Slovak firms attribute notably higher AI investment penetration to firms in Germany, France and Italy (SK estimate: 25.6%) than EA respondents do on average (EA estimate: 19.0%), a gap of 6.6 pp.",
+          "Slovak firms expect 23.7% of domestic peers to invest in AI over the next 12 months, 6.8 pp below the EA average of 30.5%, the largest domestic expectation gap across all questions.",
+          "For firms in Germany, France and Italy, Slovak respondents expect 31.4% to invest, broadly comparable to the EA average of 33.3% (gap of 1.9 pp), and above their estimate for domestic peers."
+        ]
+      }
+    ],
+    "wave_number": 37,
+    "total_cost_usd": 0.034,
+    "input_tokens": 28329,
+    "output_tokens": 9462,
+    "cache_read_tokens": 0,
+    "model_sonnet": "claude-opus-4-8",
+    "model_mistral": "mistral-large-2512",
+    "cost_by_model": {
+      "claude-opus-4-8": {
+        "calls": 3,
+        "input_tokens": 7143,
+        "output_tokens": 977,
+        "usd": 0.0
+      },
+      "claude-sonnet-4-6": {
+        "calls": 1,
+        "input_tokens": 7698,
+        "output_tokens": 683,
+        "usd": 0.03334
+      },
+      "mistral-large-2512": {
+        "calls": 1,
+        "input_tokens": 2558,
+        "output_tokens": 113,
+        "usd": 0.0
+      },
+      "mistral-medium-2505": {
+        "calls": 1,
+        "input_tokens": 6388,
+        "output_tokens": 7000,
+        "usd": 0.0
+      },
+      "mistral-small-latest": {
+        "calls": 6,
+        "input_tokens": 4542,
+        "output_tokens": 689,
+        "usd": 0.00066
+      }
+    },
+    "n_sections": 1,
+    "duration_seconds": 208.0,
+    "context_sources": {
+      "adhoc_module": "qa1",
+      "adhoc_topic": "Artificial intelligence technologies",
+      "questionnaire_url": "https://www.ecb.europa.eu/stats/accesstofinancesofenterprises/pdf/questionnaire/ecb.safeq202602.en.pdf",
+      "questionnaire_labels_parsed": true
+    },
+    "grounding_warning_count": 3,
+    "review_scores": {
+      "grounding": 9,
+      "coverage": 8,
+      "readability": 9,
+      "chart_alignment": 7
+    },
+    "review_passed": false
+  },
+  {
+    "run_type": "adhoc",
+    "run_date": "2026-07-07",
+    "run_time": "15:34:51",
+    "sections_summary": [
+      {
+        "section_id": "adhoc_spotlight",
+        "finding": "Slovak firms are concentrated in early-stage AI adoption, with lower investment intent and a focus on non-core processes relative to the euro area.",
+        "bullets": [
+          "Slovak firms are notably more concentrated in pilot or very infrequent AI use than the EA: 46.5% of SK firms fall into this category versus 32.7% in the EA, a gap of 13.8 pp.",
+          "Moderate AI use is substantially less prevalent in Slovakia (17.1%) than in the EA (31.2%), a difference of 14.1 pp, while significant use rates are broadly comparable (SK 5.4% vs EA 6.4%).",
+          "Slovak firms favour AI for improving non-core processes (47.9%) more than the EA (42.2%), while core-process improvement is cited by only 11.7% of SK firms versus 21.3% in the EA — a gap of 9.6 pp.",
+          "The 9.6 pp shortfall in core-process AI use is consistent with the lower share of Slovak firms at moderate or significant adoption stages observed in QA1.",
+          "Incompatibility with existing systems is the leading barrier in Slovakia (28.4%), whereas lack of AI skills tops the EA list (31.8%), pointing to different primary constraints on deeper adoption across the two geographies.",
+          "AI cost concerns rank notably higher among Slovak firms as a first-cited reason (31.5%) than in the EA (26.1%), a gap of 5.4 pp.",
+          "Slovak firms plan to allocate 5.5% of total investment to AI over the next 12 months, below the EA average of 7.3% and Germany's 8.4%, a gap of 1.8 pp versus the EA.",
+          "The lower planned AI investment share is consistent with Slovak firms' concentration in early-stage adoption and their relatively lower intent to expand AI use.",
+          "Slovak firms estimate that 25.6% of peers in Germany, France and Italy had invested in AI by mid-2025, notably above the EA average estimate of 19.0% — a gap of 6.6 pp — suggesting Slovak firms perceive large-economy peers as more advanced adopters.",
+          "For domestic peers, Slovak firms estimated 14.1% had invested in AI by June 2025, marginally below the EA average of 15.6%, a difference of 1.5 pp.",
+          "Slovak firms expect only 23.7% of domestic peers (a_g3) to invest in AI over the next 12 months, compared with 30.5% in the EA — a gap of 6.8 pp — while their expectations for peers in Germany, France and Italy (b_g3: 31.4%) are broadly comparable to the EA (33.3%).",
+          "Under the alternative threshold (a_g4), Slovak firms' domestic peer expectation of 23.4% remains below the EA's 26.1%, while the b_g4 estimate of 35.0% exceeds the EA (29.4%) by 5.6 pp, consistent with Slovak firms viewing large-economy markets as more AI-intensive."
+        ]
+      }
+    ],
+    "wave_number": 37,
+    "total_cost_usd": 0.03582,
+    "input_tokens": 28995,
+    "output_tokens": 9563,
+    "cache_read_tokens": 0,
+    "model_sonnet": "claude-opus-4-8",
+    "model_mistral": "mistral-large-2512",
+    "cost_by_model": {
+      "claude-opus-4-8": {
+        "calls": 3,
+        "input_tokens": 7462,
+        "output_tokens": 981,
+        "usd": 0.0
+      },
+      "claude-sonnet-4-6": {
+        "calls": 1,
+        "input_tokens": 7688,
+        "output_tokens": 807,
+        "usd": 0.03517
+      },
+      "mistral-large-2512": {
+        "calls": 1,
+        "input_tokens": 2683,
+        "output_tokens": 107,
+        "usd": 0.0
+      },
+      "mistral-medium-2505": {
+        "calls": 1,
+        "input_tokens": 6620,
+        "output_tokens": 7000,
+        "usd": 0.0
+      },
+      "mistral-small-latest": {
+        "calls": 6,
+        "input_tokens": 4542,
+        "output_tokens": 668,
+        "usd": 0.00065
+      }
+    },
+    "n_sections": 1,
+    "duration_seconds": 205.2,
+    "context_sources": {
+      "adhoc_module": "qa1",
+      "adhoc_topic": "Artificial intelligence technologies",
+      "questionnaire_url": "https://www.ecb.europa.eu/stats/accesstofinancesofenterprises/pdf/questionnaire/ecb.safeq202602.en.pdf",
+      "questionnaire_labels_parsed": true
+    },
+    "grounding_warning_count": 3,
+    "review_scores": {
+      "grounding": 9,
+      "coverage": 8,
+      "readability": 9,
+      "chart_alignment": 8
+    },
+    "review_passed": true
+  },
+  {
+    "run_type": "adhoc",
+    "run_date": "2026-07-07",
+    "run_time": "20:06:19",
+    "sections_summary": [
+      {
+        "section_id": "adhoc_spotlight",
+        "finding": "Slovak firms are at an earlier stage of AI adoption than the euro area, with lower intensity use and lower planned AI investment shares.",
+        "bullets": [
+          "Slovak firms are notably concentrated at the pilot/very infrequent use stage: 46.5% of SK firms report this level versus 32.7% in the EA, a gap of 13.8 pp.",
+          "Moderate AI use is correspondingly lower in Slovakia (17.1%) than in the EA (31.2%), a difference of 14.1 pp, confirming that SK adoption remains at an earlier stage.",
+          "Among Slovak firms using AI, improving non-core processes is the leading motivation (47.9% vs EA 42.2%), a gap of 5.7 pp.",
+          "Reducing personnel costs is cited more frequently in Slovakia (31.2%) than in the EA (26.0%), suggesting a stronger cost-efficiency orientation among Slovak AI adopters.",
+          "Incompatibility with existing systems is the top barrier in Slovakia (28.4%), broadly comparable to the EA (30.1%), a gap of only 1.7 pp.",
+          "Distrust of AI-based results ranks second in Slovakia (19.8%), while in the EA it is lack of AI skills (31.8%) — a gap of 12.0 pp versus SK's 25.5% on lack of skills — pointing to a different barrier profile.",
+          "Slovak firms expect to allocate 5.5% of total investment to AI over the next 12 months, compared with 7.3% in the EA and 8.4% in Germany, a gap of 1.8 pp versus the EA.",
+          "Both regions share a median of 5%, indicating that the mean difference is driven by a smaller share of high-AI-investment firms in Slovakia rather than a broad-based shortfall.",
+          "Slovak firms estimate that 25.6% of similar firms in Germany, France and Italy had invested in AI by June 2025, notably above the EA mean of 19.0% and the German self-estimate of 18.4%, a gap of 6.6 pp versus the EA.",
+          "For domestic peers, Slovak firms estimate only 14.1% had invested in AI, below the EA mean of 15.6%, a modest gap of 1.5 pp.",
+          "For expected AI investment among similar domestic firms over the next 12 months, Slovakia's mean of 23.7% is below the EA's 30.5%, a gap of 6.8 pp.",
+          "For Germany, France and Italy, Slovak firms' expectations (35.0%) are broadly comparable to the EA (33.3%) and above Germany (28.4%), with all medians at or near 30%."
+        ]
+      }
+    ],
+    "wave_number": 37,
+    "total_cost_usd": 0.18331,
+    "input_tokens": 26578,
+    "output_tokens": 9158,
+    "cache_read_tokens": 0,
+    "model_sonnet": "claude-opus-4-8",
+    "model_mistral": "mistral-large-2512",
+    "cost_by_model": {
+      "claude-opus-4-8": {
+        "calls": 2,
+        "input_tokens": 5470,
+        "output_tokens": 590,
+        "usd": 0.1263
+      },
+      "claude-sonnet-4-6": {
+        "calls": 1,
+        "input_tokens": 7762,
+        "output_tokens": 714,
+        "usd": 0.034
+      },
+      "mistral-large-2512": {
+        "calls": 1,
+        "input_tokens": 2598,
+        "output_tokens": 110,
+        "usd": 0.00586
+      },
+      "mistral-medium-2505": {
+        "calls": 1,
+        "input_tokens": 6206,
+        "output_tokens": 7000,
+        "usd": 0.01648
+      },
+      "mistral-small-latest": {
+        "calls": 6,
+        "input_tokens": 4542,
+        "output_tokens": 744,
+        "usd": 0.00068
+      }
+    },
+    "n_sections": 1,
+    "duration_seconds": 259.3,
+    "context_sources": {
+      "adhoc_module": "qa1",
+      "adhoc_topic": "Artificial intelligence technologies",
+      "questionnaire_url": "https://www.ecb.europa.eu/stats/accesstofinancesofenterprises/pdf/questionnaire/ecb.safeq202602.en.pdf",
+      "questionnaire_labels_parsed": true
+    },
+    "grounding_warning_count": 3,
+    "review_scores": {
+      "grounding": 9,
+      "coverage": 8,
+      "readability": 9,
+      "chart_alignment": 7
+    },
+    "review_passed": false
+  },
+  {
+    "run_type": "adhoc",
+    "run_date": "2026-07-07",
+    "run_time": "20:26:20",
+    "sections_summary": [
+      {
+        "section_id": "adhoc_spotlight",
+        "finding": "Slovak firms cluster in early-stage AI adoption, with lower intensity use, investment allocation, and forward expectations than the euro area average.",
+        "bullets": [
+          "Slovak firms are notably concentrated at the pilot/very infrequent use stage: 46.5% of SK firms report this level versus 32.7% in the EA, a gap of 13.8 pp.",
+          "Conversely, only 17.1% of SK firms report moderate AI use compared with 31.2% in the EA, a difference of 14.1 pp, pointing to a shallower intensity distribution in Slovakia.",
+          "Slovak AI-using firms more often cite reducing personnel costs as a primary reason (31.2% SK vs 26.0% EA), whereas EA firms more frequently report improving core processes (37.6% EA vs 33.8% SK).",
+          "Improving non-core processes is the leading stated reason in Slovakia (47.9%), exceeding the EA share of 42.2% by 5.7 pp, consistent with a cost- and efficiency-oriented adoption pattern.",
+          "The most common barrier cited in Slovakia is 'AI is not useful for my firm' (31.7% SK vs 26.1% EA), a gap of 5.6 pp that is the largest single difference across barrier categories.",
+          "Incompatibility with existing systems is the second most cited barrier in Slovakia at 28.4%, broadly comparable to the EA's 30.1% (gap of 1.7 pp).",
+          "Slovak firms expect to allocate 5.5% of total investment to AI over the next 12 months, notably below the EA mean of 7.3% and Germany's 8.4%, a gap of 1.8 pp versus the EA.",
+          "The chart values (SK 5.5%, EA 7.3%) differ from the text description (SK 7.2%, EA 9.1%); the analysis above uses chart-reported figures as the primary source.",
+          "Slovak firms estimate that 25.6% of similar firms in Germany, France and Italy had invested in AI by mid-2025, notably above the EA average of 19.0% and Germany's self-reported 18.4%, a gap of 6.6 pp versus EA.",
+          "For domestic peers, SK firms estimate 14.1% had invested, modestly below the EA average of 15.6% and Germany's 17.3%, a gap of 1.5 pp versus EA.",
+          "Slovak firms expect only 23.7% of domestic peers to invest in AI over the next 12 months, notably below the EA average of 30.5% (a gap of 6.8 pp), consistent with lower domestic AI momentum.",
+          "For expected investment by firms in Germany, France and Italy, SK respondents estimate 35.0%, above the EA average of 29.4% and Germany's 28.4%, a gap of 5.6 pp versus EA — mirroring the pattern seen in QB1."
+        ]
+      }
+    ],
+    "wave_number": 37,
+    "total_cost_usd": 0.18925,
+    "input_tokens": 26870,
+    "output_tokens": 9248,
+    "cache_read_tokens": 0,
+    "model_sonnet": "claude-opus-4-8",
+    "model_mistral": "mistral-large-2512",
+    "cost_by_model": {
+      "claude-opus-4-8": {
+        "calls": 2,
+        "input_tokens": 5610,
+        "output_tokens": 630,
+        "usd": 0.1314
+      },
+      "claude-sonnet-4-6": {
+        "calls": 1,
+        "input_tokens": 7714,
+        "output_tokens": 779,
+        "usd": 0.03483
+      },
+      "mistral-large-2512": {
+        "calls": 1,
+        "input_tokens": 2652,
+        "output_tokens": 82,
+        "usd": 0.0058
+      },
+      "mistral-medium-2505": {
+        "calls": 1,
+        "input_tokens": 6352,
+        "output_tokens": 7000,
+        "usd": 0.01654
+      },
+      "mistral-small-latest": {
+        "calls": 6,
+        "input_tokens": 4542,
+        "output_tokens": 757,
+        "usd": 0.00068
+      }
+    },
+    "n_sections": 1,
+    "duration_seconds": 199.2,
+    "context_sources": {
+      "adhoc_module": "qa1",
+      "adhoc_topic": "Artificial intelligence technologies",
+      "questionnaire_url": "https://www.ecb.europa.eu/stats/accesstofinancesofenterprises/pdf/questionnaire/ecb.safeq202602.en.pdf",
+      "questionnaire_labels_parsed": true
+    },
+    "grounding_warning_count": 3,
+    "review_scores": {
+      "grounding": 6,
+      "coverage": 7,
+      "readability": 8,
+      "chart_alignment": 5
+    },
+    "review_passed": false
+  },
+  {
+    "run_type": "adhoc",
+    "run_date": "2026-07-07",
+    "run_time": "20:31:40",
+    "sections_summary": [
+      {
+        "section_id": "adhoc_spotlight",
+        "finding": "Slovak firms remain concentrated at pilot-stage AI use and allocate less investment to AI than the EA average.",
+        "bullets": [
+          "Slovak firms are notably more concentrated at the pilot/experimental stage than EA peers: 46.5% of SK firms report very infrequent or pilot use versus 32.7% in the EA, a gap of 13.8 pp.",
+          "Moderate AI use is substantially less prevalent in Slovakia (17.1%) than in the EA (31.2%), a difference of 14.1 pp, with significant use also below EA levels.",
+          "Slovak AI-using firms prioritise improving non-core area processes (47.9%) as their primary reason, while EA counterparts most frequently cite improving core area processes (37.6%), with SK at only 12.0% on that code.",
+          "The 25.8 pp gap between SK (47.9%) and EA (21.3%) on improving non-core processes is the largest cross-country divergence observed across AI use reasons.",
+          "Incompatibility with existing systems is the leading barrier in Slovakia (28.4%), whereas lack of AI skills tops the EA list (31.8%), pointing to differing structural constraints across the two geographies.",
+          "Slovakia's rate on the incompatibility barrier (28.4%) is broadly comparable to the EA (30.1%), a gap of only 1.7 pp, while the skills deficit barrier is more pronounced in the EA.",
+          "Slovak firms expect to allocate 5.5% of total investment to AI over the next 12 months, 1.8 pp below the EA mean of 7.3% and 2.9 pp below Germany's 8.4%, the lowest of the three shown.",
+          "Slovak firms perceive AI adoption among large-economy peers (Germany, France and Italy) to be notably higher than the EA average: SK respondents estimate 25.6% of such peers have invested in AI versus the EA estimate of 19.0%, a gap of 6.6 pp.",
+          "For domestic peer adoption, Slovak firms estimate 14.1% had invested by mid-2025, slightly below the EA mean of 15.6% (1.5 pp gap).",
+          "Slovak firms expect 35.0% of large-firm peers in Germany, France and Italy to invest in AI over the next 12 months, 5.6 pp above the EA expectation of 29.4%, while expectations for domestic large-firm peers (23.4%) trail the EA (26.1%) by 2.7 pp.",
+          "For domestic SME peers, Slovak firms expect 23.7% to invest, compared with 30.5% in the EA, a gap of 6.8 pp, the widest domestic-peer divergence across the QB2 sub-items."
+        ]
+      }
+    ],
+    "wave_number": 37,
+    "total_cost_usd": 0.18287,
+    "input_tokens": 26498,
+    "output_tokens": 9094,
+    "cache_read_tokens": 0,
+    "model_sonnet": "claude-opus-4-8",
+    "model_mistral": "mistral-large-2512",
+    "cost_by_model": {
+      "claude-opus-4-8": {
+        "calls": 2,
+        "input_tokens": 5500,
+        "output_tokens": 580,
+        "usd": 0.126
+      },
+      "claude-sonnet-4-6": {
+        "calls": 1,
+        "input_tokens": 7634,
+        "output_tokens": 730,
+        "usd": 0.03385
+      },
+      "mistral-large-2512": {
+        "calls": 1,
+        "input_tokens": 2602,
+        "output_tokens": 112,
+        "usd": 0.00588
+      },
+      "mistral-medium-2505": {
+        "calls": 1,
+        "input_tokens": 6220,
+        "output_tokens": 7000,
+        "usd": 0.01649
+      },
+      "mistral-small-latest": {
+        "calls": 6,
+        "input_tokens": 4542,
+        "output_tokens": 672,
+        "usd": 0.00066
+      }
+    },
+    "n_sections": 1,
+    "duration_seconds": 200.1,
+    "context_sources": {
+      "adhoc_module": "qa1",
+      "adhoc_topic": "Artificial intelligence technologies",
+      "questionnaire_url": "https://www.ecb.europa.eu/stats/accesstofinancesofenterprises/pdf/questionnaire/ecb.safeq202602.en.pdf",
+      "questionnaire_labels_parsed": true
+    },
+    "grounding_warning_count": 3,
+    "review_scores": {
+      "grounding": 9,
+      "coverage": 8,
+      "readability": 9,
+      "chart_alignment": 7
+    },
+    "review_passed": false
+  }
+]

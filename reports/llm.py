@@ -182,11 +182,18 @@ INTEREST_SYSTEM = textwrap.dedent("""
 NBS_STYLE_GUIDE = textwrap.dedent("""
     Language and tone (modelled on NBS/ECB financial stability reports):
     - Use precise quantitative language: "rose from X% to Y%", "declined by Z pp", "increased marginally"
-    - Qualitative intensity must match data magnitude:
-      * "marginally" / "slightly" = change ≤ 2 pp (or ≤ 0.3 score units for pressingness)
-      * "moderately" = 2–5 pp (0.3–0.8 units)
-      * "notably" / "significantly" = 5–10 pp (0.8–1.5 units) — only if data supports it
-      * "sharply" / "substantially" = > 10 pp (> 1.5 units) — only if data supports it
+    - Qualitative intensity must match data magnitude (these are the exact thresholds a
+      code-enforced check will apply after you write the bullet — a value outside the
+      stated range for a word will FAIL the quality gate and block publication):
+      * "marginally" / "slightly" = change ≤ 2 pp
+      * "mildly" = change ≤ 3 pp
+      * "moderately" = change ≥ 5 pp
+      * "notably" / "significantly" = change ≥ 10 pp — do not use below 10 pp
+      * "sharply" / "substantially" = change ≥ 15 pp — do not use below 15 pp
+      * "dramatically" = change ≥ 20 pp — do not use below 20 pp
+      * For a change that doesn't clearly clear one of these bars (e.g. 6–9 pp, or
+        11–14 pp), state the number plainly without an intensity adverb rather than
+        guessing at a word that might fail the gate.
     - NEVER use: "surged", "collapsed", "plummeted", "acute stress", "dramatic", "striking"
     - Mechanism language ("signalling", "suggesting", "indicating") requires either:
       (a) direct logical entailment from the data, or

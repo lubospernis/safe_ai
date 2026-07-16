@@ -123,6 +123,13 @@ def main() -> None:
     if not adhoc_theme:
         print("No adhoc data for this wave — skipping.")
         tool_con.close()
+        # Remove any stale output from a previous wave's run. report_adhoc_latest.html
+        # is git-tracked (needed for the web app's link JSON), so on a fresh CI
+        # checkout it would otherwise still exist here from the last wave that DID
+        # have adhoc data — making the workflow's "was output produced this run?"
+        # file-existence check wrongly report success and re-publish old content.
+        for _stale in ("report_adhoc_latest.html", "report_adhoc_latest_sk.html"):
+            (OUTPUT_DIR / _stale).unlink(missing_ok=True)
         sys.exit(0)
 
     _adhoc_module = adhoc_theme["module_id"]

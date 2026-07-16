@@ -42,7 +42,7 @@ export default async function Home() {
     .select("lang")
     .eq("email", email)
     .maybeSingle();
-  const lang: "en" | "sk" = allowedRow?.lang === "sk" ? "sk" : "en";
+  const lang: "en" | "sk" = allowedRow?.lang === "en" ? "en" : "sk";
   const t = STRINGS[lang];
 
   const [regularLinks, adhocLinks] = await Promise.all([

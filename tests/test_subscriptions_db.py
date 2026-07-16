@@ -59,9 +59,9 @@ def test_get_subscribers_returns_empty_list_when_no_subscribers():
     assert result == []
 
 
-def test_get_subscribers_defaults_lang_to_en_when_missing_from_allowed_emails():
+def test_get_subscribers_defaults_lang_to_sk_when_missing_from_allowed_emails():
     """A subscriber not present in allowed_emails must not crash the lookup —
-    defaults to 'en' rather than being dropped or raising."""
+    defaults to 'sk' rather than being dropped or raising."""
     client = MagicMock()
 
     def table_side_effect(name):
@@ -76,7 +76,7 @@ def test_get_subscribers_defaults_lang_to_en_when_missing_from_allowed_emails():
     with patch("subscriptions_db.create_client", return_value=client):
         result = get_subscribers(NEWSLETTER_REGULAR)
 
-    assert result == [{"email": "orphan@example.com", "lang": "en"}]
+    assert result == [{"email": "orphan@example.com", "lang": "sk"}]
 
 
 def test_get_subscribers_queries_correct_newsletter_id():

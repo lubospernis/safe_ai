@@ -30,9 +30,11 @@ jobs:
           path: gh-pages
 
       - name: Copy report HTML into expected path
+        # index.html is now the SK (default/primary) report, en.html is EN.
         run: |
           mkdir -p reports/output
-          cp gh-pages/index.html reports/output/report_latest.html
+          cp gh-pages/en.html reports/output/report_latest.html
+          cp gh-pages/index.html reports/output/report_latest_sk.html
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5

@@ -4,7 +4,7 @@ SAFE Survey Newsletter — standard report digest email via Gmail SMTP.
 Parses the standard report HTML (report_latest.html / report_latest_sk.html),
 extracts executive summary bullets and section findings, and sends a digest
 email to each subscriber of the "safe-regular" newsletter in their preferred
-language (looked up from Supabase allowed_emails.lang, defaults to "en" if
+language (looked up from Supabase allowed_emails.lang, defaults to "sk" if
 absent — see subscriptions_db.py).
 
 Adhoc special-focus emails are sent separately by send_adhoc_newsletter.py,
@@ -223,7 +223,7 @@ def send_newsletter() -> None:
 
     sent, failed = 0, 0
     for sub in subscribers:
-        lang = sub.get("lang", "en")
+        lang = sub.get("lang", "sk")
         if lang not in email_html_by_lang:
             lang = "en"
         subject, email_html = email_html_by_lang[lang]

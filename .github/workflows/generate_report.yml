@@ -106,9 +106,11 @@ jobs:
           git push
 
       - name: Rename reports for Pages
+        # SK is the default/primary published report — root index.html.
+        # EN remains available at /en.html.
         run: |
-          mv reports/output/report_latest.html reports/output/index.html
-          mv reports/output/report_latest_sk.html reports/output/sk.html
+          mv reports/output/report_latest_sk.html reports/output/index.html
+          mv reports/output/report_latest.html reports/output/en.html
 
       - name: Publish to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4

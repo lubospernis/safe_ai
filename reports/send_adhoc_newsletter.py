@@ -1,11 +1,13 @@
 """
 SAFE Survey — Adhoc Special Focus Newsletter via Gmail SMTP.
 
-Parses report_adhoc_latest.html, extracts the adhoc spotlight section, and sends
-a focused "Special Focus" email to subscribers of the separate "safe-adhoc"
-newsletter (distinct from the regular quarterly digest — see
-reports/send_newsletter.py and subscriptions_db.py). Runs only on adhoc waves
-(the generate_adhoc_report workflow produces the HTML only when adhoc data exists).
+Parses report_adhoc_latest.html / report_adhoc_latest_sk.html, extracts the
+adhoc spotlight section, and sends a focused "Special Focus" email to each
+subscriber of the separate "safe-adhoc" newsletter in their preferred language
+(looked up from Supabase allowed_emails.lang, defaults to "sk" if absent —
+see subscriptions_db.py), mirroring reports/send_newsletter.py's per-language
+pattern. Runs only on adhoc waves (the generate_adhoc_report workflow produces
+the HTML only when adhoc data exists).
 
 Usage:
   GMAIL_ADDRESS=you@gmail.com GMAIL_16CHAR=xxxxxxxxxxxxxxxx python reports/send_adhoc_newsletter.py
@@ -17,8 +19,8 @@ Required environment variables:
   SUPABASE_SECRET_KEY   — Supabase secret key (see subscriptions_db.py)
 
 Optional environment variables:
-  PAGES_URL        — URL of the published adhoc report
-                     (default: lubospernis.github.io/safe_ai/adhoc.html)
+  PAGES_URL        — URL of the published EN adhoc report
+                     (default: lubospernis.github.io/safe_ai/adhoc-en.html)
 """
 
 import json
@@ -32,14 +34,28 @@ from email_smtp import send_email
 from subscriptions_db import NEWSLETTER_ADHOC, get_subscribers
 
 REPORT_HTML = Path(__file__).parent / "output" / "report_adhoc_latest.html"
+REPORT_HTML_SK = Path(__file__).parent / "output" / "report_adhoc_latest_sk.html"
 
 _PAGES_BASE = "https://lubospernis.github.io/safe_ai"
 _links_path = Path(__file__).parent / "output" / "latest_adhoc_links.json"
 if _links_path.exists():
     _links = json.loads(_links_path.read_text())
-    PAGES_URL = os.environ.get("PAGES_URL", _links.get("en", f"{_PAGES_BASE}/adhoc.html"))
+    PAGES_URL = os.environ.get("PAGES_URL", _links.get("en", f"{_PAGES_BASE}/adhoc-en.html"))
+    PAGES_URL_SK = _links.get("sk", f"{_PAGES_BASE}/adhoc.html")
 else:
-    PAGES_URL = os.environ.get("PAGES_URL", f"{_PAGES_BASE}/adhoc.html")
+    PAGES_URL = os.environ.get("PAGES_URL", f"{_PAGES_BASE}/adhoc-en.html")
+    PAGES_URL_SK = f"{_PAGES_BASE}/adhoc.html"
+
+_LABELS = {
+    "en": {"key_finding": "Key Finding", "details": "Details",
+           "cta": "View full special focus report →",
+           "footer": "You're receiving this because you're subscribed to the ECB SAFE survey digest. "
+                     "Source: ECB SAFE microdata. Net balance = % reporting increase minus % reporting decrease."},
+    "sk": {"key_finding": "Kľúčové zistenie", "details": "Podrobnosti",
+           "cta": "Zobraziť celú správu na špeciálnu tému →",
+           "footer": "Tento e-mail dostávate, pretože ste odberateľom prehľadu z prieskumu ECB SAFE. "
+                     "Zdroj: mikroúdaje ECB SAFE. Čisté saldo = % nárastu mínus % poklesu."},
+}
 
 # Inline CSS — email-safe
 _BODY = "margin:0;padding:0;background:#f4f4f4;font-family:Arial,sans-serif;"
@@ -104,7 +120,8 @@ def parse_adhoc_report(html: str) -> dict | None:
     }
 
 
-def build_adhoc_email_html(data: dict, pages_url: str) -> str:
+def build_adhoc_email_html(data: dict, pages_url: str, lang: str = "en") -> str:
+    labels = _LABELS.get(lang, _LABELS["en"])
     bullets_html = "\n".join(
         f'<li style="{_LI}">{b}</li>' for b in data["bullets"]
     )
@@ -117,7 +134,7 @@ def build_adhoc_email_html(data: dict, pages_url: str) -> str:
         )
 
     return f"""<!DOCTYPE html>
-<html lang="en">
+<html lang="{lang}">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="{_BODY}">
   <div style="{_WRAP}">
@@ -128,12 +145,12 @@ def build_adhoc_email_html(data: dict, pages_url: str) -> str:
     <div style="{_EYEBROW}">ECB SAFE Survey — Slovakia</div>
 
     <div style="{_SECTION}">
-      <h2 style="{_H2}">Key Finding</h2>
+      <h2 style="{_H2}">{labels['key_finding']}</h2>
       <p style="{_FINDING}">{data["finding"]}</p>
     </div>
 
     <div style="{_SECTION}">
-      <h2 style="{_H2}">Details</h2>
+      <h2 style="{_H2}">{labels['details']}</h2>
       <ul style="padding-left:18px;margin:0 0 8px;">
 {bullets_html}
       </ul>
@@ -141,12 +158,11 @@ def build_adhoc_email_html(data: dict, pages_url: str) -> str:
     </div>
 
     <div style="{_CTA_WRAP}">
-      <a href="{pages_url}" style="{_CTA}">View full special focus report →</a>
+      <a href="{pages_url}" style="{_CTA}">{labels['cta']}</a>
     </div>
 
     <div style="{_FOOTER}">
-      You're receiving this because you're subscribed to the ECB SAFE survey digest.
-      Source: ECB SAFE microdata. Net balance = % reporting increase minus % reporting decrease.
+      {labels['footer']}
     </div>
 
   </div>
@@ -163,32 +179,43 @@ def send_adhoc_newsletter() -> None:
         print(f"Adhoc report not found at {REPORT_HTML} — skipping.")
         sys.exit(0)
 
-    html = REPORT_HTML.read_text(encoding="utf-8")
-    data = parse_adhoc_report(html)
-
-    if not data:
-        print("No adhoc spotlight section found in report — skipping.")
-        sys.exit(0)
-
-    if not data.get("finding"):
-        print("Adhoc spotlight has no finding — skipping.")
-        sys.exit(0)
-
     subscribers = get_subscribers(NEWSLETTER_ADHOC)
     if not subscribers:
         print("No subscribers — nothing to send.")
         sys.exit(0)
 
-    meta = data["meta"]
-    subject = f"Special Focus: {data['theme_label']} — Slovakia | {meta.split('|')[-1].strip()}"
+    have_sk = REPORT_HTML_SK.exists()
+    if not have_sk and any(sub.get("lang") == "sk" for sub in subscribers):
+        print(f"WARNING: SK adhoc report not found at {REPORT_HTML_SK} — SK subscribers will get the EN version.")
 
-    email_html = build_adhoc_email_html(data, PAGES_URL)
+    # Build per-language email content once, reused across all matching subscribers.
+    email_by_lang: dict[str, tuple[str, str]] = {}  # lang -> (subject, html)
+    for lang, report_path, pages_url in (
+        ("en", REPORT_HTML, PAGES_URL),
+        ("sk", REPORT_HTML_SK if have_sk else REPORT_HTML, PAGES_URL_SK if have_sk else PAGES_URL),
+    ):
+        html = report_path.read_text(encoding="utf-8")
+        data = parse_adhoc_report(html)
+        if not data or not data.get("finding"):
+            print(f"No usable adhoc spotlight in {lang.upper()} report — skipping {lang}.")
+            continue
+        meta = data["meta"]
+        subject = f"Special Focus: {data['theme_label']} — Slovakia | {meta.split('|')[-1].strip()}"
+        email_by_lang[lang] = (subject, build_adhoc_email_html(data, pages_url, lang))
+
+    if "en" not in email_by_lang:
+        print("No usable EN adhoc report content — aborting send.")
+        sys.exit(1)
 
     sent, failed = 0, 0
     for sub in subscribers:
+        lang = sub.get("lang", "sk")
+        if lang not in email_by_lang:
+            lang = "en"
+        subject, email_html = email_by_lang[lang]
         try:
             send_email(sub["email"], subject, email_html)
-            print(f"  ✓ Sent to {sub['email']}")
+            print(f"  ✓ Sent to {sub['email']} ({lang})")
             sent += 1
         except Exception as e:
             print(f"  ✗ Failed for {sub['email']}: {e}")

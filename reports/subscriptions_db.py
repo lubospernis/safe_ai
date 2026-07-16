@@ -35,7 +35,7 @@ def _get_client() -> Client:
 def get_subscribers(newsletter_id: str) -> list[dict]:
     """Return [{"email": ..., "lang": ...}] for everyone subscribed to newsletter_id.
 
-    lang defaults to "en" for any subscriber missing from allowed_emails
+    lang defaults to "sk" for any subscriber missing from allowed_emails
     (should not happen in practice, but the subscriber list and the
     allowed-login list are not formally guaranteed to be in lockstep).
     """
@@ -57,6 +57,6 @@ def get_subscribers(newsletter_id: str) -> list[dict]:
         .in_("email", emails)
         .execute()
     ).data
-    lang_by_email = {r["email"]: r.get("lang", "en") for r in langs}
+    lang_by_email = {r["email"]: r.get("lang", "sk") for r in langs}
 
-    return [{"email": e, "lang": lang_by_email.get(e, "en")} for e in emails]
+    return [{"email": e, "lang": lang_by_email.get(e, "sk")} for e in emails]

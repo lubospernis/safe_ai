@@ -13,14 +13,21 @@
 -- ============================================================
 
 -- 1. Create the allowed_emails table
+-- Slovak is the default language for new signups; English remains available
+-- as an explicit opt-in (set lang = 'en' for a specific user to switch).
 CREATE TABLE IF NOT EXISTS public.allowed_emails (
   email TEXT PRIMARY KEY,
-  lang TEXT NOT NULL DEFAULT 'en' CHECK (lang IN ('en', 'sk')),
+  lang TEXT NOT NULL DEFAULT 'sk' CHECK (lang IN ('en', 'sk')),
   added_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- 1b. If the table already exists from before the lang column was added, run this:
--- ALTER TABLE public.allowed_emails ADD COLUMN IF NOT EXISTS lang TEXT NOT NULL DEFAULT 'en' CHECK (lang IN ('en', 'sk'));
+-- ALTER TABLE public.allowed_emails ADD COLUMN IF NOT EXISTS lang TEXT NOT NULL DEFAULT 'sk' CHECK (lang IN ('en', 'sk'));
+
+-- 1c. If the table already exists WITH the lang column defaulting to 'en', run this to
+-- flip the default for future signups only (does NOT change any existing subscriber's
+-- current lang — deliberately, so no one's existing preference is silently switched):
+-- ALTER TABLE public.allowed_emails ALTER COLUMN lang SET DEFAULT 'sk';
 
 -- 2. Enable Row Level Security
 ALTER TABLE public.allowed_emails ENABLE ROW LEVEL SECURITY;

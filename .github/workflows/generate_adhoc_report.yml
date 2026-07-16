@@ -86,10 +86,12 @@ jobs:
           git push
 
       - name: Rename adhoc reports for Pages
+        # SK is the default/primary published adhoc report — adhoc.html.
+        # EN remains available at adhoc-en.html.
         if: steps.run_adhoc.outputs.produced == 'true'
         run: |
-          cp reports/output/report_adhoc_latest.html reports/output/adhoc.html
-          cp reports/output/report_adhoc_latest_sk.html reports/output/adhoc-sk.html
+          cp reports/output/report_adhoc_latest_sk.html reports/output/adhoc.html
+          cp reports/output/report_adhoc_latest.html reports/output/adhoc-en.html
 
       - name: Publish adhoc pages to GitHub Pages
         if: steps.run_adhoc.outputs.produced == 'true'

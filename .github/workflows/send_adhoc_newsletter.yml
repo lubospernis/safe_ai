@@ -42,10 +42,14 @@ jobs:
           fi
 
       - name: Copy adhoc report HTML into expected path
+        # adhoc.html is now the SK (default/primary) report, adhoc-en.html is EN.
         if: steps.check.outputs.exists == 'true'
         run: |
           mkdir -p reports/output
-          cp gh-pages/adhoc.html reports/output/report_adhoc_latest.html
+          cp gh-pages/adhoc.html reports/output/report_adhoc_latest_sk.html
+          if [ -f gh-pages/adhoc-en.html ]; then
+            cp gh-pages/adhoc-en.html reports/output/report_adhoc_latest.html
+          fi
 
       - name: Set up Python 3.11
         if: steps.check.outputs.exists == 'true'

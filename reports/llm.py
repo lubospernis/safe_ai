@@ -181,30 +181,129 @@ def _check_numeric_grounding(bullets: list[str], df: pd.DataFrame, value_cols: l
     return errors
 
 
+def _cited_numbers(text: str) -> set[str]:
+    """Numbers appearing verbatim in text worth provenance-checking. Same >9/<=200
+    filter as _check_numeric_grounding (skip wave numbers, years, small counts)."""
+    out: set[str] = set()
+    for m in _NUMBER_RE.finditer(text):
+        num_str = m.group(1)
+        try:
+            iv = int(num_str.split(".")[0])
+        except ValueError:
+            continue
+        if iv <= 9 or iv > 200:
+            continue
+        out.add(num_str)
+    return out
+
+
+def _number_variants(num_str: str) -> set[str]:
+    """A number plus its rounded forms (1dp and integer), so a citation like
+    "21.8" matches a source value written as "21.78" — the exec-summary editor
+    pass regularly condenses precision when summarizing section bullets, which
+    is not a fabrication."""
+    try:
+        fv = float(num_str)
+    except ValueError:
+        return {num_str}
+    return {num_str, f"{fv:.1f}", str(int(round(fv)))}
+
+
+def _section_number_pool(text: str) -> set[str]:
+    """Every number in text, expanded to include rounded variants — the pool a
+    citation is checked against (see _number_variants)."""
+    pool: set[str] = set()
+    for num_str in _cited_numbers(text):
+        pool |= _number_variants(num_str)
+    return pool
+
+
 def _check_exec_provenance(exec_bullets: list[dict], rendered: list[dict]) -> list[str]:
-    """Return list of numbers in exec bullets that don't appear verbatim in the section bullets they cite."""
-    section_bullet_text: dict[str, str] = {
-        s["section_id"]: " ".join(s.get("bullets", []))
+    """Return list of numbers in exec bullets that don't appear (verbatim or
+    rounded — see _number_variants) in the section bullets they cite."""
+    section_pools: dict[str, set[str]] = {
+        s["section_id"]: _section_number_pool(" ".join(s.get("bullets", [])))
         for s in rendered
     }
     errors = []
     for item in exec_bullets:
         sid = item.get("section_id", "")
         bullet = item.get("bullet", "")
-        source_text = section_bullet_text.get(sid, "")
-        if not source_text:
+        if sid not in section_pools:
             continue
-        for m in _NUMBER_RE.finditer(bullet):
-            num = m.group(1)
-            try:
-                iv = int(num.split(".")[0])
-            except ValueError:
-                continue
-            if iv <= 9 or iv > 200:
-                continue
-            if num not in source_text:
-                errors.append(f"[{sid}] '{num}' in exec bullet not found in section bullets")
+        pool = section_pools[sid]
+        for cited in _cited_numbers(bullet):
+            if not (_number_variants(cited) & pool):
+                errors.append(f"[{sid}] '{cited}' in exec bullet not found in section bullets")
     return errors
+
+
+_MIN_MISLABEL_FIX_MATCH_RATIO = 0.7  # candidate section must explain >=70% of missing numbers
+
+
+def _fix_exec_provenance_mislabels(exec_bullets: list[dict], rendered: list[dict]) -> list[dict]:
+    """Auto-correct an exec bullet's section_id when it's a TOTAL mislabel — NONE of its
+    cited numbers belong to the claimed section — and one OTHER section clearly, and much
+    more than any other section, explains where the numbers came from.
+
+    This targets a real bug found in production: the editor pass occasionally writes a
+    bullet whose content is entirely about section A but tags it with section_id B (not
+    a genuine cross-cutting bullet mixing numbers from two sections — a plain mislabel).
+    The numbers are real and grounded, just attributed to the wrong section_id, so the
+    fix is to find where they actually came from rather than discard a correct bullet or
+    hard-block the run over a labeling slip.
+
+    A candidate section doesn't need to explain EVERY missing number — the editor pass
+    sometimes computes a small cross-clause comparison (e.g. "23 pp below the EA's net
+    17%", a comparison between two different sub-claims' figures) that won't literally
+    appear anywhere, even in the correct section. Requiring a 100% match on a real
+    production example missed 6 correctly-matching numbers over 1 non-matching one.
+    _MIN_MISLABEL_FIX_MATCH_RATIO requires a strong majority match instead, and the
+    candidate must be the UNIQUE best match (no tie) to avoid guessing between two
+    similarly-plausible sections.
+
+    Leaves the bullet untouched (and therefore still caught by _check_exec_provenance's
+    warning) if even ONE cited number belongs to the claimed section (likely a genuine
+    cross-cutting bullet, allowed by the exec-summary prompt) or if no single other
+    section is a clear, unique best match."""
+    section_pools: dict[str, set[str]] = {
+        s["section_id"]: _section_number_pool(" ".join(s.get("bullets", [])))
+        for s in rendered
+    }
+    fixed = []
+    for item in exec_bullets:
+        sid = item.get("section_id", "")
+        bullet = item.get("bullet", "")
+        cited = _cited_numbers(bullet)
+        claimed_pool = section_pools.get(sid, set())
+        # Which cited numbers are NOT found (verbatim or rounded) in the claimed
+        # section. Only consider re-tagging a TOTAL mislabel — every cited number
+        # missing from the claimed section. If at least one is present, this may be
+        # a genuine cross-cutting bullet mixing numbers from multiple sections on
+        # purpose (allowed by the exec-summary prompt) — leave it alone rather than guess.
+        missing = {n for n in cited if not (_number_variants(n) & claimed_pool)}
+        if not cited or missing != cited:
+            fixed.append(item)
+            continue
+        # Score every OTHER section by how many missing numbers it explains.
+        scores = {
+            other_sid: sum(1 for n in missing if _number_variants(n) & pool)
+            for other_sid, pool in section_pools.items()
+            if other_sid != sid
+        }
+        best_sid, best_score = max(scores.items(), key=lambda kv: kv[1], default=(None, 0))
+        runner_up = sorted(scores.values(), reverse=True)[1] if len(scores) > 1 else 0
+        if (
+            best_sid is not None
+            and best_score / len(missing) >= _MIN_MISLABEL_FIX_MATCH_RATIO
+            and best_score > runner_up
+        ):
+            print(f"  [EXEC PROVENANCE FIX] Re-tagged bullet from '{sid}' to '{best_sid}' "
+                  f"({best_score}/{len(missing)} cited numbers belong to {best_sid}, not {sid}): {bullet[:80]}")
+            fixed.append({**item, "section_id": best_sid})
+        else:
+            fixed.append(item)
+    return fixed
 
 
 def _is_reasoning_leak(bullet: str) -> bool:
@@ -1260,6 +1359,11 @@ def get_exec_summary(
         if len(result) >= 4:
             result = result[:3]  # drop weakest (last) to stay at 4
         result.append({"bullet": fallback_bullet, "section_id": "adhoc_spotlight"})
+
+    # Auto-correct bullets mislabeled with the wrong section_id (numbers are real and
+    # grounded, just attributed to the wrong section) before the provenance check —
+    # see _fix_exec_provenance_mislabels docstring for what this does and doesn't fix.
+    result = _fix_exec_provenance_mislabels(result, rendered_sections)
 
     # Exec provenance check — log warnings if exec bullets cite numbers not in section bullets
     prov_errors = _check_exec_provenance(result, rendered_sections)

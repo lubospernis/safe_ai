@@ -5,7 +5,8 @@ import pandas as pd
 import pytest
 
 from llm import (
-    _check_numeric_grounding, _fmt_data_for_prompt, _parse_section_response,
+    _check_exec_provenance, _check_numeric_grounding, _fix_exec_provenance_mislabels,
+    _fmt_data_for_prompt, _parse_section_response,
     _shorten_question_llm, _sme_divergence_note, build_section_signals,
     classify_ecb_emphasis, direction_reversal, get_exec_summary,
     get_shortened_questions, historical_extremity, reliable_n, sk_ea_gap, translate_to_slovak,
@@ -289,6 +290,75 @@ def test_grounding_check_still_flags_invented_number_despite_new_skips():
     )
     assert len(warnings) == 1
     assert "77.2" in warnings[0]
+
+
+# ── _check_exec_provenance / _fix_exec_provenance_mislabels ─────────────────
+
+def _rendered(section_id, *bullets):
+    return {"section_id": section_id, "bullets": list(bullets)}
+
+
+def test_exec_provenance_passes_when_numbers_match_claimed_section():
+    rendered = [_rendered("bank_loan_terms", "Rates rose 12.3pp for Slovak firms.")]
+    exec_bullets = [{"bullet": "Rates rose 12.3pp.", "section_id": "bank_loan_terms"}]
+    assert _check_exec_provenance(exec_bullets, rendered) == []
+
+
+def test_exec_provenance_flags_mismatch():
+    rendered = [_rendered("bank_loan_terms", "Rates rose 12.3pp for Slovak firms.")]
+    exec_bullets = [{"bullet": "A striking 99.7pp shift occurred.", "section_id": "bank_loan_terms"}]
+    errors = _check_exec_provenance(exec_bullets, rendered)
+    assert len(errors) == 1
+    assert "99.7" in errors[0]
+
+
+def test_fix_mislabel_retags_bullet_to_the_correct_section():
+    # Real bug found in production (wave 38): an exec bullet entirely about
+    # business_situation (labour costs, turnover, profits) was tagged with
+    # section_id "bank_loan_terms" instead. The numbers are real and grounded
+    # — just attributed to the wrong section — so this should be silently
+    # re-tagged to the section they actually belong to.
+    rendered = [
+        _rendered("bank_loan_terms", "Bank loan interest rates rose 9.2pp."),
+        _rendered(
+            "business_situation",
+            "Labour costs rose 21.8 pp and 21 pp above the EA; turnover fell 26 pp; profits fell 23 pp below the EA's 17 pp.",
+        ),
+    ]
+    exec_bullets = [{
+        "bullet": "**Margin squeeze intensifies:** labour costs up 21.8 pp and 21 pp above the EA, "
+                  "turnover fell for a net 26%, profits declined — 23 pp below the EA's net 17%.",
+        "section_id": "bank_loan_terms",
+    }]
+    fixed = _fix_exec_provenance_mislabels(exec_bullets, rendered)
+    assert fixed[0]["section_id"] == "business_situation"
+    # And the provenance check is clean after the fix.
+    assert _check_exec_provenance(fixed, rendered) == []
+
+
+def test_fix_mislabel_leaves_genuine_cross_cutting_bullet_untouched():
+    # A bullet that genuinely cites numbers from TWO different sections is
+    # ambiguous — there's no single correct section to re-tag it to, so it
+    # must be left as-is (still caught by the provenance warning, not silently
+    # "fixed" to an arbitrary guess).
+    rendered = [
+        _rendered("bank_loan_terms", "Rates rose 12.3pp for Slovak firms."),
+        _rendered("business_situation", "Labour costs rose 21.8pp."),
+    ]
+    exec_bullets = [{
+        "bullet": "Rates rose 12.3pp while labour costs climbed 21.8pp.",
+        "section_id": "bank_loan_terms",
+    }]
+    fixed = _fix_exec_provenance_mislabels(exec_bullets, rendered)
+    assert fixed[0]["section_id"] == "bank_loan_terms"  # unchanged
+
+
+def test_fix_mislabel_leaves_bullet_untouched_when_no_section_matches():
+    rendered = [_rendered("bank_loan_terms", "Rates rose 9.2pp.")]
+    exec_bullets = [{"bullet": "A striking 99.7pp shift occurred.", "section_id": "bank_loan_terms"}]
+    fixed = _fix_exec_provenance_mislabels(exec_bullets, rendered)
+    assert fixed[0]["section_id"] == "bank_loan_terms"  # unchanged, still flagged by the check
+    assert len(_check_exec_provenance(fixed, rendered)) == 1
 
 
 # ── _shorten_question_llm ────────────────────────────────────────────────────

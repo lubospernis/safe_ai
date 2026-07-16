@@ -616,5 +616,78 @@
       "chart_alignment": 7
     },
     "review_passed": false
+  },
+  {
+    "run_type": "adhoc",
+    "run_date": "2026-07-16",
+    "run_time": "15:09:41",
+    "sections_summary": [
+      {
+        "section_id": "adhoc_spotlight",
+        "finding": "Slovak firms trail the euro area in AI intensity and planned investment, yet overestimate peer adoption in larger economies.",
+        "bullets": [
+          "46.5% of Slovak firms report very infrequent or pilot use of AI, 13.8 pp above the EA's 32.7%, while moderate use stands at 17.1% versus 31.2% in the EA.",
+          "The gap in moderate use (17.1% SK vs 31.2% EA) points to a concentration of Slovak AI engagement at the earliest adoption stage rather than scaled deployment.",
+          "Slovak AI-using firms are less likely than EA peers to cite improving core area processes as a primary reason (11.7% vs 21.3%), consistent with their lower rate of moderate or intensive AI use.",
+          "Improving non-core area processes is the top reason in Slovakia (47.9% vs EA 42.2%), reinforcing the pattern of peripheral rather than operational AI integration.",
+          "Incompatibility with existing systems is the leading barrier to greater AI use in Slovakia (28.4%), versus lack of AI skills in the euro area (31.8%); the gap on incompatibility between SK and EA is narrow (28.4% vs 30.1%).",
+          "Slovak firms cite 'AI is not useful for my firm' at 31.5% versus EA's 26.1%, the largest cross-country divergence among the barriers shown, reflecting lower perceived relevance.",
+          "Slovak firms expect to allocate 5.5% of total investment to AI over the next 12 months, below the EA's 7.3% and Germany's 8.4%, consistent with their earlier-stage adoption profile.",
+          "Slovak firms estimate that 25.6% of similar firms in Germany, France and Italy had invested in AI by June 2025, versus an EA average estimate of 19.0% — a 6.6 pp gap that implies Slovak firms hold a more optimistic view of western-economy AI penetration than EA respondents overall.",
+          "For domestic peers, Slovak firms estimate 14.1% had invested in AI by mid-2025, 1.5 pp below the EA average of 15.6%, broadly in line with the EA.",
+          "Slovak firms expect only 23.7% of domestic SME peers to invest in AI over the next 12 months, 6.8 pp below the EA's 30.5%, while expectations for large domestic peers (23.4% vs EA 26.1%) show a smaller gap.",
+          "For peers in Germany, France and Italy, Slovak firms' expectations are close to or above the EA average — 31.4% vs EA 33.3% for SMEs and 35.0% vs EA 29.4% for large firms — continuing the pattern of more optimistic assessments of western-economy AI investment."
+        ]
+      }
+    ],
+    "wave_number": 37,
+    "total_cost_usd": 0.23976,
+    "input_tokens": 27995,
+    "output_tokens": 9235,
+    "cache_read_tokens": 0,
+    "model_sonnet": "claude-opus-4-8",
+    "model_mistral": "mistral-large-2512",
+    "cost_by_model": {
+      "claude-opus-4-8": {
+        "calls": 2,
+        "input_tokens": 5913,
+        "output_tokens": 731,
+        "usd": 0.14352
+      },
+      "claude-sonnet-4-6": {
+        "calls": 1,
+        "input_tokens": 8007,
+        "output_tokens": 730,
+        "usd": 0.03497
+      },
+      "mistral-large-2512": {
+        "calls": 2,
+        "input_tokens": 8939,
+        "output_tokens": 7114,
+        "usd": 0.06056
+      },
+      "mistral-small-latest": {
+        "calls": 6,
+        "input_tokens": 5136,
+        "output_tokens": 660,
+        "usd": 0.00071
+      }
+    },
+    "n_sections": 1,
+    "duration_seconds": 188.9,
+    "context_sources": {
+      "adhoc_module": "qa1",
+      "adhoc_topic": "Artificial intelligence technologies",
+      "questionnaire_url": "https://www.ecb.europa.eu/stats/accesstofinancesofenterprises/pdf/questionnaire/ecb.safeq202602.en.pdf",
+      "questionnaire_labels_parsed": true
+    },
+    "grounding_warning_count": 2,
+    "review_scores": {
+      "grounding": 9,
+      "coverage": 8,
+      "readability": 9,
+      "chart_alignment": 7
+    },
+    "review_passed": false
   }
 ]

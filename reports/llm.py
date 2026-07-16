@@ -182,9 +182,18 @@ INTEREST_SYSTEM = textwrap.dedent("""
 NBS_STYLE_GUIDE = textwrap.dedent("""
     Language and tone (modelled on NBS/ECB financial stability reports):
     - Use precise quantitative language: "rose from X% to Y%", "declined by Z pp", "increased marginally"
-    - Qualitative intensity must match data magnitude (these are the exact thresholds a
-      code-enforced check will apply after you write the bullet — a value outside the
-      stated range for a word will FAIL the quality gate and block publication):
+    - DEFAULT TO NO INTENSITY ADVERB. When you state both figures or the pp gap (e.g.
+      "17.1% in Slovakia vs 31.2% in the EA"), the reader already sees the magnitude —
+      an adverb on top is usually redundant, not informative, and often reads as
+      editorializing. Only add one when it changes the reader's interpretation (e.g.
+      flagging that an unexpectedly small change is noteworthy). Never stack an
+      intensity adverb onto a sentence whose subject is itself a magnitude label
+      (e.g. a response option literally called "moderate use") — that reads as
+      redundant regardless of the pp value.
+    - If you do use an intensity adverb, it must match data magnitude (these are the
+      exact thresholds a code-enforced check will apply after you write the bullet —
+      a value outside the stated range for a word will FAIL the quality gate and
+      block publication):
       * "marginally" / "slightly" = change ≤ 2 pp
       * "mildly" = change ≤ 3 pp
       * "moderately" = change ≥ 5 pp

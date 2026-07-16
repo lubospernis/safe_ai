@@ -37,6 +37,59 @@ EMIT_SECTION_TOOL = {
     },
 }
 
+# Given to the exec-summary editor pass (get_exec_summary) so it never does
+# arithmetic in prose. Rather than teaching grounding/provenance checks to
+# recognize every phrasing an LLM might invent for a computed delta after the
+# fact (an arms race — see _is_verified_pp_delta's history), the model calls
+# this tool and MUST cite the exact returned value, not its own mental math.
+COMPUTE_DELTA_TOOL = {
+    "name": "compute_delta",
+    "description": (
+        "Compute the exact difference between two numbers you want to compare in a "
+        "bullet (a wave-over-wave change, an SK-vs-EA gap, or any other numeric "
+        "comparison). ALWAYS use this instead of doing the subtraction yourself — "
+        "your mental arithmetic is not trusted and will be checked; a value from "
+        "this tool is. Returns the exact result to cite verbatim."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "a": {"type": "number", "description": "First value"},
+            "b": {"type": "number", "description": "Second value"},
+            "label": {"type": "string", "description": "Short description, e.g. 'SK labour costs wave38 minus wave37'"},
+        },
+        "required": ["a", "b"],
+    },
+}
+
+EMIT_EXEC_BULLETS_TOOL = {
+    "name": "emit_exec_bullets",
+    "description": "Emit the final executive-summary bullets as structured output.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "bullets": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "bullet": {"type": "string"},
+                        "section_id": {"type": "string"},
+                    },
+                    "required": ["bullet", "section_id"],
+                },
+                "minItems": 1,
+                "maxItems": 4,
+            },
+        },
+        "required": ["bullets"],
+    },
+}
+
+
+def _compute_delta(a: float, b: float) -> float:
+    return round(a - b, 4)
+
 # Patterns that indicate leaked LLM reasoning rather than published bullet content
 _LEAKED_PATTERNS = re.compile(
     r"^("
@@ -584,16 +637,21 @@ EXEC_SUMMARY_SYSTEM = textwrap.dedent(f"""
       overall claim while citing only one instrument. Either: (a) aggregate across instruments,
       or (b) narrow the claim to the specific instrument — e.g. "credit line availability
       tightened" not "liquidity conditions tightened".
-    - Number provenance: every number you cite in a bullet must appear verbatim in the bullets
-      of the section you attribute that bullet to (its section_id). Do NOT mix numbers from
-      different sections into one bullet. If you want to mention a number from section X, that
-      bullet's section_id must be X.
+    - Number provenance: every number you cite in a bullet must EITHER (a) appear verbatim
+      (or rounded) in the bullets of the section you attribute that bullet to (its
+      section_id), OR (b) be the exact return value of a compute_delta tool call — never
+      a number you subtracted, compared, or otherwise computed in your own reasoning. If a
+      bullet needs a comparison that isn't already stated in the source bullets (a
+      wave-over-wave change, an SK-vs-EA gap, a cross-clause comparison), call compute_delta
+      with the two source values and cite the number IT returns, not your own arithmetic.
+      Do NOT mix numbers from different sections into one bullet unless each is either
+      directly from that section or a compute_delta result built from that section's own
+      numbers. If you want to mention a number from section X, that bullet's section_id
+      must be X.
 
-    Return a JSON array only — no markdown fences, no commentary:
-    [
-      {{"bullet": "**Label:** explanation", "section_id": "bank_loan_terms"}},
-      ...
-    ]
+    Once you have finished reasoning (and made any compute_delta calls you needed),
+    reply with plain text summarising your 3–4 chosen bullets and their section_ids —
+    you will then be asked to emit them in their final structured form separately.
 
     Valid section_id values (use exactly as written):
     bank_loan_terms, financing_gap, loan_applications, availability_expectations,
@@ -1316,7 +1374,12 @@ def get_exec_summary(
     # Pass 1: cross-section analyst — current wave only, no historical context
     themes = _claude_complete(EXEC_CROSS_SECTION_SYSTEM, section_text, 200)
 
-    # Pass 2: editor — receives historical context so it can add wave comparisons where warranted
+    # Pass 2: editor — tool-use loop. Has access to compute_delta so any comparison
+    # not already stated verbatim in the section bullets (a wave-over-wave change, an
+    # SK-vs-EA gap, a cross-clause comparison) is computed exactly rather than done in
+    # the model's own reasoning — see COMPUTE_DELTA_TOOL's docstring/comment for why
+    # (this closes the source of the pp-delta/mislabeling bugs at the root, rather
+    # than only detecting them after the fact via regex).
     history_block = (
         f"\n\nHistorical context (prior waves — use ONLY when it makes a current finding "
         f"more striking; omit otherwise):\n{historical_context}"
@@ -1327,26 +1390,67 @@ def get_exec_summary(
         f"Cross-cutting themes identified by first-pass analyst:\n{themes}"
         f"{history_block}"
     )
-    raw = _claude_complete(EXEC_SUMMARY_SYSTEM, user_msg, 600)
-    raw = re.sub(r"^```(?:json)?\s*", "", raw)
-    raw = re.sub(r"\s*```$", "", raw).strip()
-
-    try:
-        items = json.loads(repair_json(raw))
-        result = []
-        for item in items:
-            if not isinstance(item, dict):
+    messages = [{"role": "user", "content": user_msg}]
+    _MAX_EXEC_TOOL_TURNS = 3
+    for _ in range(_MAX_EXEC_TOOL_TURNS):
+        response = anthropic_client.messages.create(
+            model=_EXEC_MODEL,
+            max_tokens=600,
+            system=EXEC_SUMMARY_SYSTEM,
+            tools=[COMPUTE_DELTA_TOOL],
+            messages=messages,
+        )
+        _track_cost(cost_tracker, _EXEC_MODEL, response.usage)
+        if response.stop_reason != "tool_use":
+            messages.append({"role": "assistant", "content": response.content})
+            break
+        messages.append({"role": "assistant", "content": response.content})
+        tool_results = []
+        for block in response.content:
+            if block.type != "tool_use":
                 continue
-            bullet = str(item.get("bullet", "")).strip().lstrip("•- ")
-            sid = str(item.get("section_id", "")).strip()
-            if sid != "adhoc_spotlight":
-                bullet = bullet.lstrip("🔍 ")
-            if bullet:
-                result.append({"bullet": bullet, "section_id": sid if sid in section_ids else ""})
-        result = result[:4]
-    except Exception:
-        plain = [l.strip().lstrip("•- ") for l in raw.splitlines() if l.strip()]
-        result = [{"bullet": b, "section_id": ""} for b in plain[:4]]
+            a = block.input.get("a")
+            b = block.input.get("b")
+            label = block.input.get("label", "")
+            try:
+                value = _compute_delta(float(a), float(b))
+                content = f"{value}"
+                print(f"    [tool_use] compute_delta({a}, {b}) -> {value} ({label})")
+            except (TypeError, ValueError):
+                content = "ERROR: a and b must be numbers"
+            tool_results.append({"type": "tool_result", "tool_use_id": block.id, "content": content})
+        messages.append({"role": "user", "content": tool_results})
+
+    # Force structured output via emit_exec_bullets — cannot return plain text/JSON.
+    messages.append({
+        "role": "user",
+        "content": "Now emit your final 3-4 bullets using the emit_exec_bullets tool.",
+    })
+    emit_resp = anthropic_client.messages.create(
+        model=_EXEC_MODEL,
+        max_tokens=600,
+        system=EXEC_SUMMARY_SYSTEM,
+        tools=[EMIT_EXEC_BULLETS_TOOL],
+        tool_choice={"type": "any"},
+        messages=messages,
+    )
+    _track_cost(cost_tracker, _EXEC_MODEL, emit_resp.usage)
+
+    result = []
+    for block in emit_resp.content:
+        if getattr(block, "type", None) == "tool_use" and block.name == "emit_exec_bullets":
+            items = block.input.get("bullets", [])
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                bullet = str(item.get("bullet", "")).strip().lstrip("•- ")
+                sid = str(item.get("section_id", "")).strip()
+                if sid != "adhoc_spotlight":
+                    bullet = bullet.lstrip("🔍 ")
+                if bullet:
+                    result.append({"bullet": bullet, "section_id": sid if sid in section_ids else ""})
+            result = result[:4]
+            break
 
     # Guarantee one 🔍 adhoc bullet only when adhoc_spotlight was actually rendered
     adhoc_was_rendered = adhoc_section is not None and any(

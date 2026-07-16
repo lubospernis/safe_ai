@@ -779,22 +779,50 @@ def test_build_section_signals_skips_sections_not_in_registry():
 
 # ── get_exec_summary + [SIGNALS] prompt wiring ──────────────────────────────
 
+def _exec_usage_mock():
+    return MagicMock(input_tokens=10, output_tokens=5,
+                      cache_creation_input_tokens=0, cache_read_input_tokens=0)
+
+
+def _text_block(text):
+    return MagicMock(type="text", text=text)
+
+
+def _emit_exec_bullets_response(bullets):
+    resp = MagicMock()
+    resp.usage = _exec_usage_mock()
+    resp.stop_reason = "tool_use"
+    tool_block = MagicMock()
+    tool_block.type = "tool_use"
+    tool_block.name = "emit_exec_bullets"
+    tool_block.input = {"bullets": bullets}
+    resp.content = [tool_block]
+    return resp
+
+
 def test_get_exec_summary_includes_signals_line_in_prompt():
     anthropic_client = MagicMock()
     call_count = {"n": 0}
 
     def create_side_effect(*args, **kwargs):
         call_count["n"] += 1
-        resp = MagicMock()
-        resp.usage = MagicMock(input_tokens=10, output_tokens=5,
-                               cache_creation_input_tokens=0, cache_read_input_tokens=0)
         if call_count["n"] == 1:
-            resp.content = [MagicMock(text="No major cross-cutting themes.")]
-        else:
-            resp.content = [MagicMock(
-                text='[{"bullet": "**Test:** something.", "section_id": "financing_factors"}]'
-            )]
-        return resp
+            # Pass 1: cross-section themes (plain text, no tools)
+            resp = MagicMock()
+            resp.usage = _exec_usage_mock()
+            resp.content = [_text_block("No major cross-cutting themes.")]
+            return resp
+        if call_count["n"] == 2:
+            # Pass 2, first tool-use turn: model finishes without calling compute_delta
+            resp = MagicMock()
+            resp.usage = _exec_usage_mock()
+            resp.stop_reason = "end_turn"
+            resp.content = [_text_block("(reasoning, no tool call)")]
+            return resp
+        # Forced emit call
+        return _emit_exec_bullets_response(
+            [{"bullet": "**Test:** something.", "section_id": "financing_factors"}]
+        )
 
     anthropic_client.messages.create.side_effect = create_side_effect
 
@@ -813,13 +841,72 @@ def test_get_exec_summary_includes_signals_line_in_prompt():
     }
     tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
 
-    get_exec_summary(rendered, tracker, section_signals=signals, anthropic_client=anthropic_client)
+    result = get_exec_summary(rendered, tracker, section_signals=signals, anthropic_client=anthropic_client)
 
-    pass2_messages = anthropic_client.messages.create.call_args_list[-1].kwargs["messages"]
-    pass2_user_msg = pass2_messages[0]["content"]
+    assert result == [{"bullet": "**Test:** something.", "section_id": "financing_factors"}]
+
+    pass2_call = anthropic_client.messages.create.call_args_list[1]
+    pass2_user_msg = pass2_call.kwargs["messages"][0]["content"]
     assert "[SIGNALS]" in pass2_user_msg
     assert "tier=policy_technical" in pass2_user_msg
     assert "deprioritized: Access to public financial support (Q11b)" in pass2_user_msg
+
+
+def test_get_exec_summary_uses_compute_delta_tool_result_verbatim():
+    anthropic_client = MagicMock()
+    call_count = {"n": 0}
+    seen_messages_by_call: list[list] = []
+
+    def create_side_effect(*args, **kwargs):
+        call_count["n"] += 1
+        # Snapshot a deep-enough copy now — the real `messages` list is mutated
+        # in-place after this call, so call_args_list would otherwise only ever
+        # show its FINAL state for every recorded call (a Mock/mutable-list
+        # gotcha, not something the real code needs to guard against).
+        seen_messages_by_call.append(list(kwargs.get("messages", [])))
+        if call_count["n"] == 1:
+            resp = MagicMock()
+            resp.usage = _exec_usage_mock()
+            resp.content = [_text_block("theme")]
+            return resp
+        if call_count["n"] == 2:
+            # Model calls compute_delta(83.62, 61.84) instead of subtracting itself
+            resp = MagicMock()
+            resp.usage = _exec_usage_mock()
+            resp.stop_reason = "tool_use"
+            tool_block = MagicMock()
+            tool_block.type = "tool_use"
+            tool_block.id = "call_1"
+            tool_block.input = {"a": 83.62, "b": 61.84, "label": "labour costs delta"}
+            resp.content = [tool_block]
+            return resp
+        if call_count["n"] == 3:
+            # Model finishes reasoning after seeing the tool result
+            resp = MagicMock()
+            resp.usage = _exec_usage_mock()
+            resp.stop_reason = "end_turn"
+            resp.content = [_text_block("ok")]
+            return resp
+        return _emit_exec_bullets_response(
+            [{"bullet": "**Costs:** up 21.78pp.", "section_id": "business_situation"}]
+        )
+
+    anthropic_client.messages.create.side_effect = create_side_effect
+
+    rendered = [{
+        "section_id": "business_situation", "title": "Situation", "finding": "F",
+        "bullets": ["Labour costs rose to 83.62% from 61.84%."], "sign_note": "",
+    }]
+    tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
+
+    result = get_exec_summary(rendered, tracker, anthropic_client=anthropic_client)
+
+    assert result[0]["bullet"] == "**Costs:** up 21.78pp."
+    # Call #3 (index 2) is the first one made AFTER the tool result was appended —
+    # its messages must contain the exact computed value, not a re-derived one.
+    call3_messages = seen_messages_by_call[2]
+    tool_result_msg = call3_messages[-1]["content"]
+    assert tool_result_msg[0]["content"] == "21.78"
 
 
 # ── get_section_content_agentic mandatory-lead instruction ─────────────────

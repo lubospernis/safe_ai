@@ -78,10 +78,35 @@ class CostCeilingExceeded(RuntimeError):
     pass
 
 
+class UngroundedNumberError(RuntimeError):
+    pass
+
+
 def _check_cost_ceiling(cost_tracker: dict) -> None:
     if cost_tracker["usd"] > COST_CEILING_USD:
         raise CostCeilingExceeded(
             f"Spend ${cost_tracker['usd']:.2f} exceeded ceiling ${COST_CEILING_USD:.2f} — aborting run"
+        )
+
+
+def _check_grounding_blocking(rendered: list[dict]) -> None:
+    """Abort the run if any section has an ungrounded number. Promoted from
+    monitoring-only to blocking after: (1) the skip-pattern fixes for n=/wave-
+    reference/scale-denominator false positives (ROADMAP.md A8), verified via a
+    2026-07-07 calibration run against 136 logged warnings, and (2) a pp-delta
+    arithmetic false-positive fix (_is_verified_pp_delta) found via a live
+    2026-07-16 run. A real ungrounded number should never reach a published
+    report — see reports/output/run_log.json's historical grounding_warning_count
+    for the monitoring-era baseline this replaces."""
+    all_warnings = [
+        (s.get("section_id", "?"), w)
+        for s in rendered
+        for w in s.get("grounding_warnings", [])
+    ]
+    if all_warnings:
+        detail = "; ".join(f"[{sid}] {w}" for sid, w in all_warnings[:5])
+        raise UngroundedNumberError(
+            f"{len(all_warnings)} ungrounded number(s) found — aborting run: {detail}"
         )
 
 
@@ -319,6 +344,7 @@ def main() -> None:
     rendered = [rendered_map[s["id"]] for s in SECTIONS if s["id"] in rendered_map]
 
     _check_cost_ceiling(cost_tracker)
+    _check_grounding_blocking(rendered)
 
     if ecb_context:
         print("Sharpening bullets against ECB publication...")

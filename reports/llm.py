@@ -51,15 +51,50 @@ _LEAKED_PATTERNS = re.compile(
 
 _NUMBER_RE = re.compile(r'(?<!\d)(\d+(?:\.\d+)?)(?!\d)')
 
+# "13.8 pp above the EA's 32.7%" / "1.5 pp below the EA average of 15.6%" /
+# "gap of 6.8 pp" style phrasing — the pp figure is a CORRECTLY COMPUTED
+# difference of two other numbers in the same bullet (e.g. 46.5 - 32.7 = 13.8),
+# not a raw value that appears anywhere in the source DataFrame. Confirmed via a
+# real run (wave 37 adhoc): "46.5% ... 13.8 pp above the EA's 32.7%" flagged as
+# ungrounded even though 46.5 - 32.7 = 13.8 exactly — this is arithmetic on two
+# already-grounded numbers, not a fabrication.
+_PP_DELTA_RE = re.compile(r'pp\s+(?:above|below|higher|lower)|gap\s+of\s*$', re.IGNORECASE)
+
+
+def _is_verified_pp_delta(bullet: str, num_str: str, start: int, end: int) -> bool:
+    """True if num_str at [start:end] is immediately followed by pp-delta phrasing
+    ("13.8 pp above ...") and equals the absolute difference of two OTHER numbers
+    already present in the bullet, within 0.15 rounding tolerance."""
+    following = bullet[end:end + 15]
+    preceding = bullet[max(0, start - 10):start]
+    if not (_PP_DELTA_RE.match(following.lstrip()) or _PP_DELTA_RE.search(preceding)):
+        return False
+    try:
+        target = float(num_str)
+    except ValueError:
+        return False
+    other_numbers = [
+        float(m.group(1)) for m in _NUMBER_RE.finditer(bullet)
+        if not (m.start() == start and m.end() == end)
+    ]
+    return any(
+        abs(abs(a - b) - target) < 0.15
+        for i, a in enumerate(other_numbers)
+        for b in other_numbers[i + 1:]
+    )
+
 
 def _check_numeric_grounding(bullets: list[str], df: pd.DataFrame, value_cols: list[str]) -> list[str]:
     """Return list of numbers in bullets that don't appear in any value column of df.
 
     Monitoring-only: callers log warnings but do not block on these errors.
     Numbers <= single digit or > 200 are skipped (wave numbers, counts, not cited values).
-    Also skipped: sample-size citations ("n=62"), wave references ("wave 37"), and
-    pressingness-scale denominators ("6.19/10") — these are legitimate non-data-value
-    numbers that previously produced a high false-positive rate (see ROADMAP.md A8).
+    Also skipped: sample-size citations ("n=62"), wave references ("wave 37"),
+    pressingness-scale denominators ("6.19/10"), and pp-deltas that are a verified
+    difference of two other numbers in the same bullet ("13.8 pp above ...", where
+    13.8 = the two other cited percentages' difference) — these are legitimate
+    non-data-value numbers that previously produced a high false-positive rate
+    (see ROADMAP.md A8).
     """
     data_numbers: set[str] = set()
     for col in value_cols:
@@ -96,6 +131,11 @@ def _check_numeric_grounding(bullets: list[str], df: pd.DataFrame, value_cols: l
             # Wave reference: "wave 37", "prior wave" style mentions right before the number
             preceding_word = bullet[max(0, start - 6):start]
             if re.search(r"wave\s*$", preceding_word, re.IGNORECASE):
+                continue
+
+            # Verified pp-delta: "13.8 pp above the EA's 32.7%" where 13.8 is the
+            # correctly-computed difference of two other numbers in the bullet.
+            if _is_verified_pp_delta(bullet, num_str, start, end):
                 continue
 
             try:

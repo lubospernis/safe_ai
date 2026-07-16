@@ -189,6 +189,41 @@ def test_grounding_check_still_flags_invented_number_near_n_equals():
     assert "99.7" in warnings[0]
 
 
+def test_grounding_check_accepts_verified_pp_delta():
+    # Real false positive found in production (wave 37 adhoc spotlight):
+    # "46.5% ... 13.8 pp above the EA's 32.7%" — 46.5 - 32.7 = 13.8 exactly,
+    # a correctly computed difference, but neither pp_delta_col contains "13.8"
+    # directly since it's arithmetic on two already-grounded percentages.
+    df = pd.DataFrame([{"pct_wtd": 46.5, "wave_number": 37}, {"pct_wtd": 32.7, "wave_number": 37}])
+    warnings = _check_numeric_grounding(
+        ["Slovak firms report 46.5% very infrequent AI use, 13.8 pp above the EA's 32.7%"],
+        df, ["pct_wtd"],
+    )
+    assert warnings == []
+
+
+def test_grounding_check_accepts_pp_below_phrasing():
+    df = pd.DataFrame([{"pct_wtd": 14.1, "wave_number": 37}, {"pct_wtd": 15.6, "wave_number": 37}])
+    warnings = _check_numeric_grounding(
+        ["Slovak firms estimate 14.1% had invested, 1.5 pp below the EA average of 15.6%"],
+        df, ["pct_wtd"],
+    )
+    assert warnings == []
+
+
+def test_grounding_check_still_flags_incorrect_pp_delta():
+    # The pp-delta phrasing is present, but the number does NOT match the actual
+    # difference of the two cited percentages (46.5 - 32.7 = 13.8, not 25.0) —
+    # this is a genuine fabrication and must still be flagged.
+    df = pd.DataFrame([{"pct_wtd": 46.5, "wave_number": 37}, {"pct_wtd": 32.7, "wave_number": 37}])
+    warnings = _check_numeric_grounding(
+        ["Slovak firms report 46.5% very infrequent AI use, 25.0 pp above the EA's 32.7%"],
+        df, ["pct_wtd"],
+    )
+    assert len(warnings) == 1
+    assert "25.0" in warnings[0]
+
+
 # ── _shorten_question_llm ────────────────────────────────────────────────────
 
 def _mock_mistral_response(content: str, prompt_tokens=20, completion_tokens=8):

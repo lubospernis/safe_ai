@@ -71,10 +71,26 @@ class CostCeilingExceeded(RuntimeError):
     pass
 
 
+class UngroundedNumberError(RuntimeError):
+    pass
+
+
 def _check_cost_ceiling(cost_tracker: dict) -> None:
     if cost_tracker["usd"] > COST_CEILING_USD:
         raise CostCeilingExceeded(
             f"Spend ${cost_tracker['usd']:.2f} exceeded ceiling ${COST_CEILING_USD:.2f} — aborting run"
+        )
+
+
+def _check_grounding_blocking(adhoc_section: dict) -> None:
+    """Abort the run if the adhoc spotlight has any ungrounded number. See
+    run_report.py::_check_grounding_blocking — same promotion from
+    monitoring-only, same underlying check (_check_numeric_grounding)."""
+    warnings = adhoc_section.get("grounding_warnings", [])
+    if warnings:
+        detail = "; ".join(warnings[:5])
+        raise UngroundedNumberError(
+            f"{len(warnings)} ungrounded number(s) in adhoc spotlight — aborting run: {detail}"
         )
 
 
@@ -197,6 +213,7 @@ def main() -> None:
         sys.exit(1)
 
     _check_cost_ceiling(cost_tracker)
+    _check_grounding_blocking(adhoc_section)
 
     print(f"  Adhoc spotlight generated: {adhoc_section['finding']}")
     if not adhoc_section.get("review_passed", True):

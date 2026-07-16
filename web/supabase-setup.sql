@@ -99,3 +99,81 @@ DROP POLICY IF EXISTS "self_delete" ON public.subscriptions;
 CREATE POLICY "self_delete" ON public.subscriptions
   FOR DELETE
   USING (email = auth.jwt() ->> 'email');
+
+-- 7b. Drop the old static newsletter_id allowlist now that newsletters are a
+-- real table (see below) — validation moves to the app layer (subscribe/
+-- unsubscribe routes check against public.newsletters directly). A FK isn't
+-- used here so a newsletter row can be deleted/renamed without being blocked
+-- by old subscription rows, matching how this schema already prefers RLS +
+-- app-level checks over FKs elsewhere.
+-- "subscriptions_newsletter_id_check" is Postgres's default {table}_{column}_check
+-- naming for the inline CHECK above — if this DROP is a no-op (constraint name
+-- differs), find the real name first:
+--   SELECT conname FROM pg_constraint WHERE conrelid = 'public.subscriptions'::regclass AND contype = 'c';
+ALTER TABLE public.subscriptions DROP CONSTRAINT IF EXISTS subscriptions_newsletter_id_check;
+
+-- ============================================================
+-- Newsletters — one row per tile shown on the home page. Replaces the
+-- hardcoded array in web/lib/newsletters.ts so new tiles (including
+-- link-only "custom project" cards) can be added without a code change.
+-- ============================================================
+
+-- 8. Create the newsletters table
+CREATE TABLE IF NOT EXISTS public.newsletters (
+  id              TEXT PRIMARY KEY,
+  icon            TEXT NOT NULL,
+  name_en         TEXT NOT NULL,
+  name_sk         TEXT NOT NULL,
+  description_en  TEXT NOT NULL,
+  description_sk  TEXT NOT NULL,
+  periodicity_en  TEXT NOT NULL,
+  periodicity_sk  TEXT NOT NULL,
+  -- Exactly one of these is expected to be set per row (app-level convention,
+  -- not DB-enforced): link_url for a plain static-link "custom project"
+  -- card; links_json_url for a SAFE-style card whose title link and
+  -- last_updated/next_release badges come from a fetched {en,sk,
+  -- last_updated,next_release} JSON file (see web/lib/latestLinks.ts).
+  link_url        TEXT,
+  links_json_url  TEXT,
+  is_experimental BOOLEAN NOT NULL DEFAULT false,
+  is_subscribable BOOLEAN NOT NULL DEFAULT true,
+  sort_order      INTEGER NOT NULL DEFAULT 0,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- 9. Enable Row Level Security
+ALTER TABLE public.newsletters ENABLE ROW LEVEL SECURITY;
+
+-- 10. Policy: any authenticated user can read (public reference data for
+--     rendering tiles). No INSERT/UPDATE/DELETE policy — admin changes are
+--     made directly via the Supabase SQL editor, same as allowed_emails.
+DROP POLICY IF EXISTS "authenticated_read" ON public.newsletters;
+CREATE POLICY "authenticated_read" ON public.newsletters
+  FOR SELECT
+  USING (auth.role() = 'authenticated');
+
+-- 11. Seed the two existing SAFE newsletters (migrated from the old
+-- hardcoded web/lib/newsletters.ts + web/lib/strings.ts STRINGS.newsletters).
+INSERT INTO public.newsletters
+  (id, icon, name_en, name_sk, description_en, description_sk, periodicity_en, periodicity_sk,
+   links_json_url, is_experimental, is_subscribable, sort_order)
+VALUES
+  (
+    'safe-regular', '🏦',
+    'SAFE Slovakia', 'SAFE Slovensko',
+    'Quarterly ECB Survey on the Access to Finance of Enterprises — Slovakia focus. Covers financing conditions, loan applications, business situation, and forward-looking expectations.',
+    'Štvrťročný prieskum ECB o prístupe firiem k financovaniu — zameranie na Slovensko. Zahŕňa podmienky financovania, žiadosti o úvery, obchodnú situáciu a výhľad do budúcnosti.',
+    'Quarterly', 'Štvrťročne',
+    'https://raw.githubusercontent.com/lubospernis/safe_ai/main/reports/output/latest_links.json',
+    false, true, 0
+  ),
+  (
+    'safe-adhoc', '🔦',
+    'SAFE Slovakia — Special Focus', 'SAFE Slovensko — Špeciálna téma',
+    'Ad-hoc deep dive on a special survey topic (e.g. AI adoption, green transition), sent whenever the ECB adds a one-off module to the SAFE survey.',
+    'Mimoriadny prehľad na špeciálnu tému prieskumu (napr. adopcia AI, zelená transformácia), zasielaný vždy, keď ECB doplní do prieskumu SAFE jednorazový modul.',
+    'Ad hoc', 'Príležitostne',
+    'https://raw.githubusercontent.com/lubospernis/safe_ai/main/reports/output/latest_adhoc_links.json',
+    true, true, 1
+  )
+ON CONFLICT (id) DO NOTHING;

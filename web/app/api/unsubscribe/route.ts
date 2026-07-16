@@ -1,6 +1,5 @@
 import { createServerSideClient } from "@/lib/supabase-server";
 import { unsubscribe } from "@/lib/subscriptions";
-import { NEWSLETTERS } from "@/lib/newsletters";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
@@ -15,7 +14,15 @@ export async function POST(request: Request) {
   }
 
   const { newsletterId } = await request.json();
-  if (!NEWSLETTERS.some((n) => n.id === newsletterId)) {
+  // No is_subscribable filter here — a user must always be able to
+  // unsubscribe from something they're subscribed to, even if the tile is
+  // later marked non-subscribable.
+  const { data: newsletterRow } = await supabase
+    .from("newsletters")
+    .select("id")
+    .eq("id", newsletterId)
+    .maybeSingle();
+  if (!newsletterRow) {
     return NextResponse.json({ error: "Invalid newsletter" }, { status: 400 });
   }
 

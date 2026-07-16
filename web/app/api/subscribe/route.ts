@@ -1,6 +1,5 @@
 import { createServerSideClient } from "@/lib/supabase-server";
 import { subscribe } from "@/lib/subscriptions";
-import { NEWSLETTERS } from "@/lib/newsletters";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
@@ -15,7 +14,13 @@ export async function POST(request: Request) {
   }
 
   const { newsletterId } = await request.json();
-  if (!NEWSLETTERS.some((n) => n.id === newsletterId)) {
+  const { data: newsletterRow } = await supabase
+    .from("newsletters")
+    .select("id")
+    .eq("id", newsletterId)
+    .eq("is_subscribable", true)
+    .maybeSingle();
+  if (!newsletterRow) {
     return NextResponse.json({ error: "Invalid newsletter" }, { status: 400 });
   }
 

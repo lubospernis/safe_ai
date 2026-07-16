@@ -180,6 +180,18 @@
   border-radius: 12px;
 }
 
+.badgeWarn {
+  display: inline-block;
+  background: #fdf0e0;
+  color: #a35d00;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
 .footnote {
   margin: 4px 0 0;
   font-size: 11px;
@@ -276,6 +288,10 @@
   .badgeMuted {
     background: #2a2e35;
     color: #aaa;
+  }
+  .badgeWarn {
+    background: #4a3418;
+    color: #e0a860;
   }
   .footnote {
     color: #777;

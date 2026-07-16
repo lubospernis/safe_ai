@@ -1,8 +1,8 @@
 import { createServerSideClient } from "@/lib/supabase-server";
 import { getSubscriptions } from "@/lib/subscriptions";
-import { getLatestLinks, getLatestAdhocLinks, type LatestLinks } from "@/lib/latestLinks";
-import { NEWSLETTERS } from "@/lib/newsletters";
-import { STRINGS, type NewsletterId } from "@/lib/strings";
+import { fetchLinks, type LatestLinks } from "@/lib/latestLinks";
+import { getNewsletters } from "@/lib/newsletters";
+import { STRINGS } from "@/lib/strings";
 import { redirect } from "next/navigation";
 import SubscribeButton from "./SubscribeButton";
 import LanguageToggle from "./LanguageToggle";
@@ -45,14 +45,14 @@ export default async function Home() {
   const lang: "en" | "sk" = allowedRow?.lang === "en" ? "en" : "sk";
   const t = STRINGS[lang];
 
-  const [regularLinks, adhocLinks] = await Promise.all([
-    getLatestLinks(),
-    getLatestAdhocLinks(),
-  ]);
-  const linksByNewsletter: Record<string, LatestLinks | null> = {
-    "safe-regular": regularLinks,
-    "safe-adhoc": adhocLinks,
-  };
+  const newsletters = await getNewsletters(supabase);
+  const fetchedLinks = await Promise.all(
+    newsletters.map((nl) => (nl.linksJsonUrl ? fetchLinks(nl.linksJsonUrl) : Promise.resolve(null))),
+  );
+  const linksByNewsletter: Record<string, LatestLinks | null> = {};
+  newsletters.forEach((nl, i) => {
+    linksByNewsletter[nl.id] = fetchedLinks[i];
+  });
 
   return (
     <main className={styles.main}>
@@ -67,11 +67,11 @@ export default async function Home() {
       </header>
 
       <section className={styles.list}>
-        {NEWSLETTERS.map((nl) => {
+        {newsletters.map((nl) => {
           const isSubscribed = subscribedIds.has(nl.id);
-          const nlText = t.newsletters[nl.id as NewsletterId] ?? nl;
+          const nlText = { name: nl.name[lang], description: nl.description[lang], periodicity: nl.periodicity[lang] };
           const latestLinks = linksByNewsletter[nl.id] ?? null;
-          const reportUrl = latestLinks ? (latestLinks[lang] || latestLinks.en) : null;
+          const reportUrl = nl.linkUrl ?? (latestLinks ? (latestLinks[lang] || latestLinks.en) : null);
           return (
             <div key={nl.id} className={styles.card}>
               <div className={styles.cardIcon}>{nl.icon}</div>
@@ -94,6 +94,9 @@ export default async function Home() {
                 <p className={styles.cardFormat}>{t.formatDescription}</p>
                 <div className={styles.badgeRow}>
                   <span className={styles.badge}>{nlText.periodicity}</span>
+                  {nl.isExperimental && (
+                    <span className={styles.badgeWarn}>{t.experimentalBadge}</span>
+                  )}
                   {latestLinks?.last_updated && (
                     <span className={styles.badgeMuted}>
                       {t.lastUpdated.replace("{date}", formatDate(latestLinks.last_updated, lang))}
@@ -109,13 +112,15 @@ export default async function Home() {
                   <p className={styles.footnote}>{t.nextReleaseFootnote}</p>
                 )}
               </div>
-              <SubscribeButton
-                newsletterId={nl.id}
-                isSubscribed={isSubscribed}
-                subscribeLabel={t.subscribe}
-                unsubscribeLabel={t.unsubscribe}
-                errorLabel={t.somethingWentWrong}
-              />
+              {nl.isSubscribable && (
+                <SubscribeButton
+                  newsletterId={nl.id}
+                  isSubscribed={isSubscribed}
+                  subscribeLabel={t.subscribe}
+                  unsubscribeLabel={t.unsubscribe}
+                  errorLabel={t.somethingWentWrong}
+                />
+              )}
             </div>
           );
         })}

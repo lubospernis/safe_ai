@@ -95,9 +95,11 @@ HTML_PAGE = textwrap.dedent("""
 <html lang="{lang}">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title_str}</title>
 <style>
   /* NBS brand: Sitka Banner for headings, Arial for body */
+  * {{ box-sizing: border-box; }}
   body        {{ font-family: Arial, sans-serif; background: #f4f4f4; color: #231f20;
                  max-width: 1200px; margin: 40px auto; padding: 0 24px; }}
   h1          {{ font-family: "Sitka Banner", "Sitka Text", Georgia, serif;
@@ -151,8 +153,9 @@ HTML_PAGE = textwrap.dedent("""
   summary     {{ font-weight: bold; font-size: 13px; cursor: pointer; color: #555;
                  user-select: none; }}
   summary:hover {{ color: #231f20; }}
-  details table           {{ width: 100%; border-collapse: collapse; margin-top: 12px;
-                             font-size: 12px; }}
+  .annex-table-wrap        {{ overflow-x: auto; -webkit-overflow-scrolling: touch; }}
+  details table           {{ width: 100%; min-width: 480px; border-collapse: collapse;
+                             margin-top: 12px; font-size: 12px; }}
   details td, details th  {{ padding: 5px 8px; border-bottom: 1px solid #f0f0f0;
                              vertical-align: top; }}
   details th              {{ font-weight: bold; background: #f8f8f8; text-align: left; }}
@@ -161,6 +164,22 @@ HTML_PAGE = textwrap.dedent("""
                              border-radius: 3px; font-size: 11px; }}
   .badge-ecb              {{ background: #eef2f9; color: #2B5291; padding: 1px 6px;
                              border-radius: 3px; font-size: 11px; }}
+
+  /* Mobile: single-column stack, tighter spacing, full-width charts */
+  @media (max-width: 700px) {{
+    body            {{ margin: 16px auto; padding: 0 14px; }}
+    h1              {{ font-size: 21px; }}
+    section         {{ padding: 16px 18px; margin-bottom: 14px; }}
+    h2              {{ font-size: 16px; margin: 26px 0 10px 0; }}
+    .exec-flex      {{ flex-direction: column; gap: 14px; }}
+    .exec-painting  {{ order: 2; max-width: 220px; margin: 0 auto; }}
+    .exec-summary   {{ order: 1; flex: none; width: 100%; padding: 16px 18px; }}
+    .chart-img,
+    .chart-img.chart-img--flex-third {{ max-width: 100%; min-width: 0; }}
+    .lang-switch    {{ float: none; display: inline-block; margin-bottom: 10px; }}
+    #toc            {{ padding: 12px 16px; }}
+    details         {{ padding: 12px 14px; }}
+  }}
 </style>
 </head>
 <body>
@@ -419,6 +438,7 @@ def build_annex_html(con=None, ui: dict | None = None, question_texts_override: 
     return textwrap.dedent(f"""
 <details>
   <summary>{annex_summary} ({len(q_texts)} questions)</summary>
+  <div class="annex-table-wrap">
   <table>
     <thead>
       <tr><th>{col_topic}</th><th>{col_id}</th><th>{col_question}</th><th>{col_module}</th></tr>
@@ -427,6 +447,7 @@ def build_annex_html(con=None, ui: dict | None = None, question_texts_override: 
 {rows_html}
     </tbody>
   </table>
+  </div>
 </details>
 """).strip()
 

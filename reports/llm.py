@@ -724,10 +724,27 @@ def _fmt_data_for_prompt(sec: dict, df: pd.DataFrame) -> str:
     prev = df[df["wave_number"] == prev_wave]
 
     if sec["id"] == "financing_gap":
+        def composite_gap(d: pd.DataFrame) -> dict[str, float]:
+            """Simple average of financing_gap_wtd across instruments with a non-null
+            value, per country. NOT a reproduction of ECB's own published Chart 4
+            composite (their internal instrument-weighting isn't public) — always
+            presented as "average across N instruments with available data", never
+            claimed to match ECB's figure exactly."""
+            main_rows = d[d.get("chart_type", "main") == "main"] if "chart_type" in d.columns else d
+            out: dict[str, float] = {}
+            for country in ("SK", "EA"):
+                vals = main_rows[
+                    (main_rows["country_code"] == country) & main_rows["financing_gap_wtd"].notna()
+                ]["financing_gap_wtd"]
+                if len(vals) >= 2:  # a single instrument isn't a "composite"
+                    out[country] = float(vals.mean())
+            return out
+
         def fmt_gap(d: pd.DataFrame, label: str) -> str:
             rows = [f"{label}:"]
             main_rows = d[d.get("chart_type", "main") == "main"] if "chart_type" in d.columns else d
             by_inst = main_rows.groupby("sub_item")
+            n_instruments = 0
             for sub_item, grp in sorted(by_inst, key=lambda x: x[0]):
                 inst_label = grp["sub_item_label"].iloc[0] if not grp.empty else sub_item
                 rows.append(f"  [{inst_label}]")
@@ -744,6 +761,7 @@ def _fmt_data_for_prompt(sec: dict, df: pd.DataFrame) -> str:
                     if r["country_code"] == "EA" and pd.notna(gap_val):
                         ea_gap = gap_val
                 if sk_gap is not None and ea_gap is not None:
+                    n_instruments += 1
                     diff = sk_gap - ea_gap
                     if diff > 0:
                         comparison = f"SK gap is {diff:+.1f}pp HIGHER than EA → SK MORE stressed than EA"
@@ -752,6 +770,17 @@ def _fmt_data_for_prompt(sec: dict, df: pd.DataFrame) -> str:
                     else:
                         comparison = "SK gap equals EA gap"
                     rows.append(f"    ↳ Comparison: {comparison}")
+            gaps = composite_gap(d)
+            if "SK" in gaps and "EA" in gaps:
+                rows.append(
+                    f"  [COMPOSITE — average across {n_instruments} instruments with data]\n"
+                    f"    SK={gaps['SK']:+.1f}pp | EA={gaps['EA']:+.1f}pp | "
+                    f"diff={gaps['SK'] - gaps['EA']:+.1f}pp\n"
+                    f"    This is OUR average across available instruments, NOT ECB's own "
+                    f"published composite figure (their exact instrument-weighting isn't "
+                    f"public) — if cited, must be described as \"an average across "
+                    f"{n_instruments} instruments\", never as \"the ECB composite gap\"."
+                )
             return "\n".join(rows)
         return fmt_gap(latest, f"Wave {latest_wave} (latest)") + "\n\n" + fmt_gap(prev, f"Wave {prev_wave} (previous)")
 

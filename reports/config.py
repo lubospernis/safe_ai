@@ -89,7 +89,14 @@ SECTIONS = [
             "diverges from the bank loan gap (e.g. tight credit lines but easy bank loans), name it "
             "directly: 'While bank loan conditions eased, the credit line gap remained wide at Xpp, "
             "driven by rising need rather than tighter supply.' "
-            "This cross-instrument comparison is the most analytically important part of the section."
+            "This cross-instrument comparison is the most analytically important part of the section. "
+            "A [COMPOSITE] line (average gap across all available instruments) is also provided — "
+            "cite it ONLY if it adds something the per-instrument bullets don't already show, e.g. "
+            "SK's composite gap diverges notably from EA's, or SK's composite moved sharply wave-over-"
+            "wave. Do NOT cite it just because it exists — most waves, the per-instrument story is "
+            "more informative and the composite adds nothing. If you do cite it, always describe it "
+            "exactly as \"an average across N instruments with available data\", NEVER as \"the ECB "
+            "composite gap\" — it is our own calculation, not a reproduction of ECB's published figure."
         ),
     },
     {

@@ -108,6 +108,56 @@ def test_fmt_data_for_prompt_delta_present(section_stub, net_balance_df):
     assert "Δ=" in text
 
 
+# ── _fmt_data_for_prompt: financing_gap composite ────────────────────────────
+
+def _financing_gap_section_stub():
+    return {"id": "financing_gap", "sql_file": "financing_gap.sql"}
+
+
+def _financing_gap_df(gaps_by_country_instrument: dict[str, dict[str, float]]) -> pd.DataFrame:
+    """gaps_by_country_instrument: {country: {sub_item: gap_value}}."""
+    labels = {"a": "Bank loans", "b": "Trade credit", "f": "Credit lines"}
+    rows = []
+    for wave in [37, 38]:
+        for country, by_inst in gaps_by_country_instrument.items():
+            for sub_item, gap in by_inst.items():
+                rows.append({
+                    "wave_number": wave, "country_code": country, "chart_type": "main",
+                    "sub_item": sub_item, "sub_item_label": labels[sub_item],
+                    "need_nb": 5.0, "availability_nb": 2.0,
+                    "financing_gap_wtd": gap, "n_respondents_need": 100,
+                })
+    return pd.DataFrame(rows)
+
+
+def test_financing_gap_composite_appears_with_three_instruments():
+    df = _financing_gap_df({
+        "SK": {"a": -4.0, "b": 6.3, "f": 14.8},
+        "EA": {"a": 1.7, "b": -2.0, "f": 3.7},
+    })
+    text = _fmt_data_for_prompt(_financing_gap_section_stub(), df)
+    assert "COMPOSITE" in text
+    # (-4.0 + 6.3 + 14.8) / 3 = 5.7
+    assert "SK=+5.7pp" in text
+
+
+def test_financing_gap_composite_absent_with_one_instrument():
+    # A single instrument isn't a "composite" — must not appear.
+    df = _financing_gap_df({"SK": {"a": -4.0}, "EA": {"a": 1.7}})
+    text = _fmt_data_for_prompt(_financing_gap_section_stub(), df)
+    assert "COMPOSITE" not in text
+
+
+def test_financing_gap_composite_labelled_as_own_average_not_ecb():
+    df = _financing_gap_df({
+        "SK": {"a": -4.0, "b": 6.3},
+        "EA": {"a": 1.7, "b": -2.0},
+    })
+    text = _fmt_data_for_prompt(_financing_gap_section_stub(), df)
+    assert "average across" in text
+    assert "NOT ECB's own published composite" in text
+
+
 # ── _check_numeric_grounding ─────────────────────────────────────────────────
 
 def test_grounding_check_passes_real_number():

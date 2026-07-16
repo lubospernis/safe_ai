@@ -20,7 +20,10 @@ from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from mistralai import Mistral
 
-from evals import check_bare_response_codes, check_magnitude_calibration, check_sign_language
+from evals import (
+    check_bare_response_codes, check_bullet_length, check_magnitude_calibration,
+    check_sign_language,
+)
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
@@ -173,6 +176,7 @@ def run_deterministic_checks(html: str) -> list[str]:
         errors.extend(check_sign_language(bullet))
         errors.extend(check_magnitude_calibration(bullet))
         errors.extend(check_bare_response_codes(bullet))
+        errors.extend(check_bullet_length(bullet))
     return errors
 
 

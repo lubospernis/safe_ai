@@ -469,7 +469,11 @@ SECTION_CONTENT_SYSTEM = textwrap.dedent("""
       - Frame as firm behaviour: "a net 26% of firms reported..." NOT "the net balance rose"
       - Compare to prior wave: "compared with a net X% in the previous quarter"
       - Include sample size for SK and EA where available: "a net 26% of firms (n=80)..."
-      - One sentence per bullet, max ~25 words.
+      - One sentence per bullet, max ~25 words (hard ceiling 35 — a code-enforced
+        check rejects anything longer). Pick the SINGLE most important fact and
+        state it. Do NOT stack multiple sub-claims into one bullet with
+        "while X... and Y also..." or an em-dash aside adding a second fact —
+        each additional clause is a separate bullet, or gets cut.
       - When citing a rate (application_rate, discouragement_rate, rejection_rate), always
         give n_respondents in parentheses immediately after the rate.
       - Avoid dramatic language: never write "surged", "collapsed", or "plummeted".
@@ -609,7 +613,11 @@ EXEC_SUMMARY_SYSTEM = textwrap.dedent(f"""
     qualifying bullet from the same section's other bullets.
 
     FORMAT — every bullet must follow this exact structure:
-      **Short label (2–4 words):** One concise sentence of explanation.
+      **Short label (2–4 words):** One concise sentence of explanation, max ~25
+      words (hard ceiling 35 — a code-enforced check rejects anything longer).
+      State the single most important fact. Do NOT stack a second or third
+      sub-claim onto the same bullet with "while X... and Y also..." or an
+      em-dash aside — pick the sharpest fact and cut the rest, don't cram it in.
 
     Examples of well-formed bullets:
       **Interest rate tightening:** Slovak firms reported a net increase in bank loan interest costs,
@@ -1788,9 +1796,19 @@ def translate_to_slovak(
         "Translate the following ECB SAFE survey report content to Slovak. "
         "Keep all numbers, percentages, and proper nouns (Slovakia, Euro Area, Germany, ECB, "
         "SAFE) unchanged. Use formal economic Slovak (not colloquial). "
+        "For \"exec_bullets\", \"sections\" (finding/bullets/title), and \"adhoc\" content: "
+        "write IDIOMATIC, NATIVE Slovak — do not mirror the English sentence's clause order or "
+        "structure word-for-word. A literal/calque translation that sounds grammatically odd "
+        "in Slovak is a FAILURE even if every word is individually correct. In particular, "
+        "many English headlines use a noun as the grammatical subject of a verb it wouldn't "
+        "naturally take in Slovak (e.g. \"Credit line stress widened sharply\" — \"stres sa "
+        "rozšíril\" is not idiomatic; restructure around what actually widened, e.g. \"medzera "
+        "vo financovaní úverových liniek sa výrazne rozšírila\", or lead with the cause). "
+        "When in doubt, translate the MEANING, not the sentence structure. "
         "If an \"annex_questions\" object is present, translate every question text value "
         "(keep the keys, i.e. question IDs, unchanged) — these are official survey question "
-        "wordings shown in a glossary, translate them faithfully rather than paraphrasing. "
+        "wordings shown in a glossary; for THIS field only, translate faithfully/literally "
+        "rather than paraphrasing, since it must match the ECB's published wording. "
         "Return valid JSON only — no markdown fences — with exactly the same structure as the input.\n\n"
         + json.dumps(payload, ensure_ascii=False)
     )

@@ -10,7 +10,10 @@ from pathlib import Path
 
 import yaml
 
-from evals import check_bare_response_codes, check_magnitude_calibration, check_sign_language
+from evals import (
+    check_bare_response_codes, check_bullet_length, check_magnitude_calibration,
+    check_sign_language,
+)
 
 GOLDEN_DIR = Path(__file__).parent / "golden"
 
@@ -156,6 +159,34 @@ def test_bare_response_code_passes_labelled_bullet():
         "(SK 46.5% vs EA 32.7%) and a lower share with moderate use (SK 17.1% vs EA 31.2%)."
     )
     assert not check_bare_response_codes(good)
+
+
+def test_bullet_length_flags_real_production_runaway_bullet():
+    # Real bullet from a live wave-38 report (financing_gap section) — 51 words,
+    # a "while X, Y also happened, and Z" compound-clause pattern the ~25-word
+    # prompt guidance was never code-enforced against.
+    bad = (
+        "The credit-line financing gap widened by 10.0 pp to +14.8 pp — driven almost "
+        "entirely by a 9.2 pp rise in liquidity need — moving Slovak firms from less "
+        "stressed than the EA to more stressed, while fixed-investment financing "
+        "purposes fell 6.1 pp to 34.2% and hiring financing rose to 31.1%."
+    )
+    errors = check_bullet_length(bad)
+    assert errors
+    assert "51" in errors[0]
+
+
+def test_bullet_length_passes_bullet_within_target():
+    good = "Bank loan interest rates tightened for a net 12% of Slovak firms (n=80), easing 1.8pp from wave 37."
+    assert not check_bullet_length(good)
+
+
+def test_bullet_length_ceiling_is_looser_than_prompt_target():
+    # The 35-word hard ceiling is deliberately looser than the prompt's own
+    # ~25-word target (catches genuine runaways, not a restatement of the
+    # style goal) — a 30-word bullet should NOT be flagged.
+    thirty_words = " ".join(["word"] * 30)
+    assert not check_bullet_length(thirty_words)
 
 
 def test_bare_response_code_passes_unrelated_bullet():

@@ -104,3 +104,23 @@ def check_bare_response_codes(bullet: str) -> list[str]:
     if m:
         errors.append(f"Bare response code cited without a label ('{m.group(0)}'): {bullet[:120]}")
     return errors
+
+
+# Prompts already say "one sentence per bullet, max ~25 words" (SECTION_CONTENT_SYSTEM)
+# but that guidance was never code-enforced — real bullets were found running 50+ words
+# (double the target) in a live wave-38 report. 35 is deliberately looser than the
+# prompt's own 25-word target: this is a hard ceiling catching genuine runaway
+# compound-clause bullets, not a re-statement of the style goal, and needs slack for
+# Slovak (often needs more words than English for the same content) since this check
+# runs against both EN and SK reports via the same quality_check.py pass.
+_MAX_BULLET_WORDS = 35
+
+
+def check_bullet_length(bullet: str) -> list[str]:
+    """Flag a bullet that blows well past the "~25 words, one sentence" style guidance —
+    a strong signal of the "while X, Y also happened, and Z" compound-clause pattern
+    that makes bullets hard to skim."""
+    word_count = len(bullet.split())
+    if word_count > _MAX_BULLET_WORDS:
+        return [f"Bullet is {word_count} words (target ~25, hard ceiling {_MAX_BULLET_WORDS}): {bullet[:100]}"]
+    return []

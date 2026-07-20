@@ -17,8 +17,9 @@ from db import (
     MART_QUERY_TEMPLATES, MAX_TOOL_TURNS, PROD_SCHEMA, QUERY_MART_TOOL, _get_connection,
     _run_query_tool,
 )
+from evals import check_all_style
 
-MAX_GROUNDING_RETRIES = 2  # feedback-and-regenerate attempts before dropping an ungrounded bullet
+MAX_SECTION_REVISION_RETRIES = 2  # feedback-and-regenerate attempts for grounding/style issues
 
 EMIT_SECTION_TOOL = {
     "name": "emit_section_json",
@@ -155,6 +156,13 @@ def _is_verified_pp_delta(bullet: str, num_str: str, start: int, end: int) -> bo
         for i, a in enumerate(other_numbers)
         for b in other_numbers[i + 1:]
     )
+
+
+class UngroundedNumberError(RuntimeError):
+    """Raised when a bullet cites a number that can't be traced to source data.
+    Defined here (not in run_report.py) so enforce_bullet_style can raise it
+    directly without a circular import; run_report.py re-exports this class."""
+    pass
 
 
 def _check_numeric_grounding(bullets: list[str], df: pd.DataFrame, value_cols: list[str]) -> list[str]:
@@ -692,6 +700,9 @@ SO_WHAT_SYSTEM = textwrap.dedent("""
     Rules:
     - Add ONE embedded implication clause per bullet that needs it (a subordinate clause or
       "—" dash phrase). Keep the original wording; just extend it.
+    - The revised bullet must stay at or under 35 words total. If adding an implication
+      clause would push it over, shorten the clause to a few words, or skip the addition
+      for that bullet entirely — do not let a bullet run long.
     - Do NOT add any numbers that are not already in the bullet.
     - Do NOT change bullets that already have an implication (e.g. already say "suggesting",
       "putting pressure on", "compressing", "signalling", "indicating", etc.).
@@ -1118,22 +1129,37 @@ def get_section_content_agentic(
         bullets = parsed["bullets"]
         chart_subtitle = parsed["chart_subtitle"]
         grounding_warns = _check_numeric_grounding(bullets, df, value_cols)
+        style_warns = [w for b in bullets for w in check_all_style(b)]
 
-        # Ungrounded numbers: give the model the specific failures and let it
+        # Ungrounded numbers or style violations (bullet too long, magnitude-word
+        # miscalibration, ...): give the model the specific failures and let it
         # regenerate, instead of hard-failing the whole run over one bad bullet.
         retry_attempt = 0
-        while grounding_warns and retry_attempt < MAX_GROUNDING_RETRIES:
+        while (grounding_warns or style_warns) and retry_attempt < MAX_SECTION_REVISION_RETRIES:
             retry_attempt += 1
-            print(f"  [GROUNDING RETRY {retry_attempt}/{MAX_GROUNDING_RETRIES}] [{sid_label}] "
-                  f"{len(grounding_warns)} unverified number(s) — asking model to revise")
+            print(f"  [REVISION RETRY {retry_attempt}/{MAX_SECTION_REVISION_RETRIES}] [{sid_label}] "
+                  f"{len(grounding_warns)} grounding + {len(style_warns)} style issue(s) — "
+                  f"asking model to revise")
+            feedback_parts = []
+            if grounding_warns:
+                feedback_parts.append(
+                    "Grounding check failed. These numbers in your bullets could not be "
+                    "verified against the source data queried earlier in this conversation:\n"
+                    + "\n".join(f"- {w}" for w in grounding_warns)
+                )
+            if style_warns:
+                feedback_parts.append(
+                    "Style check failed. These bullets need revision:\n"
+                    + "\n".join(f"- {w}" for w in style_warns)
+                )
             feedback = (
-                "Grounding check failed. These numbers in your bullets could not be verified "
-                "against the source data queried earlier in this conversation:\n"
-                + "\n".join(f"- {w}" for w in grounding_warns)
-                + "\n\nRevise the bullets: use only numbers you can trace directly to a query "
-                  "result above, or drop the unverifiable claim from the bullet entirely. Do "
-                  "not invent or approximate a replacement number. Call emit_section_json "
-                  "again with the corrected finding/bullets/chart_subtitle."
+                "\n\n".join(feedback_parts)
+                + "\n\nRevise the bullets to fix all of the above: use only numbers you can "
+                  "trace directly to a query result above (or drop an unverifiable claim "
+                  "entirely — do not invent or approximate a replacement number), and keep "
+                  "every bullet at or under 35 words with intensity words matching their pp "
+                  "figures. Call emit_section_json again with the corrected "
+                  "finding/bullets/chart_subtitle."
             )
             messages.append({"role": "assistant", "content": emit_resp.content})
             messages.append({
@@ -1158,6 +1184,7 @@ def get_section_content_agentic(
             bullets = parsed["bullets"]
             chart_subtitle = parsed["chart_subtitle"] or chart_subtitle
             grounding_warns = _check_numeric_grounding(bullets, df, value_cols)
+            style_warns = [w for b in bullets for w in check_all_style(b)]
 
         dropped = []
         if grounding_warns:
@@ -1169,16 +1196,23 @@ def get_section_content_agentic(
                 if b_warns:
                     dropped.append(b)
                     print(f"  [GROUNDING DROPPED] [{sid_label}] excluded after "
-                          f"{MAX_GROUNDING_RETRIES} retries ({b_warns}): {b!r}")
+                          f"{MAX_SECTION_REVISION_RETRIES} retries ({b_warns}): {b!r}")
                 else:
                     kept_bullets.append(b)
             bullets = kept_bullets
             grounding_warns = []  # nothing ungrounded remains in what's published
 
+        if style_warns:
+            # Style issues are cosmetic, not correctness bugs — log and keep the
+            # bullet rather than dropping real content over a word-count/phrasing nit.
+            for w in style_warns:
+                print(f"  [STYLE FLAGGED] [{sid_label}] {w}")
+
         return {"finding": finding, "bullets": bullets, "chart_subtitle": chart_subtitle,
                 "tool_calls": tool_calls_made,
                 "grounding_warnings": grounding_warns,
-                "grounding_dropped": dropped}
+                "grounding_dropped": dropped,
+                "style_warnings": style_warns}
 
     # Last-resort fallback: extract text from emit response and parse
     text_blocks = [b.text for b in emit_resp.content if hasattr(b, "text")]
@@ -1917,6 +1951,10 @@ def translate_to_slovak(
         "rozšíril\" is not idiomatic; restructure around what actually widened, e.g. \"medzera "
         "vo financovaní úverových liniek sa výrazne rozšírila\", or lead with the cause). "
         "When in doubt, translate the MEANING, not the sentence structure. "
+        "Each translated bullet must stay at or under 35 words. If a literal translation "
+        "would exceed this, choose more concise Slovak phrasing rather than a longer "
+        "literal rendering — do not add clauses or explanatory asides that aren't in the "
+        "English source just to make the Slovak read more naturally. "
         "If an \"annex_questions\" object is present, translate every question text value "
         "(keep the keys, i.e. question IDs, unchanged) — these are official survey question "
         "wordings shown in a glossary; for THIS field only, translate faithfully/literally "
@@ -1995,6 +2033,155 @@ def translate_to_slovak(
         print("  [SK] Annex question translation missing from response — falling back to English annex text")
 
     return sk_rendered, sk_exec_bullets, sk_question_texts
+
+
+ENFORCE_STYLE_SYSTEM = textwrap.dedent("""
+    You are a copy editor fixing style violations in bullets from an ECB SAFE survey
+    report. You will receive bullets that failed automated style checks, each with the
+    specific violation(s) that were found.
+
+    Rules:
+    - Fix ONLY what the violation(s) describe (word count, magnitude-word calibration,
+      bare response codes, recovery language with a negative value) — do not rewrite
+      for style beyond what's needed to pass.
+    - Preserve every number in the bullet exactly — do not add, remove, or change any
+      number, and do not change its rounding.
+    - Preserve the original meaning and sign convention.
+    - Keep bullets at or under 35 words.
+    - Return valid JSON only — no markdown fences:
+      {"revisions": {"<key>": "<revised bullet text>", ...}}
+      Include ONLY keys for bullets you actually changed.
+""").strip()
+
+
+def _bullet_preserves_numbers(original: str, revised: str) -> bool:
+    """True if `revised` cites exactly the same set of numbers as `original`
+    (rounding-tolerant via _number_variants) — a style fix must never add, drop,
+    or alter a cited figure."""
+    original_pool = _section_number_pool(original)
+    revised_pool = _section_number_pool(revised)
+    for n in _cited_numbers(revised):
+        if not (_number_variants(n) & original_pool):
+            return False
+    for n in _cited_numbers(original):
+        if not (_number_variants(n) & revised_pool):
+            return False
+    return True
+
+
+def enforce_bullet_style(
+    rendered: list[dict],
+    exec_bullets: list[dict],
+    mistral_client,
+    cost_tracker: dict,
+    label: str,
+    data: dict[str, pd.DataFrame] | None = None,
+    sections_by_id: dict[str, dict] | None = None,
+) -> tuple[list[dict], list[dict], list[str]]:
+    """Final deterministic-style pass, run once each for the EN and SK bullet sets
+    right before HTML assembly — the one point guaranteed to see bullets after every
+    mutation stage (so-what, ECB-sharpen, SK-translate), none of which are
+    individually style-aware in a way that's enforced rather than just requested in
+    a prompt. Any bullet still violating after a fix attempt is logged and KEPT
+    (never dropped/truncated) — style issues are cosmetic, not correctness bugs.
+
+    Also re-verifies numeric grounding for every rendered section (data/sections_by_id
+    given) since sharpening/translation/this function's own revisions can all rewrite
+    bullet text after the original post-generation grounding check already passed —
+    raises UngroundedNumberError (same class used by _check_grounding_blocking) if a
+    genuinely new unverifiable number appears, since that's a correctness bug, not style.
+    """
+    # Collect every bullet with its write-back location.
+    items: dict[str, dict] = {}
+    for s_idx, sec in enumerate(rendered):
+        for b_idx, bullet in enumerate(sec.get("bullets", [])):
+            key = f"section:{s_idx}:{b_idx}"
+            items[key] = {"text": bullet, "kind": "section"}
+    for e_idx, item in enumerate(exec_bullets):
+        key = f"exec:{e_idx}"
+        items[key] = {"text": item.get("bullet", ""), "kind": "exec"}
+
+    def _violating() -> dict[str, list[str]]:
+        return {k: check_all_style(v["text"]) for k, v in items.items()
+                if check_all_style(v["text"])}
+
+    flagged: list[str] = []
+    violations = _violating()
+    for attempt in range(2):  # one fix attempt + one retry for anything still failing
+        if not violations:
+            break
+        print(f"  [{label}] {len(violations)} style issue(s) — "
+              f"{'retrying' if attempt else 'requesting'} fix via Mistral")
+        payload = {k: {"text": items[k]["text"], "violations": v} for k, v in violations.items()}
+        try:
+            resp = mistral_client.chat.complete(
+                model="mistral-small-latest",
+                max_tokens=2000,
+                messages=[
+                    {"role": "system", "content": ENFORCE_STYLE_SYSTEM},
+                    {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+                ],
+            )
+            if resp.usage:
+                _track_cost(cost_tracker, "mistral-small-latest",
+                            _Usage(resp.usage.prompt_tokens, resp.usage.completion_tokens))
+            raw = resp.choices[0].message.content.strip()
+            raw = re.sub(r"^```(?:json)?\s*", "", raw)
+            raw = re.sub(r"\s*```$", "", raw).strip()
+            revisions = json.loads(repair_json(raw)).get("revisions", {})
+        except Exception as e:
+            print(f"  [{label}] Style-fix call failed ({e}) — keeping original bullets")
+            revisions = {}
+
+        for key, revised in revisions.items():
+            if key not in items or not isinstance(revised, str) or not revised.strip():
+                continue
+            original = items[key]["text"]
+            if not _bullet_preserves_numbers(original, revised):
+                print(f"  [{label}] [STYLE FIX REJECTED] {key} — revision changed cited numbers")
+                continue
+            items[key]["text"] = revised.strip()
+
+        violations = _violating()
+
+    for key, warns in violations.items():
+        for w in warns:
+            flagged.append(w)
+            print(f"  [{label}] [STYLE FLAGGED] {key}: {w}")
+
+    # Write revised text back into rendered/exec_bullets.
+    for s_idx, sec in enumerate(rendered):
+        bullets = sec.get("bullets", [])
+        for b_idx in range(len(bullets)):
+            key = f"section:{s_idx}:{b_idx}"
+            if key in items:
+                bullets[b_idx] = items[key]["text"]
+    for e_idx, item in enumerate(exec_bullets):
+        key = f"exec:{e_idx}"
+        if key in items:
+            item["bullet"] = items[key]["text"]
+
+    # Grounding safety net: sharpening/translation/the style fixes above can all
+    # rewrite bullet text after the original grounding check already passed.
+    if data is not None and sections_by_id is not None:
+        ground_errors = []
+        for sec in rendered:
+            sid = sec.get("section_id", "")
+            df = data.get(sid)
+            if df is None:
+                continue
+            sec_cfg = sections_by_id.get(sid, {})
+            value_cols = [sec_cfg.get("value_col", "net_balance_wtd"),
+                          "pct_cited_wtd", "avg_pressingness_wtd"]
+            warns = _check_numeric_grounding(sec.get("bullets", []), df, value_cols)
+            ground_errors.extend(f"[{sid}] {w}" for w in warns)
+        if ground_errors:
+            raise UngroundedNumberError(
+                f"{len(ground_errors)} ungrounded number(s) found after {label} style/translation "
+                f"pass — aborting run: {'; '.join(ground_errors[:5])}"
+            )
+
+    return rendered, exec_bullets, flagged
 
 
 def _fetch_ecb_context() -> tuple[str, str]:

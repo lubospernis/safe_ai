@@ -58,8 +58,8 @@ def test_retry_recovers_after_ungrounded_first_attempt(section_stub, net_balance
 
 def test_bullet_dropped_after_retries_exhausted(section_stub, net_balance_df, sample_cost_tracker):
     """The model keeps citing an invented number across every retry — after
-    MAX_GROUNDING_RETRIES the offending bullet is dropped, not published, and
-    the run isn't blocked."""
+    MAX_SECTION_REVISION_RETRIES the offending bullet is dropped, not published,
+    and the run isn't blocked."""
     client = MagicMock()
     client.messages.create.side_effect = [
         _reasoning_response(),

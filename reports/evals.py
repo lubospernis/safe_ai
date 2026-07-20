@@ -124,3 +124,15 @@ def check_bullet_length(bullet: str) -> list[str]:
     if word_count > _MAX_BULLET_WORDS:
         return [f"Bullet is {word_count} words (target ~25, hard ceiling {_MAX_BULLET_WORDS}): {bullet[:100]}"]
     return []
+
+
+def check_all_style(bullet: str) -> list[str]:
+    """Run every deterministic style check against one bullet. Single call site for
+    both the generation-time retry loop (llm.py) and the post-hoc CI gate
+    (quality_check.py) so they can never drift out of sync."""
+    errors = []
+    errors.extend(check_sign_language(bullet))
+    errors.extend(check_magnitude_calibration(bullet))
+    errors.extend(check_bare_response_codes(bullet))
+    errors.extend(check_bullet_length(bullet))
+    return errors

@@ -11,8 +11,8 @@ from pathlib import Path
 import yaml
 
 from evals import (
-    check_bare_response_codes, check_bullet_length, check_magnitude_calibration,
-    check_sign_language,
+    check_all_style, check_bare_response_codes, check_bullet_length,
+    check_magnitude_calibration, check_sign_language,
 )
 
 GOLDEN_DIR = Path(__file__).parent / "golden"
@@ -192,6 +192,39 @@ def test_bullet_length_ceiling_is_looser_than_prompt_target():
 def test_bare_response_code_passes_unrelated_bullet():
     good = "Loan application rates held steady at 32% across the euro area."
     assert not check_bare_response_codes(good)
+
+
+# ── check_all_style: single call site combining all four checks ─────────────
+
+
+def test_check_all_style_passes_clean_bullet():
+    good = "Bank loan interest rates tightened for a net 12% of Slovak firms (n=80), easing 1.8pp from wave 37."
+    assert not check_all_style(good)
+
+
+def test_check_all_style_flags_length_violation():
+    bad = (
+        "The credit-line financing gap widened by 10.0 pp to +14.8 pp — driven almost "
+        "entirely by a 9.2 pp rise in liquidity need — moving Slovak firms from less "
+        "stressed than the EA to more stressed, while fixed-investment financing "
+        "purposes fell 6.1 pp to 34.2% and hiring financing rose to 31.1%."
+    )
+    errors = check_all_style(bad)
+    assert any("words" in e for e in errors)
+
+
+def test_check_all_style_flags_magnitude_violation():
+    bad = "Slovak firms marginally increased loan applications, rising by 8pp."
+    errors = check_all_style(bad)
+    assert any("marginally" in e for e in errors)
+
+
+def test_check_all_style_combines_multiple_violation_types():
+    # Same bullet trips both the magnitude-calibration and bare-response-code checks.
+    bad = "Slovak firms marginally shifted to code 2, rising by 9pp."
+    errors = check_all_style(bad)
+    assert any("marginally" in e for e in errors)
+    assert any("code 2" in e for e in errors)
 
 
 # ── pytest tests — Layer 2 (golden YAML) ────────────────────────────────────

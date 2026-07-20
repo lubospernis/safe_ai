@@ -62,39 +62,119 @@ jobs:
             echo "produced=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Quality check (adhoc spotlight)
+      # continue-on-error so a quality-gate finding never skips the rest of this
+      # job (gap analysis, run-log commit, Pages publish) — same fix as
+      # generate_report.yml. quality_check.py exits 3 for style-only findings,
+      # 1 for real content failures; "Evaluate quality gate" below reads the
+      # actual tier2_fail boolean from the JSON rather than relying on exit code.
+      - name: Quality check (adhoc spotlight, EN)
+        id: qc_en
         if: steps.run_adhoc.outputs.produced == 'true'
+        continue-on-error: true
         env:
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
         run: python reports/quality_check.py --html reports/output/report_adhoc_latest.html
+
+      - name: Quality check (adhoc spotlight, SK)
+        id: qc_sk
+        if: steps.run_adhoc.outputs.produced == 'true'
+        continue-on-error: true
+        env:
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+        run: |
+          if [ -f reports/output/report_adhoc_latest_sk.html ]; then
+            python reports/quality_check.py --html reports/output/report_adhoc_latest_sk.html
+          else
+            echo "No SK adhoc report found — skipping SK quality check."
+          fi
 
       - name: Upload quality scores
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: quality-scores-adhoc
-          path: reports/output/quality_scores.json
+          # Glob, not an exact filename — quality_check.py derives the scores
+          # filename from the input HTML's stem (quality_scores_adhoc_latest.json /
+          # quality_scores_adhoc_latest_sk.json for this report).
+          path: reports/output/quality_scores*.json
           retention-days: 30
 
-      - name: Update adhoc run log and links
+      # Always capture the generated adhoc report regardless of what the quality
+      # gates found — same reasoning as generate_report.yml's "Preserve report
+      # output" step.
+      - name: Preserve adhoc report output
+        if: steps.run_adhoc.outputs.produced == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: adhoc-report-output
+          path: |
+            reports/output/report_adhoc_latest.html
+            reports/output/report_adhoc_latest_sk.html
+            reports/output/latest_adhoc_links.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Evaluate quality gate
+        id: gate
+        if: steps.run_adhoc.outputs.produced == 'true'
+        run: |
+          python3 - <<'EOF'
+          import json, os
+          from pathlib import Path
+
+          def tier2_fail(path: str) -> bool:
+              p = Path(path)
+              if not p.exists():
+                  print(f"  {path}: missing — treating as block")
+                  return True
+              try:
+                  data = json.loads(p.read_text())
+              except Exception as e:
+                  print(f"  {path}: unparseable ({e}) — treating as block")
+                  return True
+              fail = bool(data.get("tier2_fail", False))
+              print(f"  {path}: tier2_fail={fail}")
+              return fail
+
+          block = tier2_fail("reports/output/quality_scores_adhoc_latest.json") or \
+                  tier2_fail("reports/output/quality_scores_adhoc_latest_sk.json")
+          block_str = "true" if block else "false"
+          print(f"block_publish={block_str}")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"block_publish={block_str}\n")
+          EOF
+
+      # Cost/spend telemetry must never be lost, blocked run or not.
+      - name: Commit adhoc run log
         if: steps.run_adhoc.outputs.produced == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add reports/output/run_adhoc_log.json reports/output/latest_adhoc_links.json
-          git diff --cached --quiet || git commit -m "chore: update adhoc run log and links [skip ci]"
+          git add reports/output/run_adhoc_log.json
+          git diff --cached --quiet || git commit -m "chore: update adhoc run log [skip ci]"
+          git push
+
+      # latest_adhoc_links.json drives what newsletter subscribers/consumers are
+      # told is "latest" — must only update when we're actually about to publish.
+      - name: Commit adhoc latest links
+        if: steps.run_adhoc.outputs.produced == 'true' && steps.gate.outputs.block_publish != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add reports/output/latest_adhoc_links.json
+          git diff --cached --quiet || git commit -m "chore: update adhoc latest links [skip ci]"
           git push
 
       - name: Rename adhoc reports for Pages
         # SK is the default/primary published adhoc report — adhoc.html.
         # EN remains available at adhoc-en.html.
-        if: steps.run_adhoc.outputs.produced == 'true'
+        if: steps.run_adhoc.outputs.produced == 'true' && steps.gate.outputs.block_publish != 'true'
         run: |
           cp reports/output/report_adhoc_latest_sk.html reports/output/adhoc.html
           cp reports/output/report_adhoc_latest.html reports/output/adhoc-en.html
 
       - name: Publish adhoc pages to GitHub Pages
-        if: steps.run_adhoc.outputs.produced == 'true'
+        if: steps.run_adhoc.outputs.produced == 'true' && steps.gate.outputs.block_publish != 'true'
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}

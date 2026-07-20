@@ -3,7 +3,18 @@ SAFE Report Quality Gate — Mistral sign-off supervisor.
 
 Reads reports/output/report_latest.html, extracts all section text and bullets,
 asks Mistral to score the report on readability, substance, and coherence.
-Exits 0 (pass) or 1 (fail — blocks GitHub Actions deploy).
+
+Tiered exit codes — the workflow reads quality_scores*.json's "tier2_fail" boolean
+to decide whether to block publish (exit code alone can't distinguish tier 1 from
+tier 2 in GitHub Actions' outcome/conclusion, both just read as "failure"):
+  0 = clean pass
+  3 = tier-1 issues only (style: bullet length, magnitude-word calibration, sign
+      language, bare response codes) — logged, does NOT block publish. The
+      generation pipeline (llm.py's retry loop + enforce_bullet_style) already
+      tries to fix these before the report is assembled, so this is a rare
+      last-resort catch, not the primary enforcement point.
+  1 = tier-2 failure (content quality: supervisor score/verdict, chart rendering,
+      adhoc spotlight) — should block publish.
 
 Usage:
   python reports/quality_check.py
@@ -20,10 +31,7 @@ from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from mistralai import Mistral
 
-from evals import (
-    check_bare_response_codes, check_bullet_length, check_magnitude_calibration,
-    check_sign_language,
-)
+from evals import check_all_style
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
@@ -165,18 +173,19 @@ def extract_all_bullets(html: str) -> list[str]:
 
 
 def run_deterministic_checks(html: str) -> list[str]:
-    """Code-enforced style checks — sign-language, magnitude-calibration, and bare
-    survey-response-code mismatches.
+    """Code-enforced style checks — sign-language, magnitude-calibration, bare
+    survey-response-code mismatches, and bullet length.
 
     Unlike the Mistral supervisor scores below, these are regex-based and cannot be
-    talked out of failing by an LLM having a good day.
+    talked out of failing by an LLM having a good day. This is now a Tier-1 (style)
+    signal, not a hard gate — the generation pipeline (get_section_content_agentic's
+    retry loop and enforce_bullet_style in llm.py) already tries to fix these before
+    the report is even assembled, so a survivor here is a rare last-resort catch, not
+    the primary enforcement point. See main()'s tiered exit-code handling below.
     """
     errors = []
     for bullet in extract_all_bullets(html):
-        errors.extend(check_sign_language(bullet))
-        errors.extend(check_magnitude_calibration(bullet))
-        errors.extend(check_bare_response_codes(bullet))
-        errors.extend(check_bullet_length(bullet))
+        errors.extend(check_all_style(bullet))
     return errors
 
 
@@ -212,9 +221,19 @@ def main() -> None:
     _args = _parser.parse_args()
     REPORT_HTML = _args.html if _args.html else _DEFAULT_REPORT_HTML
     OUTPUT_DIR = REPORT_HTML.parent
-    # Derive a distinct scores filename per input report so EN/SK runs don't clobber
-    # each other's output (e.g. report_latest_sk.html -> quality_scores_sk.json).
-    _suffix = REPORT_HTML.stem.removeprefix("report_latest")
+    # Derive a distinct scores filename per input report so EN/SK (and adhoc EN/SK)
+    # runs don't clobber each other's output. The two main-report names keep their
+    # exact historical filenames (generate_report.yml and write_run_manifest.py both
+    # hardcode "quality_scores.json") — anything else (e.g. report_adhoc_latest*.html)
+    # falls back to a general "_<rest-of-stem>" suffix instead of the removeprefix()
+    # no-op that used to silently produce a malformed "quality_scoresreport_adhoc_..."
+    # filename nothing could find.
+    if REPORT_HTML.stem == "report_latest":
+        _suffix = ""
+    elif REPORT_HTML.stem == "report_latest_sk":
+        _suffix = "_sk"
+    else:
+        _suffix = "_" + REPORT_HTML.stem.removeprefix("report_")
     SCORES_PATH = OUTPUT_DIR / f"quality_scores{_suffix}.json"
 
     if not REPORT_HTML.exists():
@@ -230,33 +249,29 @@ def main() -> None:
 
     print(f"Quality check: evaluating {len(report_text):,} chars of report text...")
 
-    # Deterministic style checks — code-enforced, run before any LLM call.
+    # Deterministic style checks — code-enforced, run before any LLM call. Tier 1
+    # (style only): recorded, but does NOT abort the run — the generation pipeline
+    # already tries to fix these before assembly (see run_deterministic_checks'
+    # docstring), so any survivor here is logged for visibility, not blocking.
     print("Quality check: running deterministic sign/magnitude checks...")
-    determ_errors = run_deterministic_checks(html)
-    if determ_errors:
-        print(f"  DETERMINISTIC CHECK FAIL ({len(determ_errors)} issue(s)):")
-        for e in determ_errors:
+    tier1_issues = run_deterministic_checks(html)
+    if tier1_issues:
+        print(f"  DETERMINISTIC CHECK: {len(tier1_issues)} tier-1 style issue(s) found (non-blocking):")
+        for e in tier1_issues:
             print(f"    - {e}")
-        scores = {"readability": 1, "substance": 1, "coherence": 1, "sign_convention": 1,
-                  "verdict": "fail", "reason": f"Deterministic check failures: {'; '.join(determ_errors[:5])}"}
-        SCORES_PATH.write_text(json.dumps(scores))
-        print("Quality gate FAILED — sign-language/magnitude-calibration issues detected")
-        sys.exit(1)
-    print("  Deterministic checks OK")
+    else:
+        print("  Deterministic checks OK")
 
     client = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
 
-    # Chart sanity check via Pixtral vision
+    # Chart sanity check via Pixtral vision — Tier 2 (content quality): a genuinely
+    # broken chart is a real problem, not a style nit, so this can still block publish.
     print("Quality check: inspecting charts...")
     chart_verdict, chart_reason = check_charts(html, client)
     if chart_verdict == "fail":
         print(f"  CHART FAIL: {chart_reason}")
-        scores = {"readability": 1, "substance": 1, "coherence": 1, "sign_convention": 1,
-                  "verdict": "fail", "reason": f"Chart rendering error: {chart_reason}"}
-        SCORES_PATH.write_text(json.dumps(scores))
-        print("Quality gate FAILED — chart rendering issues detected")
-        sys.exit(1)
-    print(f"  Charts OK")
+    else:
+        print("  Charts OK")
 
     try:
         resp = client.chat.complete(
@@ -273,11 +288,24 @@ def main() -> None:
         # A Mistral API outage must not be indistinguishable from a real quality
         # failure — degrade to a clearly-labeled "assumed pass" rather than crashing
         # the CI job (matches the parse-error fallback below and the adhoc
-        # supervisor's existing try/except pattern).
+        # supervisor's existing try/except pattern). The tier-1 style findings and
+        # chart check already ran locally/independently of this call, so they're
+        # still reported accurately even though the supervisor itself is unavailable.
         print(f"Quality check: supervisor call failed ({e}) — assuming pass")
-        fallback = {"readability": 10, "substance": 10, "coherence": 10,
-                    "sign_convention": 10, "verdict": "pass", "reason": f"supervisor error — assumed pass: {e}"}
+        fallback = {
+            "readability": 10, "substance": 10, "coherence": 10, "sign_convention": 10,
+            "verdict": "pass", "reason": f"supervisor error — assumed pass: {e}",
+            "tier1_issues": tier1_issues, "tier1_issue_count": len(tier1_issues),
+            "tier2_fail": chart_verdict == "fail",
+            "chart_verdict": chart_verdict, "chart_reason": chart_reason,
+        }
         SCORES_PATH.write_text(json.dumps(fallback))
+        if chart_verdict == "fail":
+            print("Quality gate FAILED (tier 2 — chart rendering) — should block publish")
+            sys.exit(1)
+        if tier1_issues:
+            print(f"Quality gate: {len(tier1_issues)} tier-1 style issue(s) — logged, not blocking")
+            sys.exit(3)
         sys.exit(0)
 
     r = result.get("readability", 10)
@@ -293,6 +321,8 @@ def main() -> None:
     scores = {
         "readability": r, "substance": s, "coherence": c,
         "sign_convention": sc, "verdict": verdict, "reason": reason,
+        "tier1_issues": tier1_issues, "tier1_issue_count": len(tier1_issues),
+        "chart_verdict": chart_verdict, "chart_reason": chart_reason,
     }
 
     # Adhoc spotlight quality check (if present)
@@ -330,15 +360,21 @@ def main() -> None:
         except Exception as e:
             print(f"  Adhoc quality check error: {e} — assuming pass")
 
+    tier2_fail = (
+        verdict == "fail" or min(r, s, c, sc) < PASS_THRESHOLD
+        or chart_verdict == "fail"
+        or adhoc_verdict == "fail"
+    )
+    scores["tier2_fail"] = tier2_fail
     SCORES_PATH.write_text(json.dumps(scores))
 
-    if verdict == "fail" or min(r, s, c, sc) < PASS_THRESHOLD:
-        print("Quality gate FAILED — blocking deploy")
+    if tier2_fail:
+        print("Quality gate FAILED (tier 2 — content quality) — should block publish")
         sys.exit(1)
 
-    if adhoc_verdict == "fail":
-        print("Quality gate FAILED — adhoc spotlight below threshold")
-        sys.exit(1)
+    if tier1_issues:
+        print(f"Quality gate: {len(tier1_issues)} tier-1 style issue(s) — logged, not blocking")
+        sys.exit(3)
 
     print("Quality gate passed")
     sys.exit(0)

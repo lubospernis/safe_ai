@@ -54,7 +54,18 @@ jobs:
           MISTRAL_API_KEY:   ${{ secrets.MISTRAL_API_KEY }}
         run: python reports/run_report.py
 
+      # continue-on-error is the actual fix for "one bad bullet kills the whole
+      # run" — without it, GitHub Actions marks the job failing here and skips
+      # every later default-conditioned step (gap analysis, manifest, run-log
+      # commit, Pages publish), even though run_report.py already fully
+      # succeeded and paid for the entire generation. quality_check.py now exits
+      # 3 (not 1) for style-only findings, but we still don't rely on the exit
+      # code alone — see "Evaluate quality gate" below, which reads the actual
+      # tier2_fail boolean from the JSON.
       - name: Quality check (sign-off supervisor, EN)
+        id: qc_en
+        if: always()
+        continue-on-error: true
         env:
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
         run: python reports/quality_check.py --html reports/output/report_latest.html
@@ -68,6 +79,9 @@ jobs:
           retention-days: 30
 
       - name: Quality check (sign-off supervisor, SK)
+        id: qc_sk
+        if: always()
+        continue-on-error: true
         env:
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
         run: |
@@ -85,7 +99,62 @@ jobs:
           path: reports/output/quality_scores_sk.json
           retention-days: 30
 
+      # Always capture the generated report regardless of what the quality gates
+      # found — a run that cost real API spend should never be silently
+      # destroyed with the ephemeral runner just because a downstream check
+      # failed. Uploaded BEFORE the Pages rename step so the original filenames
+      # are what's captured here.
+      - name: Preserve report output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-output
+          path: |
+            reports/output/report_q*.html
+            reports/output/report_latest.html
+            reports/output/report_latest_sk.html
+            reports/output/latest_links.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      # Exit codes from the quality-check steps can't distinguish tier-1 (style,
+      # non-blocking) from tier-2 (content quality, should block publish) —
+      # both just read as "failure" in steps.*.outcome. Read the actual
+      # tier2_fail boolean out of the JSON instead. A missing/unparseable
+      # scores file is treated as a block (defensive — no report to check).
+      - name: Evaluate quality gate
+        id: gate
+        if: always()
+        run: |
+          python3 - <<'EOF'
+          import json, os
+          from pathlib import Path
+
+          def tier2_fail(path: str) -> bool:
+              p = Path(path)
+              if not p.exists():
+                  print(f"  {path}: missing — treating as block")
+                  return True
+              try:
+                  data = json.loads(p.read_text())
+              except Exception as e:
+                  print(f"  {path}: unparseable ({e}) — treating as block")
+                  return True
+              fail = bool(data.get("tier2_fail", False))
+              print(f"  {path}: tier2_fail={fail}")
+              return fail
+
+          block = tier2_fail("reports/output/quality_scores.json") or \
+                  tier2_fail("reports/output/quality_scores_sk.json")
+          block_str = "true" if block else "false"
+          print(f"block_publish={block_str}")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"block_publish={block_str}\n")
+          EOF
+
       - name: Run gap analysis
+        if: always()
+        continue-on-error: true
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           MISTRAL_API_KEY:   ${{ secrets.MISTRAL_API_KEY }}
@@ -93,26 +162,53 @@ jobs:
         run: python reports/gap_agent.py
 
       - name: Write run manifest
+        if: always()
+        continue-on-error: true
         env:
           MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
-        run: python reports/write_run_manifest.py
+        run: |
+          # write_run_manifest.py always uses the LAST entry in run_log.json,
+          # tagged with a fresh timestamp-based run_id — if run_report.py
+          # crashed before ever writing report_latest.html, that "last entry"
+          # is stale data from a previous run, and skipping here avoids
+          # attaching it to a misleadingly fresh run_id.
+          if [ -f reports/output/report_latest.html ]; then
+            python reports/write_run_manifest.py
+          else
+            echo "No report_latest.html — run_report.py didn't get far enough, skipping manifest write."
+          fi
 
-      - name: Update run log and links
+      # Cost/spend telemetry must never be lost, blocked run or not.
+      - name: Commit run log
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add reports/output/run_log.json reports/output/latest_links.json
-          git diff --cached --quiet || git commit -m "chore: update run log and links [skip ci]"
+          git add reports/output/run_log.json
+          git diff --cached --quiet || git commit -m "chore: update run log [skip ci]"
+          git push
+
+      # latest_links.json drives what newsletter subscribers/consumers are told
+      # is "latest" — must only update when we're actually about to publish.
+      - name: Commit latest links
+        if: steps.gate.outputs.block_publish != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add reports/output/latest_links.json
+          git diff --cached --quiet || git commit -m "chore: update latest links [skip ci]"
           git push
 
       - name: Rename reports for Pages
         # SK is the default/primary published report — root index.html.
         # EN remains available at /en.html.
+        if: steps.gate.outputs.block_publish != 'true'
         run: |
           mv reports/output/report_latest_sk.html reports/output/index.html
           mv reports/output/report_latest.html reports/output/en.html
 
       - name: Publish to GitHub Pages
+        if: steps.gate.outputs.block_publish != 'true'
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}

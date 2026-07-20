@@ -61,9 +61,10 @@ from html_builder import (
     _load_annex_question_texts,
 )
 from llm import (
-    _add_so_what, _fetch_ecb_context, _sharpen_with_ecb,
+    UngroundedNumberError, _add_so_what, _fetch_ecb_context, _sharpen_with_ecb,
     _write_wave_memory, build_section_signals, check_all_interest, classify_ecb_emphasis,
-    get_exec_summary, get_section_content_agentic, get_shortened_questions, translate_to_slovak,
+    enforce_bullet_style, get_exec_summary, get_section_content_agentic, get_shortened_questions,
+    translate_to_slovak,
 )
 
 OUTPUT_DIR = Path(__file__).parent / "output"
@@ -75,10 +76,6 @@ COST_CEILING_USD = float(os.environ.get("COST_CEILING_USD", "15.0"))
 
 
 class CostCeilingExceeded(RuntimeError):
-    pass
-
-
-class UngroundedNumberError(RuntimeError):
     pass
 
 
@@ -258,6 +255,7 @@ def main() -> None:
                     "tool_calls": cached.get("tool_calls", 0),
                     "grounding_warnings": cached.get("grounding_warnings", []),
                     "grounding_dropped": cached.get("grounding_dropped", []),
+                    "style_warnings": cached.get("style_warnings", []),
                 }
 
         thread_con = _get_connection()
@@ -319,6 +317,7 @@ def main() -> None:
                 "tool_calls": content.get("tool_calls", 0),
                 "grounding_warnings": content.get("grounding_warnings", []),
                 "grounding_dropped": content.get("grounding_dropped", []),
+                "style_warnings": content.get("style_warnings", []),
             }
 
             # ── Cache write ───────────────────────────────────────────────────
@@ -330,6 +329,7 @@ def main() -> None:
                 "chart_subtitle": content.get("chart_subtitle", ""),
                 "grounding_warnings": content.get("grounding_warnings", []),
                 "grounding_dropped": content.get("grounding_dropped", []),
+                "style_warnings": content.get("style_warnings", []),
                 "tool_calls": content.get("tool_calls", 0),
             }, indent=2, ensure_ascii=False))
 
@@ -383,6 +383,12 @@ def main() -> None:
     print("Fetching painting thumbnail...")
     painting_inner_html = _fetch_painting_inner_html()
 
+    print("Enforcing bullet style (EN)...")
+    rendered, exec_bullets, style_flagged_en = enforce_bullet_style(
+        rendered, exec_bullets, mistral_client, cost_tracker, label="EN",
+        data=data, sections_by_id=sections_by_id,
+    )
+
     print("Assembling HTML (EN)...")
     html = build_html(rendered, annex_html, exec_bullets, toc_html, painting_inner_html, latest_wave,
                        period_label=period_label)
@@ -399,6 +405,13 @@ def main() -> None:
     sk_rendered, sk_exec_bullets, sk_question_texts = translate_to_slovak(
         rendered, exec_bullets, cost_tracker, question_texts=question_texts,
     )
+
+    print("Enforcing bullet style (SK)...")
+    sk_rendered, sk_exec_bullets, style_flagged_sk = enforce_bullet_style(
+        sk_rendered, sk_exec_bullets, mistral_client, cost_tracker, label="SK",
+        data=data, sections_by_id=sections_by_id,
+    )
+
     sk_annex_html = build_annex_html(con=tool_con, ui=_SK_UI, question_texts_override=sk_question_texts)
 
     _next_release_date = None
@@ -507,6 +520,7 @@ def main() -> None:
                 "bullets": s.get("bullets", []),
                 "grounding_warnings": s.get("grounding_warnings", []),
                 "grounding_dropped": s.get("grounding_dropped", []),
+                "style_warnings": s.get("style_warnings", []),
             }
             for s in rendered
         ],
@@ -529,6 +543,9 @@ def main() -> None:
         "n_sections": len(rendered),
         "grounding_warning_count": sum(len(s.get("grounding_warnings", [])) for s in rendered),
         "grounding_dropped_count": sum(len(s.get("grounding_dropped", [])) for s in rendered),
+        "style_warning_count": sum(len(s.get("style_warnings", [])) for s in rendered),
+        "style_flagged_en": style_flagged_en,
+        "style_flagged_sk": style_flagged_sk,
         "duration_seconds": round((_dt.now() - _run_start).total_seconds(), 1),
         "context_sources": {
             "annex_loaded": _annex_loaded_ok,

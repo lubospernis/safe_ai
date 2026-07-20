@@ -747,6 +747,35 @@ def test_translate_to_slovak_parse_failure_falls_back_to_english_questions():
     assert sk_question_texts == {"q5": "Original question"}
 
 
+def test_translate_to_slovak_malformed_section_entry_does_not_crash():
+    """Reproduces a real production failure: Mistral's JSON response included
+    a section entry missing 'id' (a repair_json-salvaged, truncated object)
+    and `by_id = {s["id"]: s for s in ...}` raised KeyError, aborting the
+    whole run. A malformed entry must be skipped (falling back to English
+    content for that section only), not crash the translation entirely."""
+    client = _mock_mistral_response(
+        '{"exec_bullets": ["Bod"], "sections": ['
+        '{"id": "financing_gap", "title": "Medzera", "finding": "Zistenie", "bullets": ["Bod 1"]}, '
+        '{"title": "Chybný", "finding": "Bez id", "bullets": ["Bod 2"]}'
+        ']}'
+    )
+    tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
+    rendered = [
+        {"section_id": "financing_gap", "title": "Financing Gap",
+         "finding": "Original finding", "bullets": ["Original bullet"]},
+        {"section_id": "outlook", "title": "Outlook",
+         "finding": "Other original finding", "bullets": ["Other original bullet"]},
+    ]
+    with patch("llm._mistral_client", return_value=client):
+        sk_rendered, sk_exec_bullets, _ = translate_to_slovak(rendered, [], tracker)
+
+    by_id = {s["section_id"]: s for s in sk_rendered}
+    assert by_id["financing_gap"]["finding"] == "Zistenie"
+    # The malformed entry never made it into by_id, so "outlook" falls back
+    # to its original English content rather than crashing the whole call.
+    assert by_id["outlook"]["finding"] == "Other original finding"
+
+
 def test_translate_to_slovak_translates_bullets_by_question_and_synthesis():
     """Regression guard: per-question adhoc bullets and the cross-cutting synthesis
     bullets must be translated too, not just the flat 'bullets' list — a prior gap

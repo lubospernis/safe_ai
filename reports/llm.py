@@ -2051,7 +2051,12 @@ def translate_to_slovak(
         return rendered, exec_bullets, (question_texts or {})
 
     sk_rendered = []
-    by_id = {s["id"]: s for s in translated.get("sections", [])}
+    raw_sections = translated.get("sections", [])
+    valid_sections = [s for s in raw_sections if isinstance(s, dict) and "id" in s]
+    if len(valid_sections) < len(raw_sections):
+        print(f"  [SK] {len(raw_sections) - len(valid_sections)} malformed section entr(y/ies) in "
+              f"translation response (missing 'id') — falling back to English content for those")
+    by_id = {s["id"]: s for s in valid_sections}
     for s in regular:
         t = by_id.get(s["section_id"], {})
         sk_rendered.append({

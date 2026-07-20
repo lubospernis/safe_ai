@@ -11,6 +11,16 @@ Loops over SECTIONS in config.py:
 
 Adhoc spotlight is handled separately by run_adhoc_report.py.
 
+Every LLM stage (section content, sharpen, exec summary, style enforcement,
+translation) is cached in MotherDuck's ref_safe__pipeline_stage_cache, keyed
+on a hash of that stage's actual inputs (prompt text, upstream content,
+evals.py's style-check logic) — a rerun with nothing relevant changed hits
+cache and costs nothing; changing one thing (e.g. a bullet-length threshold
+in evals.py) only busts the stages that actually depend on it. This persists
+across both local runs and CI (no --wave-scoped local file survives a fresh
+GitHub Actions checkout, but the MotherDuck table does). Pass --no-cache to
+bust everything and force a full regenerate.
+
 Usage:
   python run_report.py                # latest wave
   python run_report.py --wave 37      # retrospective report capped at wave 37
@@ -22,6 +32,7 @@ Required environment variables:
 """
 
 import argparse
+import inspect
 import json
 import os
 import threading
@@ -55,17 +66,24 @@ from config import SECTIONS  # noqa: E402
 
 from charts import CHART_STRINGS, SK_LABELS, build_chart, build_financing_gap_chart
 from cost import _anthropic_client, _mistral_client
-from db import PROD_SCHEMA, _get_connection, build_mart_catalogue, fetch_all, wave_period_label
+from db import (
+    MART_QUERY_TEMPLATES, PROD_SCHEMA, _get_connection, build_mart_catalogue, fetch_all,
+    wave_period_label,
+)
 from html_builder import (
     _SK_UI, _fetch_painting_inner_html, build_annex_html, build_html, build_toc,
     _load_annex_question_texts,
 )
 from llm import (
-    UngroundedNumberError, _add_so_what, _fetch_ecb_context, _sharpen_with_ecb,
+    ECB_EMPHASIS_SYSTEM, ECB_SHARPEN_SYSTEM, ENFORCE_STYLE_SYSTEM, EXEC_CROSS_SECTION_SYSTEM,
+    EXEC_SUMMARY_SYSTEM, SECTION_CONTENT_SYSTEM, SO_WHAT_SYSTEM, TRANSLATE_SYSTEM,
+    UngroundedNumberError, _add_so_what, _fetch_ecb_context, _fmt_data_for_prompt,
+    _pipeline_cache_get, _pipeline_cache_hash, _pipeline_cache_put, _sharpen_with_ecb,
     _write_wave_memory, build_section_signals, check_all_interest, classify_ecb_emphasis,
     enforce_bullet_style, get_exec_summary, get_section_content_agentic, get_shortened_questions,
     translate_to_slovak,
 )
+import evals
 
 OUTPUT_DIR = Path(__file__).parent / "output"
 OUTPUT_DIR.mkdir(exist_ok=True)
@@ -107,6 +125,32 @@ def _check_grounding_blocking(rendered: list[dict]) -> None:
         )
 
 
+def _stage_cache_check(con, schema: str, stage: str, cache_key: str, source_hash: str, no_cache: bool):
+    """Return the cached payload for a pipeline stage if its stored hash
+    matches the current inputs, else None (cache miss or --no-cache bust) —
+    the caller regenerates and writes back via _pipeline_cache_put on a miss."""
+    if no_cache:
+        return None
+    cached = _pipeline_cache_get(con, schema, stage, cache_key)
+    if cached and cached[0] == source_hash:
+        print(f"  [CACHE HIT] {stage}")
+        return cached[1]
+    return None
+
+
+def _apply_section_overlay(rendered: list[dict], overlay: dict) -> list[dict]:
+    """Apply a {section_id: {"finding": ..., "bullets": ...}} text overlay onto
+    fresh copies of `rendered`'s per-section dicts, preserving every other key
+    (chart_png, sign_note, etc.) from the CURRENT in-memory objects. Used to
+    restore a cached sharpen/style-enforcement result without ever having to
+    serialize non-JSON content like raw chart PNG bytes through the cache."""
+    result = []
+    for s in rendered:
+        patch = overlay.get(s.get("section_id"), {})
+        result.append({**s, **patch})
+    return result
+
+
 def main() -> None:
     from datetime import datetime as _dt
     _run_start = _dt.now()
@@ -117,9 +161,12 @@ def main() -> None:
     parser.add_argument("--refresh-chart-titles", action="store_true",
                         help="Force regeneration of cached chart question captions")
     parser.add_argument("--no-cache", action="store_true",
-                        help="Ignore section cache — regenerate all sections from scratch")
+                        help="Bust every stage's cache (section content, sharpen, exec summary, "
+                             "style enforcement, translation) and regenerate the whole pipeline")
     parser.add_argument("--rerun-sections", type=str, default=None,
-                        help="Comma-separated section IDs to regenerate (ignore cache for these only)")
+                        help="Comma-separated section IDs to regenerate (ignore cache for these only "
+                             "at the section-content stage — downstream stages still hash-invalidate "
+                             "automatically since their inputs changed)")
     args = parser.parse_args()
     _force_rerun = set(s.strip() for s in args.rerun_sections.split(",")) if args.rerun_sections else set()
 
@@ -210,60 +257,77 @@ def main() -> None:
     def _build_section(sec: dict) -> dict:
         sid = sec["id"]
         r = interest[sid]
+        df = data[sid]
 
         with cost_lock:
             _check_cost_ceiling(cost_tracker)
 
-        # ── Cache read ────────────────────────────────────────────────────────
-        cache_path = _cache_dir / f"{sid}_w{latest_wave}.json"
-        use_cache = (
-            not args.no_cache
-            and sid not in _force_rerun
-            and cache_path.exists()
+        q_ids = sec.get("question_ids", [])
+        relevant_questions = {qid: question_texts.get(qid.lower(), "") for qid in q_ids}
+        source_hash = _pipeline_cache_hash(
+            SECTION_CONTENT_SYSTEM, SO_WHAT_SYSTEM, MART_QUERY_TEMPLATES, mart_catalogue,
+            sec, _fmt_data_for_prompt(sec, df), relevant_questions, historical_context,
         )
-        if use_cache:
-            cached = json.loads(cache_path.read_text())
-            if cached.get("wave_number") == latest_wave:
-                print(f"  [CACHE HIT] {sid} — rebuilding chart only")
-                chart_title = cached["finding"]
-                chart_question = chart_question_captions.get(sid, "")
-                chart_subtitle = cached.get("chart_subtitle", "")
-                if sid == "financing_gap":
-                    chart_png = build_financing_gap_chart(sec, data[sid],
-                                                          chart_title=chart_title, chart_question=chart_question)
-                elif sid == "bank_loan_terms":
-                    chart_png = build_chart(sec, data[sid], "bar", r["best_panel"],
-                                            chart_subtitle=chart_subtitle,
-                                            chart_title=chart_title, chart_question=chart_question,
-                                            panel_title_suffix=CHART_STRINGS["net_change_pct_suffix"],
-                                            pct_axis=True)
-                else:
-                    chart_png = build_chart(sec, data[sid], r["chart_type"], r["best_panel"],
-                                            chart_subtitle=chart_subtitle,
-                                            chart_title=chart_title, chart_question=chart_question)
-                return {
-                    "section_id": sid,
-                    "title": sec["title"],
-                    "group": sec.get("group", "Other"),
-                    "finding": cached["finding"],
-                    "bullets": cached["bullets"],
-                    "chart_png": chart_png,
-                    "chart_subtitle": chart_subtitle,
-                    "sign_note": sec["sign_note"],
-                    "routed": sec.get("routed", False),
-                    "has_missingness_caveat": sec.get("has_missingness_caveat", False),
-                    "tool_calls": cached.get("tool_calls", 0),
-                    "grounding_warnings": cached.get("grounding_warnings", []),
-                    "grounding_dropped": cached.get("grounding_dropped", []),
-                    "style_warnings": cached.get("style_warnings", []),
-                }
+        cache_key = f"main_w{latest_wave}_{sid}"
+        cache_path = _cache_dir / f"{sid}_w{latest_wave}.json"
+        cache_allowed = not args.no_cache and sid not in _force_rerun
+
+        def _from_cached(cached: dict) -> dict:
+            chart_title = cached["finding"]
+            chart_question = chart_question_captions.get(sid, "")
+            chart_subtitle = cached.get("chart_subtitle", "")
+            if sid == "financing_gap":
+                chart_png = build_financing_gap_chart(sec, df,
+                                                      chart_title=chart_title, chart_question=chart_question)
+            elif sid == "bank_loan_terms":
+                chart_png = build_chart(sec, df, "bar", r["best_panel"],
+                                        chart_subtitle=chart_subtitle,
+                                        chart_title=chart_title, chart_question=chart_question,
+                                        panel_title_suffix=CHART_STRINGS["net_change_pct_suffix"],
+                                        pct_axis=True)
+            else:
+                chart_png = build_chart(sec, df, r["chart_type"], r["best_panel"],
+                                        chart_subtitle=chart_subtitle,
+                                        chart_title=chart_title, chart_question=chart_question)
+            return {
+                "section_id": sid,
+                "title": sec["title"],
+                "group": sec.get("group", "Other"),
+                "finding": cached["finding"],
+                "bullets": cached["bullets"],
+                "chart_png": chart_png,
+                "chart_subtitle": chart_subtitle,
+                "sign_note": sec["sign_note"],
+                "routed": sec.get("routed", False),
+                "has_missingness_caveat": sec.get("has_missingness_caveat", False),
+                "tool_calls": cached.get("tool_calls", 0),
+                "grounding_warnings": cached.get("grounding_warnings", []),
+                "grounding_dropped": cached.get("grounding_dropped", []),
+                "style_warnings": cached.get("style_warnings", []),
+            }
+
+        # ── L1: local JSON cache (hash-validated, not just wave-presence) ──────
+        if cache_allowed and cache_path.exists():
+            local_cached = json.loads(cache_path.read_text())
+            if local_cached.get("source_hash") == source_hash:
+                print(f"  [CACHE HIT L1] {sid}")
+                return _from_cached(local_cached)
 
         thread_con = _get_connection()
         try:
+            # ── L2: MotherDuck cache — gives CI (fresh checkout, no L1) the
+            # persistence L1 never had, and refreshes L1 on a hit.
+            if cache_allowed:
+                remote = _stage_cache_check(thread_con, schema, "section_content", cache_key,
+                                            source_hash, no_cache=False)
+                if remote is not None:
+                    cache_path.write_text(json.dumps(remote, indent=2, ensure_ascii=False))
+                    return _from_cached(remote)
+
             local_tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
             print(f"  Generating finding + bullets for {sid}...")
             content = get_section_content_agentic(
-                sec, data[sid], thread_con, schema, mart_catalogue,
+                sec, df, thread_con, schema, mart_catalogue,
                 local_tracker, question_texts, client=anthropic_client,
                 historical_context=historical_context,
             )
@@ -290,16 +354,16 @@ def main() -> None:
             chart_question = chart_question_captions.get(sid, "")
             print(f"  Building chart for {sid}...")
             if sid == "financing_gap":
-                chart_png = build_financing_gap_chart(sec, data[sid],
+                chart_png = build_financing_gap_chart(sec, df,
                                                       chart_title=chart_title, chart_question=chart_question)
             elif sid == "bank_loan_terms":
-                chart_png = build_chart(sec, data[sid], "bar", r["best_panel"],
+                chart_png = build_chart(sec, df, "bar", r["best_panel"],
                                         chart_subtitle=chart_subtitle,
                                         chart_title=chart_title, chart_question=chart_question,
                                         panel_title_suffix=CHART_STRINGS["net_change_pct_suffix"],
                                         pct_axis=True)
             else:
-                chart_png = build_chart(sec, data[sid], r["chart_type"], r["best_panel"],
+                chart_png = build_chart(sec, df, r["chart_type"], r["best_panel"],
                                         chart_subtitle=chart_subtitle,
                                         chart_title=chart_title, chart_question=chart_question)
 
@@ -320,10 +384,11 @@ def main() -> None:
                 "style_warnings": content.get("style_warnings", []),
             }
 
-            # ── Cache write ───────────────────────────────────────────────────
-            cache_path.write_text(json.dumps({
+            # ── Cache write — both tiers ─────────────────────────────────────
+            payload = {
                 "section_id": sid,
                 "wave_number": latest_wave,
+                "source_hash": source_hash,
                 "finding": content["finding"],
                 "bullets": content["bullets"],
                 "chart_subtitle": content.get("chart_subtitle", ""),
@@ -331,7 +396,10 @@ def main() -> None:
                 "grounding_dropped": content.get("grounding_dropped", []),
                 "style_warnings": content.get("style_warnings", []),
                 "tool_calls": content.get("tool_calls", 0),
-            }, indent=2, ensure_ascii=False))
+            }
+            cache_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False))
+            _pipeline_cache_put(thread_con, schema, "section_content", cache_key, source_hash,
+                                payload, "claude-sonnet-4-6")
 
             return result
         finally:
@@ -350,22 +418,60 @@ def main() -> None:
     _check_cost_ceiling(cost_tracker)
     _check_grounding_blocking(rendered)
 
+    def _section_text_snapshot(secs: list[dict]) -> list[dict]:
+        """{section_id, finding, bullets} only — the JSON-serializable subset
+        of `rendered` a text-only stage (sharpen) actually reads/writes,
+        excluding chart_png and other non-cacheable content."""
+        return [
+            {"section_id": s["section_id"], "finding": s.get("finding", ""), "bullets": s.get("bullets", [])}
+            for s in sorted(secs, key=lambda s: s["section_id"])
+        ]
+
     if ecb_context:
         print("Sharpening bullets against ECB publication...")
-        rendered = _sharpen_with_ecb(rendered, ecb_context, mistral_client, cost_tracker)
+        _sharpen_key = f"main_w{latest_wave}"
+        _sharpen_hash = _pipeline_cache_hash(ECB_SHARPEN_SYSTEM, ecb_context, _section_text_snapshot(rendered))
+        _cached = _stage_cache_check(tool_con, schema, "sharpen", _sharpen_key, _sharpen_hash, args.no_cache)
+        if _cached is not None:
+            overlay = {row["section_id"]: {"finding": row["finding"], "bullets": row["bullets"]} for row in _cached}
+            rendered = _apply_section_overlay(rendered, overlay)
+        else:
+            rendered = _sharpen_with_ecb(rendered, ecb_context, mistral_client, cost_tracker)
+            _pipeline_cache_put(tool_con, schema, "sharpen", _sharpen_key, _sharpen_hash,
+                                _section_text_snapshot(rendered), "mistral-small-latest")
 
     _annex_loaded_ok = len(question_texts) > 0
 
     print("Classifying ECB emphasis + computing exec-summary signals...")
     sections_by_id = {s["id"]: s for s in SECTIONS}
-    ecb_emphasis = classify_ecb_emphasis(ecb_context, interesting_sections, mistral_client, cost_tracker)
+    _emph_key = f"main_w{latest_wave}"
+    _emph_hash = _pipeline_cache_hash(
+        ECB_EMPHASIS_SYSTEM, ecb_context, sorted((s["id"], s["title"]) for s in interesting_sections),
+    )
+    ecb_emphasis = _stage_cache_check(tool_con, schema, "classify_emphasis", _emph_key, _emph_hash, args.no_cache)
+    if ecb_emphasis is None:
+        ecb_emphasis = classify_ecb_emphasis(ecb_context, interesting_sections, mistral_client, cost_tracker)
+        _pipeline_cache_put(tool_con, schema, "classify_emphasis", _emph_key, _emph_hash,
+                            ecb_emphasis, "mistral-small-latest")
     section_signals = build_section_signals(rendered, data, sections_by_id, ecb_emphasis)
 
     print("Generating executive summary (two-pass)...")
-    exec_bullets = get_exec_summary(
-        rendered, cost_tracker, historical_context=historical_context,
-        section_signals=section_signals, anthropic_client=anthropic_client,
-    ) if rendered else []
+    if rendered:
+        _exec_key = f"main_w{latest_wave}"
+        _exec_hash = _pipeline_cache_hash(
+            EXEC_CROSS_SECTION_SYSTEM, EXEC_SUMMARY_SYSTEM, _section_text_snapshot(rendered),
+            historical_context, section_signals,
+        )
+        exec_bullets = _stage_cache_check(tool_con, schema, "exec_summary", _exec_key, _exec_hash, args.no_cache)
+        if exec_bullets is None:
+            exec_bullets = get_exec_summary(
+                rendered, cost_tracker, historical_context=historical_context,
+                section_signals=section_signals, anthropic_client=anthropic_client,
+            )
+            _pipeline_cache_put(tool_con, schema, "exec_summary", _exec_key, _exec_hash,
+                                exec_bullets, "claude-opus-4-8")
+    else:
+        exec_bullets = []
     for item in exec_bullets:
         print(f"  [{item.get('section_id', '?')}] {item.get('bullet', '')}")
 
@@ -384,10 +490,29 @@ def main() -> None:
     painting_inner_html = _fetch_painting_inner_html()
 
     print("Enforcing bullet style (EN)...")
-    rendered, exec_bullets, style_flagged_en = enforce_bullet_style(
-        rendered, exec_bullets, mistral_client, cost_tracker, label="EN",
-        data=data, sections_by_id=sections_by_id,
+    _style_en_key = f"main_w{latest_wave}_en"
+    _style_en_hash = _pipeline_cache_hash(
+        ENFORCE_STYLE_SYSTEM, inspect.getsource(evals), _section_text_snapshot(rendered),
+        [item.get("bullet", "") for item in exec_bullets],
     )
+    _style_en_cached = _stage_cache_check(
+        tool_con, schema, "style_en", _style_en_key, _style_en_hash, args.no_cache)
+    if _style_en_cached is not None:
+        overlay = {row["section_id"]: {"finding": row["finding"], "bullets": row["bullets"]}
+                   for row in _style_en_cached["sections"]}
+        rendered = _apply_section_overlay(rendered, overlay)
+        exec_bullets = _style_en_cached["exec_bullets"]
+        style_flagged_en = _style_en_cached["flagged"]
+    else:
+        rendered, exec_bullets, style_flagged_en = enforce_bullet_style(
+            rendered, exec_bullets, mistral_client, cost_tracker, label="EN",
+            data=data, sections_by_id=sections_by_id,
+        )
+        _pipeline_cache_put(tool_con, schema, "style_en", _style_en_key, _style_en_hash, {
+            "sections": _section_text_snapshot(rendered),
+            "exec_bullets": exec_bullets,
+            "flagged": style_flagged_en,
+        }, "mistral-small-latest")
 
     print("Assembling HTML (EN)...")
     html = build_html(rendered, annex_html, exec_bullets, toc_html, painting_inner_html, latest_wave,
@@ -402,15 +527,59 @@ def main() -> None:
     print(f"WAVE_REPORT_EN={wave_en}")
 
     print("Translating to Slovak...")
-    sk_rendered, sk_exec_bullets, sk_question_texts = translate_to_slovak(
-        rendered, exec_bullets, cost_tracker, question_texts=question_texts,
+    _translate_key = f"main_w{latest_wave}"
+    _translate_hash = _pipeline_cache_hash(
+        TRANSLATE_SYSTEM, _section_text_snapshot(rendered),
+        sorted((s["section_id"], s.get("title", "")) for s in rendered),
+        [item.get("bullet", "") for item in exec_bullets], question_texts,
     )
+    _translate_cached = _stage_cache_check(
+        tool_con, schema, "translate_sk", _translate_key, _translate_hash, args.no_cache)
+    if _translate_cached is not None:
+        overlay = {row["section_id"]: {"title": row["title"], "finding": row["finding"],
+                                       "bullets": row["bullets"]}
+                   for row in _translate_cached["sections"]}
+        sk_rendered = _apply_section_overlay(rendered, overlay)
+        sk_exec_bullets = _translate_cached["exec_bullets"]
+        sk_question_texts = _translate_cached["question_texts"]
+    else:
+        sk_rendered, sk_exec_bullets, sk_question_texts = translate_to_slovak(
+            rendered, exec_bullets, cost_tracker, question_texts=question_texts,
+        )
+        _pipeline_cache_put(tool_con, schema, "translate_sk", _translate_key, _translate_hash, {
+            "sections": [
+                {"section_id": s["section_id"], "title": s.get("title", ""),
+                 "finding": s.get("finding", ""), "bullets": s.get("bullets", [])}
+                for s in sk_rendered
+            ],
+            "exec_bullets": sk_exec_bullets,
+            "question_texts": sk_question_texts,
+        }, "mistral-large-2512")
 
     print("Enforcing bullet style (SK)...")
-    sk_rendered, sk_exec_bullets, style_flagged_sk = enforce_bullet_style(
-        sk_rendered, sk_exec_bullets, mistral_client, cost_tracker, label="SK",
-        data=data, sections_by_id=sections_by_id,
+    _style_sk_key = f"main_w{latest_wave}_sk"
+    _style_sk_hash = _pipeline_cache_hash(
+        ENFORCE_STYLE_SYSTEM, inspect.getsource(evals), _section_text_snapshot(sk_rendered),
+        [item.get("bullet", "") for item in sk_exec_bullets],
     )
+    _style_sk_cached = _stage_cache_check(
+        tool_con, schema, "style_sk", _style_sk_key, _style_sk_hash, args.no_cache)
+    if _style_sk_cached is not None:
+        overlay = {row["section_id"]: {"finding": row["finding"], "bullets": row["bullets"]}
+                   for row in _style_sk_cached["sections"]}
+        sk_rendered = _apply_section_overlay(sk_rendered, overlay)
+        sk_exec_bullets = _style_sk_cached["exec_bullets"]
+        style_flagged_sk = _style_sk_cached["flagged"]
+    else:
+        sk_rendered, sk_exec_bullets, style_flagged_sk = enforce_bullet_style(
+            sk_rendered, sk_exec_bullets, mistral_client, cost_tracker, label="SK",
+            data=data, sections_by_id=sections_by_id,
+        )
+        _pipeline_cache_put(tool_con, schema, "style_sk", _style_sk_key, _style_sk_hash, {
+            "sections": _section_text_snapshot(sk_rendered),
+            "exec_bullets": sk_exec_bullets,
+            "flagged": style_flagged_sk,
+        }, "mistral-small-latest")
 
     sk_annex_html = build_annex_html(con=tool_con, ui=_SK_UI, question_texts_override=sk_question_texts)
 

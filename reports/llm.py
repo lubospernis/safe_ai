@@ -1761,6 +1761,65 @@ def _shorten_panel_label_llm(source_text: str, mistral_client) -> dict:
     return result
 
 
+def _pipeline_cache_ddl(con, schema: str) -> None:
+    con.execute(f"""
+        CREATE TABLE IF NOT EXISTS {schema}.ref_safe__pipeline_stage_cache (
+            stage         VARCHAR NOT NULL,
+            cache_key     VARCHAR NOT NULL,
+            source_hash   VARCHAR NOT NULL,
+            payload       JSON NOT NULL,
+            model_id      VARCHAR NOT NULL,
+            generated_at  TIMESTAMP NOT NULL,
+            PRIMARY KEY (stage, cache_key)
+        )
+    """)
+
+
+def _pipeline_cache_hash(*parts) -> str:
+    """Deterministic hash of arbitrary JSON-serializable stage inputs (prompt
+    constants, config, upstream content) — any change to any part changes
+    this hash, auto-invalidating the cache with no manual version bump."""
+    blob = json.dumps(parts, sort_keys=True, ensure_ascii=False, default=str)
+    return hashlib.sha256(blob.encode()).hexdigest()[:16]
+
+
+def _pipeline_cache_get(con, schema: str, stage: str, cache_key: str) -> tuple[str, object] | None:
+    """Return (source_hash, payload) for a cached stage output, or None on a
+    miss — absent row, first-ever call before the table exists, or a
+    transient MotherDuck error all degrade to "regenerate" rather than fail
+    the run, matching get_shortened_questions' existing read pattern."""
+    try:
+        _pipeline_cache_ddl(con, schema)
+        row = con.execute(
+            f"SELECT source_hash, payload FROM {schema}.ref_safe__pipeline_stage_cache "
+            f"WHERE stage = ? AND cache_key = ?",
+            [stage, cache_key],
+        ).fetchone()
+    except Exception:
+        return None
+    if row is None:
+        return None
+    source_hash, payload = row
+    try:
+        return source_hash, json.loads(payload)
+    except Exception:
+        return None
+
+
+def _pipeline_cache_put(
+    con, schema: str, stage: str, cache_key: str, source_hash: str, payload: object, model_id: str,
+) -> None:
+    try:
+        _pipeline_cache_ddl(con, schema)
+        con.execute(
+            f"INSERT OR REPLACE INTO {schema}.ref_safe__pipeline_stage_cache VALUES (?,?,?,?,?,?)",
+            [stage, cache_key, source_hash, json.dumps(payload, ensure_ascii=False),
+             model_id, datetime.utcnow()],
+        )
+    except Exception as e:
+        print(f"  [PIPELINE CACHE] write failed for {stage}/{cache_key}: {e}")
+
+
 def get_shortened_questions(
     sections: list[dict],
     question_texts: dict[str, str],
@@ -1903,6 +1962,31 @@ def _write_wave_memory(
         print(f"  Wave memory write failed: {e}")
 
 
+TRANSLATE_SYSTEM = (
+    "Translate the following ECB SAFE survey report content to Slovak. "
+    "Keep all numbers, percentages, and proper nouns (Slovakia, Euro Area, Germany, ECB, "
+    "SAFE) unchanged. Use formal economic Slovak (not colloquial). "
+    "For \"exec_bullets\", \"sections\" (finding/bullets/title), and \"adhoc\" content: "
+    "write IDIOMATIC, NATIVE Slovak — do not mirror the English sentence's clause order or "
+    "structure word-for-word. A literal/calque translation that sounds grammatically odd "
+    "in Slovak is a FAILURE even if every word is individually correct. In particular, "
+    "many English headlines use a noun as the grammatical subject of a verb it wouldn't "
+    "naturally take in Slovak (e.g. \"Credit line stress widened sharply\" — \"stres sa "
+    "rozšíril\" is not idiomatic; restructure around what actually widened, e.g. \"medzera "
+    "vo financovaní úverových liniek sa výrazne rozšírila\", or lead with the cause). "
+    "When in doubt, translate the MEANING, not the sentence structure. "
+    "Each translated bullet must stay at or under 35 words. If a literal translation "
+    "would exceed this, choose more concise Slovak phrasing rather than a longer "
+    "literal rendering — do not add clauses or explanatory asides that aren't in the "
+    "English source just to make the Slovak read more naturally. "
+    "If an \"annex_questions\" object is present, translate every question text value "
+    "(keep the keys, i.e. question IDs, unchanged) — these are official survey question "
+    "wordings shown in a glossary; for THIS field only, translate faithfully/literally "
+    "rather than paraphrasing, since it must match the ECB's published wording. "
+    "Return valid JSON only — no markdown fences — with exactly the same structure as the input."
+)
+
+
 def translate_to_slovak(
     rendered: list[dict],
     exec_bullets: list[dict],
@@ -1945,30 +2029,7 @@ def translate_to_slovak(
             ],
         }
 
-    prompt = (
-        "Translate the following ECB SAFE survey report content to Slovak. "
-        "Keep all numbers, percentages, and proper nouns (Slovakia, Euro Area, Germany, ECB, "
-        "SAFE) unchanged. Use formal economic Slovak (not colloquial). "
-        "For \"exec_bullets\", \"sections\" (finding/bullets/title), and \"adhoc\" content: "
-        "write IDIOMATIC, NATIVE Slovak — do not mirror the English sentence's clause order or "
-        "structure word-for-word. A literal/calque translation that sounds grammatically odd "
-        "in Slovak is a FAILURE even if every word is individually correct. In particular, "
-        "many English headlines use a noun as the grammatical subject of a verb it wouldn't "
-        "naturally take in Slovak (e.g. \"Credit line stress widened sharply\" — \"stres sa "
-        "rozšíril\" is not idiomatic; restructure around what actually widened, e.g. \"medzera "
-        "vo financovaní úverových liniek sa výrazne rozšírila\", or lead with the cause). "
-        "When in doubt, translate the MEANING, not the sentence structure. "
-        "Each translated bullet must stay at or under 35 words. If a literal translation "
-        "would exceed this, choose more concise Slovak phrasing rather than a longer "
-        "literal rendering — do not add clauses or explanatory asides that aren't in the "
-        "English source just to make the Slovak read more naturally. "
-        "If an \"annex_questions\" object is present, translate every question text value "
-        "(keep the keys, i.e. question IDs, unchanged) — these are official survey question "
-        "wordings shown in a glossary; for THIS field only, translate faithfully/literally "
-        "rather than paraphrasing, since it must match the ECB's published wording. "
-        "Return valid JSON only — no markdown fences — with exactly the same structure as the input.\n\n"
-        + json.dumps(payload, ensure_ascii=False)
-    )
+    prompt = TRANSLATE_SYSTEM + "\n\n" + json.dumps(payload, ensure_ascii=False)
     client = _mistral_client()
     _TRANSLATE_MODEL = "mistral-large-2512"
     resp = client.chat.complete(

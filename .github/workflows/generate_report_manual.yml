@@ -14,6 +14,11 @@ on:
         description: "Wave number to cap the report at (e.g. 37). Leave blank for the latest wave."
         required: false
         type: string
+      no_cache:
+        description: "Bust every pipeline-stage cache and force a full regenerate (e.g. to verify a prompt/content fix actually changes output, not just to see cached content again)."
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   report:
@@ -48,11 +53,14 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           MISTRAL_API_KEY:   ${{ secrets.MISTRAL_API_KEY }}
         run: |
+          ARGS=()
           if [ -n "${{ inputs.wave }}" ]; then
-            python reports/run_report.py --wave "${{ inputs.wave }}"
-          else
-            python reports/run_report.py
+            ARGS+=(--wave "${{ inputs.wave }}")
           fi
+          if [ "${{ inputs.no_cache }}" = "true" ]; then
+            ARGS+=(--no-cache)
+          fi
+          python reports/run_report.py "${ARGS[@]}"
 
       - name: Quality check (EN)
         if: always()

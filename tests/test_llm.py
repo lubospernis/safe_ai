@@ -5,8 +5,9 @@ import pandas as pd
 import pytest
 
 from llm import (
-    _check_exec_provenance, _check_numeric_grounding, _fix_exec_provenance_mislabels,
-    _fmt_data_for_prompt, _parse_section_response,
+    _check_exec_provenance, _check_numeric_grounding, _clean_num_token,
+    _fix_exec_provenance_mislabels,
+    _fmt_data_for_prompt, _NUMBER_RE, _parse_section_response,
     _shorten_question_llm, _sme_divergence_note, build_section_signals,
     classify_ecb_emphasis, direction_reversal, get_exec_summary,
     get_shortened_questions, historical_extremity, reliable_n, sk_ea_gap, translate_to_slovak,
@@ -340,6 +341,45 @@ def test_grounding_check_still_flags_invented_number_despite_new_skips():
     )
     assert len(warnings) == 1
     assert "77.2" in warnings[0]
+
+
+# ── _NUMBER_RE / _clean_num_token: EN thousands-comma vs SK decimal-comma ───
+# Real production bug: Slovak formats decimals with a comma ("43,8" = 43.8,
+# not English "43.8"), which the translation pass renders despite its prompt
+# saying to keep numbers unchanged. The old cleaner only handled English
+# thousands-separator commas ("5,087" -> "5087"), so "43,8" tokenized as two
+# separate numbers ("43" and "8"), and the grounding safety-net in
+# enforce_bullet_style then flagged the real, correctly cited "43" as
+# fabricated — aborting every SK run with dozens of false positives.
+
+
+def _tokens(text: str) -> list[str]:
+    return [_clean_num_token(m.group(1)) for m in _NUMBER_RE.finditer(text)]
+
+
+def test_number_re_slovak_decimal_comma_is_one_token():
+    assert _tokens("Čistých 43,8 % slovenských firiem") == ["43.8"]
+
+
+def test_number_re_slovak_decimal_comma_two_digits():
+    assert _tokens("Regulácia dosiahla 6,10/10 (n=236)") == ["6.10", "10", "236"]
+
+
+def test_number_re_english_thousands_comma_still_works():
+    assert _tokens("a net 54% (n=5,087)") == ["54", "5087"]
+
+
+def test_number_re_english_decimal_period_unaffected():
+    assert _tokens("A net 43.8% of Slovak firms (n=76)") == ["43.8", "76"]
+
+
+def test_grounding_check_accepts_slovak_decimal_comma_citation():
+    df = pd.DataFrame([{"net_balance_wtd": 43.8, "wave_number": 39}])
+    warnings = _check_numeric_grounding(
+        ["Čistých 43,8 % slovenských firiem (n=76) uviedlo sprísnenie podmienok."],
+        df, ["net_balance_wtd"],
+    )
+    assert warnings == []
 
 
 # ── _check_exec_provenance / _fix_exec_provenance_mislabels ─────────────────

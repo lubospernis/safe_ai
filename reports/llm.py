@@ -105,14 +105,21 @@ _LEAKED_PATTERNS = re.compile(
 )
 
 
-_NUMBER_RE = re.compile(r'(?<!\d)(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)(?!\d)')
+_NUMBER_RE = re.compile(r'(?<!\d)(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+,\d{1,2}(?!\d)|\d+(?:\.\d+)?)(?!\d)')
 
 
 def _clean_num_token(num_str: str) -> str:
-    """Strip thousands-separator commas so a citation like '5,087' parses as
-    5087 (one number) instead of splitting at the comma into '5' and '087'
-    (with '087' then wrongly read as 87 and flagged as ungrounded)."""
-    return num_str.replace(",", "")
+    """Normalize a matched number token to a plain float-parseable string.
+    Handles two comma conventions in this pipeline's bilingual EN/SK bullets:
+    English thousands separator ("5,087" -> "5087") and Slovak/European
+    decimal separator ("43,8" -> "43.8", "6,10" -> "6.10") — Slovak formats
+    decimals with a comma where English uses a period, which the translation
+    pass renders even though its prompt says to keep numbers unchanged."""
+    if "," not in num_str:
+        return num_str
+    if re.fullmatch(r"\d{1,3}(?:,\d{3})+(?:\.\d+)?", num_str):
+        return num_str.replace(",", "")
+    return num_str.replace(",", ".")
 
 # "13.8 pp above the EA's 32.7%" / "1.5 pp below the EA average of 15.6%" /
 # "gap of 6.8 pp" / "worsening 8.8 pp from a net 25.0%" / "up 21.78 pp from" /

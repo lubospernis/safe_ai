@@ -1,5 +1,6 @@
 import json
 
+import pandas as pd
 import pytest
 from unittest.mock import MagicMock
 
@@ -125,6 +126,33 @@ def test_grounding_recheck_passes_clean_bullets(sample_cost_tracker, net_balance
 
     new_rendered, new_exec, flagged = enforce_bullet_style(
         rendered, [], client, sample_cost_tracker, label="EN",
+        data=data, sections_by_id=sections_by_id,
+    )
+
+    assert flagged == []
+    client.chat.complete.assert_not_called()
+
+
+def test_grounding_recheck_handles_slovak_decimal_comma(sample_cost_tracker):
+    """Reproduces a real production failure: Slovak formats decimals with a
+    comma ('43,8' means 43.8), and the translation pass renders numbers this
+    way despite being told to keep them unchanged. The grounding safety-net
+    was tokenizing '43,8' as two separate numbers ('43' and '8'), flagging a
+    real, correctly cited value as fabricated and aborting every SK run."""
+    df = pd.DataFrame([{
+        "wave_number": 39, "country_code": "SK", "net_balance_wtd": 43.8,
+        "n_respondents": 76, "firm_size": "all",
+    }])
+    client = MagicMock()
+    rendered = [{
+        "section_id": "sec1",
+        "bullets": ["Čistých 43,8 % slovenských firiem (n=76) uviedlo sprísnenie podmienok."],
+    }]
+    data = {"sec1": df}
+    sections_by_id = {"sec1": {"value_col": "net_balance_wtd"}}
+
+    new_rendered, new_exec, flagged = enforce_bullet_style(
+        rendered, [], client, sample_cost_tracker, label="SK",
         data=data, sections_by_id=sections_by_id,
     )
 

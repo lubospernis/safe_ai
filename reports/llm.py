@@ -18,6 +18,8 @@ from db import (
     _run_query_tool,
 )
 
+MAX_GROUNDING_RETRIES = 2  # feedback-and-regenerate attempts before dropping an ungrounded bullet
+
 EMIT_SECTION_TOOL = {
     "name": "emit_section_json",
     "description": "Emit the final finding, bullets, and chart_subtitle as structured output.",
@@ -984,6 +986,25 @@ def check_all_interest(
     return results
 
 
+def _parse_emit_section_response(emit_resp) -> dict | None:
+    """Extract {tool_use_id, finding, bullets, chart_subtitle} from an
+    emit_section_json tool call, or None if the model didn't call it."""
+    for block in emit_resp.content:
+        if getattr(block, "type", None) == "tool_use" and block.name == "emit_section_json":
+            inp = block.input
+            finding = str(inp.get("finding", "")).strip()
+            raw_bullets = inp.get("bullets", [])
+            if isinstance(raw_bullets, list):
+                bullets = [str(b).strip().lstrip("•- ") for b in raw_bullets if str(b).strip()]
+            else:
+                bullets = [str(raw_bullets).strip().lstrip("•- ")]
+            bullets = [b for b in bullets if not _is_reasoning_leak(b)][:3]
+            chart_subtitle = str(inp.get("chart_subtitle", "")).strip()
+            return {"tool_use_id": block.id, "finding": finding, "bullets": bullets,
+                    "chart_subtitle": chart_subtitle}
+    return None
+
+
 def get_section_content_agentic(
     sec: dict,
     df: pd.DataFrame,
@@ -1088,27 +1109,76 @@ def get_section_content_agentic(
     )
     _track_cost(cost_tracker, "claude-sonnet-4-6", emit_resp.usage)
 
-    for block in emit_resp.content:
-        if getattr(block, "type", None) == "tool_use" and block.name == "emit_section_json":
-            inp = block.input
-            finding = str(inp.get("finding", sec["title"])).strip() or sec["title"]
-            raw_bullets = inp.get("bullets", [])
-            if isinstance(raw_bullets, list):
-                bullets = [str(b).strip().lstrip("•- ") for b in raw_bullets if str(b).strip()]
-            else:
-                bullets = [str(raw_bullets).strip().lstrip("•- ")]
-            bullets = [b for b in bullets if not _is_reasoning_leak(b)][:3]
-            chart_subtitle = str(inp.get("chart_subtitle", "")).strip()
-            value_cols = [sec.get("value_col", "net_balance_wtd"),
-                          "pct_cited_wtd", "avg_pressingness_wtd"]
+    parsed = _parse_emit_section_response(emit_resp)
+    if parsed is not None:
+        sid_label = sec.get("id", "?")
+        value_cols = [sec.get("value_col", "net_balance_wtd"),
+                      "pct_cited_wtd", "avg_pressingness_wtd"]
+        finding = parsed["finding"] or sec["title"]
+        bullets = parsed["bullets"]
+        chart_subtitle = parsed["chart_subtitle"]
+        grounding_warns = _check_numeric_grounding(bullets, df, value_cols)
+
+        # Ungrounded numbers: give the model the specific failures and let it
+        # regenerate, instead of hard-failing the whole run over one bad bullet.
+        retry_attempt = 0
+        while grounding_warns and retry_attempt < MAX_GROUNDING_RETRIES:
+            retry_attempt += 1
+            print(f"  [GROUNDING RETRY {retry_attempt}/{MAX_GROUNDING_RETRIES}] [{sid_label}] "
+                  f"{len(grounding_warns)} unverified number(s) — asking model to revise")
+            feedback = (
+                "Grounding check failed. These numbers in your bullets could not be verified "
+                "against the source data queried earlier in this conversation:\n"
+                + "\n".join(f"- {w}" for w in grounding_warns)
+                + "\n\nRevise the bullets: use only numbers you can trace directly to a query "
+                  "result above, or drop the unverifiable claim from the bullet entirely. Do "
+                  "not invent or approximate a replacement number. Call emit_section_json "
+                  "again with the corrected finding/bullets/chart_subtitle."
+            )
+            messages.append({"role": "assistant", "content": emit_resp.content})
+            messages.append({
+                "role": "user",
+                "content": [{"type": "tool_result", "tool_use_id": parsed["tool_use_id"],
+                             "content": feedback}],
+            })
+            emit_resp = client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=500,
+                system=cached_system,
+                tools=[EMIT_SECTION_TOOL],
+                tool_choice={"type": "any"},
+                messages=messages,
+                extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
+            )
+            _track_cost(cost_tracker, "claude-sonnet-4-6", emit_resp.usage)
+            parsed = _parse_emit_section_response(emit_resp)
+            if parsed is None:
+                break
+            finding = parsed["finding"] or finding
+            bullets = parsed["bullets"]
+            chart_subtitle = parsed["chart_subtitle"] or chart_subtitle
             grounding_warns = _check_numeric_grounding(bullets, df, value_cols)
-            if grounding_warns:
-                sid_label = sec.get("id", "?")
-                for w in grounding_warns:
-                    print(f"  [GROUNDING WARN] [{sid_label}] {w}")
-            return {"finding": finding, "bullets": bullets, "chart_subtitle": chart_subtitle,
-                    "tool_calls": tool_calls_made,
-                    "grounding_warnings": grounding_warns if grounding_warns else []}
+
+        dropped = []
+        if grounding_warns:
+            # Retries exhausted — exclude just the still-ungrounded bullet(s)
+            # rather than blocking the whole section/report over them.
+            kept_bullets = []
+            for b in bullets:
+                b_warns = _check_numeric_grounding([b], df, value_cols)
+                if b_warns:
+                    dropped.append(b)
+                    print(f"  [GROUNDING DROPPED] [{sid_label}] excluded after "
+                          f"{MAX_GROUNDING_RETRIES} retries ({b_warns}): {b!r}")
+                else:
+                    kept_bullets.append(b)
+            bullets = kept_bullets
+            grounding_warns = []  # nothing ungrounded remains in what's published
+
+        return {"finding": finding, "bullets": bullets, "chart_subtitle": chart_subtitle,
+                "tool_calls": tool_calls_made,
+                "grounding_warnings": grounding_warns,
+                "grounding_dropped": dropped}
 
     # Last-resort fallback: extract text from emit response and parse
     text_blocks = [b.text for b in emit_resp.content if hasattr(b, "text")]

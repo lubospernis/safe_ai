@@ -257,6 +257,7 @@ def main() -> None:
                     "has_missingness_caveat": sec.get("has_missingness_caveat", False),
                     "tool_calls": cached.get("tool_calls", 0),
                     "grounding_warnings": cached.get("grounding_warnings", []),
+                    "grounding_dropped": cached.get("grounding_dropped", []),
                 }
 
         thread_con = _get_connection()
@@ -317,6 +318,7 @@ def main() -> None:
                 "has_missingness_caveat": sec.get("has_missingness_caveat", False),
                 "tool_calls": content.get("tool_calls", 0),
                 "grounding_warnings": content.get("grounding_warnings", []),
+                "grounding_dropped": content.get("grounding_dropped", []),
             }
 
             # ── Cache write ───────────────────────────────────────────────────
@@ -327,6 +329,7 @@ def main() -> None:
                 "bullets": content["bullets"],
                 "chart_subtitle": content.get("chart_subtitle", ""),
                 "grounding_warnings": content.get("grounding_warnings", []),
+                "grounding_dropped": content.get("grounding_dropped", []),
                 "tool_calls": content.get("tool_calls", 0),
             }, indent=2, ensure_ascii=False))
 
@@ -503,6 +506,7 @@ def main() -> None:
                 "finding": s.get("finding", ""),
                 "bullets": s.get("bullets", []),
                 "grounding_warnings": s.get("grounding_warnings", []),
+                "grounding_dropped": s.get("grounding_dropped", []),
             }
             for s in rendered
         ],
@@ -524,6 +528,7 @@ def main() -> None:
         },
         "n_sections": len(rendered),
         "grounding_warning_count": sum(len(s.get("grounding_warnings", [])) for s in rendered),
+        "grounding_dropped_count": sum(len(s.get("grounding_dropped", [])) for s in rendered),
         "duration_seconds": round((_dt.now() - _run_start).total_seconds(), 1),
         "context_sources": {
             "annex_loaded": _annex_loaded_ok,

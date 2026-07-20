@@ -1515,14 +1515,16 @@ def get_exec_summary(
             messages=messages,
         )
         _track_cost(cost_tracker, _EXEC_MODEL, response.usage)
-        if response.stop_reason != "tool_use":
-            messages.append({"role": "assistant", "content": response.content})
-            break
         messages.append({"role": "assistant", "content": response.content})
+        # Any tool_use block must get a paired tool_result in the very next message,
+        # even if stop_reason isn't "tool_use" (e.g. "max_tokens" cutting the model
+        # off mid tool-call still leaves a tool_use block in response.content) — an
+        # unpaired tool_use id makes the next API call fail with a 400.
+        tool_use_blocks = [b for b in response.content if getattr(b, "type", None) == "tool_use"]
+        if not tool_use_blocks:
+            break
         tool_results = []
-        for block in response.content:
-            if block.type != "tool_use":
-                continue
+        for block in tool_use_blocks:
             a = block.input.get("a")
             b = block.input.get("b")
             label = block.input.get("label", "")
@@ -1534,6 +1536,8 @@ def get_exec_summary(
                 content = "ERROR: a and b must be numbers"
             tool_results.append({"type": "tool_result", "tool_use_id": block.id, "content": content})
         messages.append({"role": "user", "content": tool_results})
+        if response.stop_reason != "tool_use":
+            break
 
     # Force structured output via emit_exec_bullets — cannot return plain text/JSON.
     messages.append({

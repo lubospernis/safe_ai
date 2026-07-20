@@ -102,7 +102,14 @@ _LEAKED_PATTERNS = re.compile(
 )
 
 
-_NUMBER_RE = re.compile(r'(?<!\d)(\d+(?:\.\d+)?)(?!\d)')
+_NUMBER_RE = re.compile(r'(?<!\d)(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)(?!\d)')
+
+
+def _clean_num_token(num_str: str) -> str:
+    """Strip thousands-separator commas so a citation like '5,087' parses as
+    5087 (one number) instead of splitting at the comma into '5' and '087'
+    (with '087' then wrongly read as 87 and flagged as ungrounded)."""
+    return num_str.replace(",", "")
 
 # "13.8 pp above the EA's 32.7%" / "1.5 pp below the EA average of 15.6%" /
 # "gap of 6.8 pp" / "worsening 8.8 pp from a net 25.0%" / "up 21.78 pp from" /
@@ -134,11 +141,11 @@ def _is_verified_pp_delta(bullet: str, num_str: str, start: int, end: int) -> bo
     if not (_PP_DELTA_RE.match(following.lstrip()) or _PP_DELTA_RE.search(preceding)):
         return False
     try:
-        target = float(num_str)
+        target = float(_clean_num_token(num_str))
     except ValueError:
         return False
     other_numbers = [
-        float(m.group(1)) for m in _NUMBER_RE.finditer(bullet)
+        float(_clean_num_token(m.group(1))) for m in _NUMBER_RE.finditer(bullet)
         if not (m.start() == start and m.end() == end)
     ]
     return any(
@@ -190,7 +197,7 @@ def _check_numeric_grounding(bullets: list[str], df: pd.DataFrame, value_cols: l
     errors = []
     for bullet in bullets:
         for m in _NUMBER_RE.finditer(bullet):
-            num_str = m.group(1)
+            num_str = _clean_num_token(m.group(1))
             start, end = m.span()
 
             # Sample-size citation: "n=62" or "(n=62)"
@@ -239,7 +246,7 @@ def _cited_numbers(text: str) -> set[str]:
     filter as _check_numeric_grounding (skip wave numbers, years, small counts)."""
     out: set[str] = set()
     for m in _NUMBER_RE.finditer(text):
-        num_str = m.group(1)
+        num_str = _clean_num_token(m.group(1))
         try:
             iv = int(num_str.split(".")[0])
         except ValueError:
@@ -1756,9 +1763,9 @@ def _write_wave_memory(
         all_bullets_text = " ".join(
             b for r in rendered for b in r.get("bullets", [])
         )
-        summary_numbers = [m.group(1) for m in _NUMBER_RE.finditer(summary)
-                           if len(m.group(1)) > 1 and int(m.group(1).split(".")[0]) <= 200]
-        bad_nums = [n for n in summary_numbers if n not in all_bullets_text]
+        summary_numbers = [_clean_num_token(m.group(1)) for m in _NUMBER_RE.finditer(summary)
+                           if len(m.group(1)) > 1 and int(_clean_num_token(m.group(1)).split(".")[0]) <= 200]
+        bad_nums = [n for n in summary_numbers if n not in all_bullets_text.replace(",", "")]
         if bad_nums:
             print(f"  [MEMORY WARN] Wave memory cites numbers not in bullets: {bad_nums} — skipping write")
             return

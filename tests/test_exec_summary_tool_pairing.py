@@ -50,11 +50,15 @@ def test_truncated_tool_call_does_not_leave_dangling_tool_use(sample_cost_tracke
     """A response with stop_reason='max_tokens' that still contains a tool_use
     block must get a paired tool_result before the conversation continues —
     otherwise the next API call 400s on 'tool_use ids were found without
-    tool_result blocks'. This reproduces a live production failure."""
+    tool_result blocks'. This reproduces a live production failure. The loop
+    must then keep going (retry, within the turn budget) rather than jumping
+    straight to emit_exec_bullets — proven here by the mock needing a 4th
+    response (a normal no-tool-use turn) before the final emit call."""
     client = MagicMock()
     client.messages.create.side_effect = [
         _text_response("Cross-cutting theme: inflation risk divergence."),  # pass 1
-        _truncated_tool_use_response(),                                    # loop: truncated
+        _truncated_tool_use_response(),                                    # loop turn 1: truncated
+        _text_response("Ready to finalize."),                              # loop turn 2: no more tools
         _emit_bullets_response(),                                          # final emit
     ]
 
@@ -70,7 +74,7 @@ def test_truncated_tool_call_does_not_leave_dangling_tool_use(sample_cost_tracke
         rendered_sections, sample_cost_tracker, anthropic_client=client,
     )
 
-    assert client.messages.create.call_count == 3
+    assert client.messages.create.call_count == 4
 
     # The tool_result for the truncated tool_use must have been appended
     # immediately after its assistant message, with no user-text message in between.

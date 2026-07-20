@@ -1536,8 +1536,10 @@ def get_exec_summary(
                 content = "ERROR: a and b must be numbers"
             tool_results.append({"type": "tool_result", "tool_use_id": block.id, "content": content})
         messages.append({"role": "user", "content": tool_results})
-        if response.stop_reason != "tool_use":
-            break
+        # Keep looping whenever a tool_use block was found — including a
+        # max_tokens-truncated one — so the model gets another turn (within the
+        # _MAX_EXEC_TOOL_TURNS budget) to retry a compute_delta call that failed
+        # rather than being forced straight to emit_exec_bullets without it.
 
     # Force structured output via emit_exec_bullets — cannot return plain text/JSON.
     messages.append({

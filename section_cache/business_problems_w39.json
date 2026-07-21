@@ -1,0 +1,16 @@
+{
+  "section_id": "business_problems",
+  "wave_number": 39,
+  "source_hash": "3b8a3d9ced90a846",
+  "finding": "Skilled staff shortages overtake costs as Slovak firms' top concern",
+  "bullets": [
+    "Skilled staff availability ranked most pressing among the seven problems tested, scoring 6.64/10 (n=239), rising from 6.07 in Wave 38 — the largest increase across all categories, signalling heightened urgency for firms.",
+    "Costs of production or labour scored 6.62/10 (n=240), up from 6.19 in Wave 38, broadly in line with the euro area average of 6.74 — underscoring persistent cost pressures despite lower ranking.",
+    "Regulation scored 6.10/10 (n=236), easing marginally from 6.18 in the prior wave; access to finance remained below 5/10 and thus not a pressing concern."
+  ],
+  "chart_subtitle": "Skilled staff tops Slovak concerns at 6.64/10.",
+  "grounding_warnings": [],
+  "grounding_dropped": [],
+  "style_warnings": [],
+  "tool_calls": 0
+}

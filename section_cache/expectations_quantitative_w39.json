@@ -1,0 +1,16 @@
+{
+  "section_id": "expectations_quantitative",
+  "wave_number": 39,
+  "source_hash": "8d0fb4319d1f50c1",
+  "finding": "Slovak firms face margin compression as cost expectations outpace selling prices",
+  "bullets": [
+    "Slovak firms (n=224) anticipated non-labour input price rises of 7.33% over the next 12 months, against selling price expectations of only 3.75% (n=222) — squeezing margins further.",
+    "Wage expectations remained at 4.12% (n=233) — easing just 0.09 pp from the prior wave — outpacing the EA's 2.60% by 1.52 pp and sustaining margin compression pressure.",
+    "Slovak 12-month inflation expectations eased 0.29 pp to 4.68% (n=193), remaining 0.80 pp above the EA average of 3.88% — adding to cost pressures."
+  ],
+  "chart_subtitle": "Slovak input price expectations at 7.33%, far above selling prices.",
+  "grounding_warnings": [],
+  "grounding_dropped": [],
+  "style_warnings": [],
+  "tool_calls": 0
+}

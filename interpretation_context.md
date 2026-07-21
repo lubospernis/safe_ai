@@ -1,7 +1,7 @@
 # Interpretation context from gap analysis
 
-- Compare SK’s 8.57% 5-year inflation expectation (highest in EA) against ECB’s 3.0% median to highlight divergence.
-- Contrast SK’s -26% turnover decline with EA’s +1% growth to emphasize demand shock severity.
-- Note SK’s 44.4% economic outlook deterioration vs. EA’s 26.1% to frame macro headwind context.
-- Benchmark SK’s 55.7% inventory financing against EA’s 39% to stress working capital reliance.
-- Highlight SK’s 33.8% public support deterioration vs. EA’s 15.5% as a policy sensitivity signal.
+- Compare SK’s 43.8% interest rate tightening (Q10) to EA’s 42% to highlight relative severity.
+- Contrast SK’s -6.0pp bank loan gap with EA’s +3% to emphasize divergent financing conditions.
+- Note SK’s 51.6% economic outlook deterioration (Q23) vs. EA’s 29% as a key constraint driver.
+- Frame SK’s 7.33% input cost vs. 3.75% selling price expectations as margin compression risk.
+- Highlight SK’s 61.23% upside inflation risk (Q17) vs. EA’s 54% as persistent pressure.

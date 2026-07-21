@@ -1,0 +1,16 @@
+{
+  "section_id": "financing_purpose",
+  "wave_number": 39,
+  "source_hash": "038c72676f0b9096",
+  "finding": "Slovak firms shifted toward fixed investment while working capital needs stayed dominant",
+  "bullets": [
+    "Fixed investment financing rose from 34.2% to 40.7% among Slovak firms (n=242), a 6.5 pp increase that lifted SK above the EA average of 38.4% — suggesting stronger growth-oriented investment.",
+    "Inventory and working capital remained the most-cited purpose at 57.0% (n=242), 16.2 pp above the EA average of 40.8%, continuing a persistent structural gap — highlighting ongoing liquidity constraints.",
+    "Refinancing or paying off obligations declined by 4.5 pp to 17.0% (n=241), converging toward the EA rate of 15.8% — indicating reduced debt-servicing pressure."
+  ],
+  "chart_subtitle": "Slovak fixed investment citations rose to 40.7% in wave 39.",
+  "grounding_warnings": [],
+  "grounding_dropped": [],
+  "style_warnings": [],
+  "tool_calls": 0
+}

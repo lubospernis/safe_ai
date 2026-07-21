@@ -2,8 +2,9 @@ import re
 from unittest.mock import MagicMock, patch
 
 from html_builder import (
-    _fetch_painting_inner_html, _format_period_suffix, _md_to_html, _clean_question_text,
-    build_annex_html, build_html, build_toc,
+    _fetch_painting_inner_html, _format_period_suffix, _load_sql_snippet, _md_to_html,
+    _clean_question_text, _sql_tooltip_attr, build_annex_html, build_html, build_toc,
+    render_section,
 )
 
 
@@ -286,3 +287,85 @@ def test_build_html_adhoc_per_question_chart_has_no_inline_width_style():
     for tag in chart_imgs:
         assert "style=" not in tag
         assert "chart-img--adhoc" in tag
+
+
+# ── SQL-provenance-on-hover ──────────────────────────────────────────────────
+
+def test_load_sql_snippet_reads_real_sql_file():
+    text = _load_sql_snippet("bank_loan_terms.sql")
+    assert text  # a real section .sql file must yield non-empty content
+    assert "select" in text.lower()
+
+
+def test_load_sql_snippet_missing_file_returns_empty_string():
+    assert _load_sql_snippet("does_not_exist.sql") == ""
+
+
+def test_sql_tooltip_attr_contains_filename_column_and_sql_text():
+    attr = _sql_tooltip_attr("bank_loan_terms.sql", "net_balance_wtd")
+    assert attr.startswith(' title="')
+    assert "bank_loan_terms.sql" in attr
+    assert "net_balance_wtd" in attr
+
+
+def test_sql_tooltip_attr_empty_without_sql_file():
+    assert _sql_tooltip_attr(None, "net_balance_wtd") == ""
+    assert _sql_tooltip_attr("", "net_balance_wtd") == ""
+
+
+def test_sql_tooltip_attr_empty_for_missing_file():
+    assert _sql_tooltip_attr("does_not_exist.sql", "net_balance_wtd") == ""
+
+
+def test_sql_tooltip_attr_escapes_html_special_characters():
+    # SQL routinely contains quotes and comparison operators (e.g. WHERE x = 'a'
+    # AND y < 10) — a raw quote must not break out of the title="..." attribute.
+    with patch("html_builder._load_sql_snippet", return_value="WHERE x = 'a' AND y < 10"):
+        attr = _sql_tooltip_attr("fake.sql", "net_balance_wtd")
+    assert attr.startswith(' title="') and attr.endswith('"')
+    assert attr.count('"') == 2  # only the two attribute-delimiting quotes remain unescaped
+    assert "&lt;" in attr  # the literal "<" was escaped, not passed through raw
+
+
+def test_render_section_includes_sql_icon_when_tooltip_given():
+    html = render_section(
+        section_id="sec1", headline="Finding", subtitle="Subtitle",
+        bullets=["A bullet"], sql_tooltip_attr=' title="SQL source: x.sql"',
+    )
+    assert 'class="sql-info-icon"' in html
+    assert 'title="SQL source: x.sql"' in html
+
+
+def test_render_section_omits_sql_icon_without_tooltip():
+    html = render_section(
+        section_id="sec1", headline="Finding", subtitle="Subtitle", bullets=["A bullet"],
+    )
+    assert "sql-info-icon" not in html
+
+
+def test_build_html_regular_section_carries_sql_tooltip():
+    section = {
+        "section_id": "bank_loan_terms",
+        "title": "Changes in Terms and Conditions of Bank Financing (Q10)",
+        "group": "Financing Conditions",
+        "finding": "Rates tightened",
+        "bullets": ["A net 43.8% of firms reported tighter conditions"],
+        "sql_file": "bank_loan_terms.sql",
+        "value_col": "net_balance_wtd",
+    }
+    html = build_html(
+        rendered_sections=[section], annex_html="", exec_bullets=[], toc_html="",
+    )
+    assert 'class="sql-info-icon"' in html
+    assert "bank_loan_terms.sql" in html
+
+
+def test_build_html_regular_section_without_sql_file_has_no_icon():
+    section = {
+        "section_id": "sec1", "title": "T", "group": "Financing Conditions",
+        "finding": "F", "bullets": ["B"],
+    }
+    html = build_html(
+        rendered_sections=[section], annex_html="", exec_bullets=[], toc_html="",
+    )
+    assert '<span class="sql-info-icon"' not in html

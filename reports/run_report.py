@@ -79,9 +79,9 @@ from llm import (
     EXEC_SUMMARY_SYSTEM, SECTION_CONTENT_SYSTEM, SO_WHAT_SYSTEM, TRANSLATE_SYSTEM,
     UngroundedNumberError, _add_so_what, _fetch_ecb_context, _fmt_data_for_prompt,
     _pipeline_cache_get, _pipeline_cache_hash, _pipeline_cache_put, _sharpen_with_ecb,
-    _write_wave_memory, build_section_signals, check_all_interest, classify_ecb_emphasis,
-    enforce_bullet_style, get_exec_summary, get_section_content_agentic, get_shortened_questions,
-    translate_to_slovak,
+    _write_wave_memory, build_section_signals, check_all_interest, check_grounding_safety_net,
+    classify_ecb_emphasis, enforce_bullet_style, get_exec_summary, get_section_content_agentic,
+    get_shortened_questions, translate_to_slovak,
 )
 import evals
 
@@ -298,6 +298,8 @@ def main() -> None:
                 "chart_png": chart_png,
                 "chart_subtitle": chart_subtitle,
                 "sign_note": sec["sign_note"],
+                "sql_file": sec.get("sql_file"),
+                "value_col": sec.get("value_col"),
                 "routed": sec.get("routed", False),
                 "has_missingness_caveat": sec.get("has_missingness_caveat", False),
                 "tool_calls": cached.get("tool_calls", 0),
@@ -376,6 +378,8 @@ def main() -> None:
                 "chart_png": chart_png,
                 "chart_subtitle": chart_subtitle,
                 "sign_note": sec["sign_note"],
+                "sql_file": sec.get("sql_file"),
+                "value_col": sec.get("value_col"),
                 "routed": sec.get("routed", False),
                 "has_missingness_caveat": sec.get("has_missingness_caveat", False),
                 "tool_calls": content.get("tool_calls", 0),
@@ -506,13 +510,17 @@ def main() -> None:
     else:
         rendered, exec_bullets, style_flagged_en = enforce_bullet_style(
             rendered, exec_bullets, mistral_client, cost_tracker, label="EN",
-            data=data, sections_by_id=sections_by_id,
         )
         _pipeline_cache_put(tool_con, schema, "style_en", _style_en_key, _style_en_hash, {
             "sections": _section_text_snapshot(rendered),
             "exec_bullets": exec_bullets,
             "flagged": style_flagged_en,
         }, "mistral-small-latest")
+
+    # Run after the cache write above (whichever branch produced it) so a
+    # grounding false positive can never discard already-completed style-fix
+    # work — see check_grounding_safety_net's docstring.
+    check_grounding_safety_net(rendered, data, sections_by_id, label="EN")
 
     print("Assembling HTML (EN)...")
     html = build_html(rendered, annex_html, exec_bullets, toc_html, painting_inner_html, latest_wave,
@@ -573,13 +581,17 @@ def main() -> None:
     else:
         sk_rendered, sk_exec_bullets, style_flagged_sk = enforce_bullet_style(
             sk_rendered, sk_exec_bullets, mistral_client, cost_tracker, label="SK",
-            data=data, sections_by_id=sections_by_id,
         )
         _pipeline_cache_put(tool_con, schema, "style_sk", _style_sk_key, _style_sk_hash, {
             "sections": _section_text_snapshot(sk_rendered),
             "exec_bullets": sk_exec_bullets,
             "flagged": style_flagged_sk,
         }, "mistral-small-latest")
+
+    # Run after the cache write above (whichever branch produced it) so a
+    # grounding false positive can never discard already-completed style-fix
+    # work — see check_grounding_safety_net's docstring.
+    check_grounding_safety_net(sk_rendered, data, sections_by_id, label="SK")
 
     sk_annex_html = build_annex_html(con=tool_con, ui=_SK_UI, question_texts_override=sk_question_texts)
 

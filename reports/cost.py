@@ -17,6 +17,20 @@ _PRICE = {
     "pixtral-12b-2409":          {"input": 0.15,  "output": 0.15},
 }
 
+# A normal main-report run costs ~$0.30-0.50 (see run_log.json); adhoc adds a
+# similar amount on adhoc waves. $2.00 gives ~4-6x headroom over the most
+# expensive legitimate single-script run while still catching a genuine
+# runaway (e.g. an infinite retry loop, or a section stuck re-querying the
+# same expensive model) before it burns real money unattended in CI.
+MAX_RUN_COST_USD = 2.00
+
+
+class CostRunawayError(RuntimeError):
+    """Raised by _track_cost when a single run's cumulative spend crosses
+    MAX_RUN_COST_USD — a hard abort, not a warning, since nothing downstream
+    of a runaway cost is worth spending further API budget to finish."""
+    pass
+
 
 class _Usage:
     """Minimal usage container for non-Anthropic calls (Mistral has different field names)."""
@@ -54,6 +68,12 @@ def _track_cost(tracker: dict, model: str, usage) -> None:
     m["usd"] += usd
     m["cache_write"] += cache_write
     m["cache_read"] += cache_read
+
+    if tracker["usd"] > MAX_RUN_COST_USD:
+        raise CostRunawayError(
+            f"Run cost ${tracker['usd']:.2f} exceeded the ${MAX_RUN_COST_USD:.2f} "
+            f"ceiling after a {model} call ({tracker['calls']} calls so far) — aborting."
+        )
 
 
 # Exponential backoff on transient failures (5xx, connection errors) for every

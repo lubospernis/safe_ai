@@ -1,9 +1,13 @@
 """HTML assembly: page template, section rendering, TOC, annex, painting."""
 
 import base64
+import html
 import re
 import textwrap
 from datetime import date
+from functools import lru_cache
+
+from db import SQL_DIR
 
 ARTWORK = {
     "page_url": "https://www.webumenia.sk/dielo/SVK:SNG.IM_127",
@@ -113,6 +117,8 @@ HTML_PAGE = textwrap.dedent("""
   h3          {{ font-family: "Sitka Banner", "Sitka Text", Georgia, serif;
                  font-size: 15px; font-weight: bold; margin: 0 0 4px 0; color: #231f20; }}
   .section-subtitle {{ font-size: 11px; color: #888; margin: 0 0 12px 0; }}
+  .sql-info-icon {{ font-size: 10px; color: #aaa; cursor: help; border-bottom: 1px dotted #aaa;
+                     margin-left: 4px; white-space: nowrap; }}
   ul          {{ padding-left: 20px; margin: 0 0 16px 0; }}
   li          {{ margin-bottom: 6px; font-size: 13.5px; line-height: 1.5; }}
   .chart-img  {{ display: block; max-width: 560px; width: 100%; margin-top: 8px; }}
@@ -206,6 +212,33 @@ SECTION_TMPL = textwrap.dedent("""
 """).strip()
 
 
+@lru_cache(maxsize=None)
+def _load_sql_snippet(sql_file: str) -> str:
+    """Raw SQL text for a section's sql_file, for the SQL-provenance tooltip —
+    empty string if the file can't be read (never blocks report rendering)."""
+    try:
+        return (SQL_DIR / sql_file).read_text().strip()
+    except OSError:
+        return ""
+
+
+def _sql_tooltip_attr(sql_file: str | None, value_col: str | None) -> str:
+    """A ` title="..."` HTML attribute (leading space, empty string if unavailable)
+    showing the literal SQL query that produced this section's numbers, plus which
+    column is plotted/cited — native-browser tooltip, no JS. See ROADMAP.md
+    "SQL-provenance-on-hover"."""
+    if not sql_file:
+        return ""
+    sql_text = _load_sql_snippet(sql_file)
+    if not sql_text:
+        return ""
+    tooltip = f"SQL source: {sql_file}"
+    if value_col:
+        tooltip += f" (cited column: {value_col})"
+    tooltip += f"\n\n{sql_text}"
+    return f' title="{html.escape(tooltip, quote=True)}"'
+
+
 def render_section(
     *,
     section_id: str,
@@ -215,6 +248,7 @@ def render_section(
     chart_html: str = "",
     footnote: str = "",
     section_class: str = "",
+    sql_tooltip_attr: str = "",
 ) -> str:
     """Canonical section shape used by every report — main and adhoc alike:
 
@@ -227,6 +261,9 @@ def render_section(
     hand-building section HTML, so the chart-after-bullets order and headline-as-story
     convention can't silently drift per report. `headline`/`subtitle` are inserted as-is
     (format/escape before calling); `bullets` are markdown-bold-converted automatically.
+
+    `sql_tooltip_attr`: a pre-built ` title="..."` attribute (see _sql_tooltip_attr)
+    rendered as a small "ⓘ SQL" hover icon next to the subtitle, when available.
     """
     bullets_html = "\n".join(
         f"    <li>{_md_to_html(b.lstrip('• ').strip())}</li>"
@@ -234,10 +271,11 @@ def render_section(
     )
     bullets_block = f'  <ul>\n{bullets_html}\n  </ul>\n' if bullets_html else ""
     class_attr = f' class="{section_class}"' if section_class else ""
+    sql_icon = f'<span class="sql-info-icon"{sql_tooltip_attr}>ⓘ SQL</span>' if sql_tooltip_attr else ""
     return (
         f'<section id="{section_id}"{class_attr}>\n'
         f'  <h3>{headline}</h3>\n'
-        f'  <p class="section-subtitle">{subtitle}</p>\n'
+        f'  <p class="section-subtitle">{subtitle} {sql_icon}</p>\n'
         f'{bullets_block}'
         f'{footnote}'
         f'{chart_html}'
@@ -584,6 +622,7 @@ def build_html(
                     bullets=s["bullets"],
                     chart_html=chart_html,
                     footnote=footnote,
+                    sql_tooltip_attr=_sql_tooltip_attr(s.get("sql_file"), s.get("value_col")),
                 )
             )
 

@@ -25,7 +25,8 @@
       "Bash(curl -s -o /private/tmp/claude-501/-Users-lubospernis-Documents-safe-ai/ccbf682a-46b6-45fd-b8c1-c8c8b788bbe8/scratchpad/safe_q202602.pdf https://www.ecb.europa.eu/stats/accesstofinancesofenterprises/pdf/questionnaire/ecb.safeq202602.en.pdf)",
       "Bash(/Users/lubospernis/Documents/safe_ai/env/bin/python3 -c ' *)",
       "Bash(/Users/lubospernis/Documents/safe_ai/env/bin/python3 -m pytest tests/test_adhoc_generic.py -v)",
-      "Bash(/Users/lubospernis/Documents/safe_ai/env/bin/python3 -m pytest tests/ -q)"
+      "Bash(/Users/lubospernis/Documents/safe_ai/env/bin/python3 -m pytest tests/ -q)",
+      "Bash(xargs -I{} echo {})"
     ]
   }
 }

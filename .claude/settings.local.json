@@ -26,7 +26,8 @@
       "Bash(/Users/lubospernis/Documents/safe_ai/env/bin/python3 -c ' *)",
       "Bash(/Users/lubospernis/Documents/safe_ai/env/bin/python3 -m pytest tests/test_adhoc_generic.py -v)",
       "Bash(/Users/lubospernis/Documents/safe_ai/env/bin/python3 -m pytest tests/ -q)",
-      "Bash(xargs -I{} echo {})"
+      "Bash(xargs -I{} echo {})",
+      "Bash(git log *)"
     ]
   }
 }

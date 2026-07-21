@@ -1,0 +1,77 @@
+name: SAFE — Eval Harness (Golden Set Regression Check)
+
+# Regenerates a small, fixed set of historical waves (reports/eval_harness.py's
+# EVAL_WAVES) end-to-end and checks the output against tests/golden/wave_N.yaml:
+# golden assertions (Layer 2), the blocking grounding check inherited from
+# run_report.py itself, the tier-2 quality gate (quality_check.py), and — once
+# a judge_baseline has been captured via `eval_harness.py --approve` — an
+# LLM-judge score regression check. This is the piece that was missing before:
+# each of those layers existed and was independently tested, but nothing ran
+# them together against a real pipeline run to catch drift.
+#
+# Weekly, not per-push: a full regenerate is a real LLM-cost operation. Every
+# pipeline stage is cached in MotherDuck (ref_safe__pipeline_stage_cache)
+# keyed on a hash of its inputs, so an unchanged wave re-runs at near-zero
+# cost — this only spends real budget when a prompt/logic change actually
+# busts the relevant cache keys, which is exactly when you want it checking.
+#
+# Never writes to tests/golden/*.yaml — a failure here means "go investigate",
+# not "the CI job will fix it." See reports/eval_harness.py's docstring for
+# the --approve flow (local-only, human-reviewed, committed via a normal PR).
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekly, Wednesday 06:00 UTC — offset from check_gh_pages_quality.yml's
+    # Monday 06:00 UTC slot so the two scheduled quality workflows don't stack.
+    - cron: "0 6 * * 3"
+
+jobs:
+  eval:
+    name: Run eval harness against golden waves
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Pre-cache MotherDuck extension
+        run: |
+          DUCKDB_VERSION=$(python -c "import duckdb; print(duckdb.__version__)")
+          EXT_DIR="$HOME/.duckdb/extensions/v${DUCKDB_VERSION}/linux_amd64"
+          mkdir -p "$EXT_DIR"
+          curl -fsSL \
+            "https://extensions.duckdb.org/v${DUCKDB_VERSION}/linux_amd64/motherduck.duckdb_extension.gz" \
+            | gunzip > "$EXT_DIR/motherduck.duckdb_extension"
+
+      - name: Run eval harness
+        id: harness
+        env:
+          MOTHERDUCK_TOKEN:  ${{ secrets.MOTHERDUCK_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MISTRAL_API_KEY:   ${{ secrets.MISTRAL_API_KEY }}
+        run: python reports/eval_harness.py
+
+      - name: Summary
+        if: always()
+        run: |
+          if [ "${{ steps.harness.outcome }}" = "failure" ]; then
+            echo "::error::Eval harness detected a regression against one or more golden historical waves — see the job log above for which wave/section and why (golden assertion, grounding, quality gate, or judge-score drop). Investigate the recent prompt/logic change before it reaches a live run."
+          fi
+
+      - name: Upload eval harness result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-harness-result
+          path: reports/output/eval_harness_result.json
+          retention-days: 30

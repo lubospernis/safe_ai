@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
-from db import fetch_all
+from db import fetch_all, run_agentic_query_turns
 
 
 def _mock_con(*dfs: pd.DataFrame):
@@ -57,3 +57,94 @@ def test_fetch_all_omits_sme_key_when_sme_sql_file_absent():
         results = fetch_all(sections)
     assert set(results) == {"outlook"}
     assert "outlook__sme" not in results
+
+
+# ── run_agentic_query_turns ──────────────────────────────────────────────────
+# Extracted from llm.py::get_section_content_agentic so reports/qa_tool.py can
+# reuse the exact same query_mart tool loop instead of a second copy of it.
+
+
+def _usage():
+    u = MagicMock()
+    u.input_tokens = 10
+    u.output_tokens = 10
+    u.cache_creation_input_tokens = 0
+    u.cache_read_input_tokens = 0
+    return u
+
+
+def _text_response(text="done", stop_reason="end_turn"):
+    resp = MagicMock()
+    resp.stop_reason = stop_reason
+    resp.content = [MagicMock(type="text", text=text)]
+    resp.usage = _usage()
+    return resp
+
+
+def _tool_use_response(tool_use_id: str, sql: str, tool_name: str = "query_mart"):
+    block = MagicMock()
+    block.type = "tool_use"
+    block.name = tool_name
+    block.id = tool_use_id
+    block.input = {"sql": sql}
+    resp = MagicMock()
+    resp.stop_reason = "tool_use"
+    resp.content = [block]
+    resp.usage = _usage()
+    return resp
+
+
+def test_run_agentic_query_turns_stops_immediately_with_no_tool_use(sample_cost_tracker):
+    client = MagicMock()
+    client.messages.create.return_value = _text_response()
+    messages = [{"role": "user", "content": "What is the profit net balance?"}]
+
+    result_messages, tool_calls = run_agentic_query_turns(
+        client, [{"type": "text", "text": "system"}], messages,
+        tool_con=MagicMock(), schema="main_safe", cost_tracker=sample_cost_tracker,
+    )
+
+    assert tool_calls == 0
+    assert client.messages.create.call_count == 1
+    assert result_messages[-1]["role"] == "assistant"
+
+
+def test_run_agentic_query_turns_executes_query_and_continues(sample_cost_tracker):
+    client = MagicMock()
+    client.messages.create.side_effect = [
+        _tool_use_response("toolu_1", "SELECT 1 FROM main_safe.mart_safe__slovakia_kpis"),
+        _text_response("final answer"),
+    ]
+    messages = [{"role": "user", "content": "question"}]
+
+    with patch("db._run_query_tool", return_value="| col |\n|---|\n| 1 |") as query_mock:
+        result_messages, tool_calls = run_agentic_query_turns(
+            client, [{"type": "text", "text": "system"}], messages,
+            tool_con=MagicMock(), schema="main_safe", cost_tracker=sample_cost_tracker,
+        )
+
+    assert tool_calls == 1
+    query_mock.assert_called_once()
+    assert client.messages.create.call_count == 2
+    # tool_result for turn 1, then the assistant's final turn-2 response
+    tool_result_msgs = [m for m in result_messages if m.get("role") == "user"
+                         and isinstance(m.get("content"), list)]
+    assert len(tool_result_msgs) == 1
+    assert tool_result_msgs[0]["content"][0]["tool_use_id"] == "toolu_1"
+
+
+def test_run_agentic_query_turns_respects_max_turns(sample_cost_tracker):
+    client = MagicMock()
+    # Model keeps calling the tool forever — max_turns must cap it.
+    client.messages.create.return_value = _tool_use_response("toolu_x", "SELECT 1")
+    messages = [{"role": "user", "content": "question"}]
+
+    with patch("db._run_query_tool", return_value="ok"):
+        _, tool_calls = run_agentic_query_turns(
+            client, [{"type": "text", "text": "system"}], messages,
+            tool_con=MagicMock(), schema="main_safe", cost_tracker=sample_cost_tracker,
+            max_turns=2,
+        )
+
+    assert tool_calls == 2
+    assert client.messages.create.call_count == 2

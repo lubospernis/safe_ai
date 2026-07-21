@@ -44,7 +44,7 @@ def test_retry_recovers_after_ungrounded_first_attempt(section_stub, net_balance
         _emit_response("toolu_2", "Terms worsened", ["Net balance worsened to 7.0pp this wave"]),
     ]
 
-    with patch("llm._run_query_tool", return_value="{}"):
+    with patch("db._run_query_tool", return_value="{}"):
         result = get_section_content_agentic(
             section_stub, net_balance_df, tool_con=MagicMock(), schema="main_safe",
             mart_catalogue="", cost_tracker=sample_cost_tracker, client=client,
@@ -71,7 +71,7 @@ def test_bullet_dropped_after_retries_exhausted(section_stub, net_balance_df, sa
                        ["Net balance worsened to 99.7pp", "Net balance was 7.0pp last wave"]),
     ]
 
-    with patch("llm._run_query_tool", return_value="{}"):
+    with patch("db._run_query_tool", return_value="{}"):
         result = get_section_content_agentic(
             section_stub, net_balance_df, tool_con=MagicMock(), schema="main_safe",
             mart_catalogue="", cost_tracker=sample_cost_tracker, client=client,

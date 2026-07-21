@@ -176,20 +176,30 @@ def _check_numeric_grounding(bullets: list[str], df: pd.DataFrame, value_cols: l
     """Return list of numbers in bullets that don't appear in any value column of df.
 
     Monitoring-only: callers log warnings but do not block on these errors.
-    Numbers <= single digit or > 200 are skipped (wave numbers, counts, not cited values).
-    Also skipped: sample-size citations ("n=62"), wave references ("wave 37",
-    or Slovak "vlny 38" / "vo vlne 37" / "39. vlne" — this check also runs on
-    Slovak-translated bullets, so the wave/months exclusions match both
-    languages), time-period references ("next 12 months", "12 mesiacoch"),
-    pressingness-scale denominators
-    ("6.19/10"), pp-deltas that are a verified difference of two other numbers
-    in the same bullet ("13.8 pp above ...", where 13.8 = the two other cited
-    percentages' difference), and sign-stripped net-balance citations (a
-    DataFrame value of -33.8 cited in prose as "a net 33.8%" — the negative
-    sign is conveyed by a word like "deteriorated"/"declined" instead of a
-    minus sign, which is legitimate English, not a fabrication) — these are
-    legitimate non-data-value numbers that previously produced a high
-    false-positive rate (see ROADMAP.md A8).
+
+    Design (2026-07-21): rather than blacklisting every phrasing that isn't a
+    real data citation — patched separately for English "wave 37"/"next 12
+    months", then patched AGAIN for Slovak "vlny 38"/"12 mesiacoch" when the
+    same false-positive class resurfaced post-translation and took down a
+    production run — only numbers carrying an actual magnitude marker are
+    checked at all: a "%" sign, a "pp" (percentage-point) suffix, or a bare
+    integer next to a firm/respondent-count word. Every number in this
+    pipeline's bullet style that cites real survey data carries one of these;
+    reference numbers (waves, dates, horizons, ordinals) never do, in either
+    language — so this generalizes to new phrasings without needing a new
+    patch per non-data pattern (see ROADMAP.md).
+
+    Also skipped regardless of marker: sample-size citations ("n=62",
+    deliberately unverified), the scale denominator in a pressingness
+    citation ("6.19/10" — only the "10" is skipped; the numerator is still
+    checked against avg_pressingness_wtd), pp-deltas that are a verified
+    difference of two other numbers in the same bullet ("13.8 pp above ...",
+    where 13.8 = the two other cited percentages' difference), and
+    sign-stripped net-balance citations (a DataFrame value of -33.8 cited in
+    prose as "a net 33.8%" — the negative sign is conveyed by a word like
+    "deteriorated"/"declined" instead of a minus sign, which is legitimate
+    English, not a fabrication) — these are legitimate non-data-value numbers
+    that previously produced a high false-positive rate (see ROADMAP.md A8).
     """
     data_numbers: set[str] = set()
     for col in value_cols:
@@ -229,24 +239,20 @@ def _check_numeric_grounding(bullets: list[str], df: pd.DataFrame, value_cols: l
             if start > 0 and bullet[start - 1] == "/":
                 continue
 
-            # Wave reference: "wave 37", "prior wave" (EN) / "vlny 38", "vo vlne 37",
-            # "vlna 36" (SK — this check also runs on Slovak-translated bullets, whose
-            # declensions of "vlna" all share the "vln" root: vlna/vlny/vlne/vlnu/vlnou).
-            preceding_word = bullet[max(0, start - 8):start]
-            if re.search(r"(wave|vln\w*)\s*$", preceding_word, re.IGNORECASE):
-                continue
-
-            # Same reference with the number first: "39. vlne", "36. vlny" — Slovak
-            # commonly puts the wave word after the number as an ordinal ("v 39. vlne"
-            # = "in wave 39"), unlike English's "wave 39".
-            following_word = bullet[end:end + 12]
-            if re.match(r"\.?\s*vln\w*", following_word, re.IGNORECASE):
-                continue
-
-            # Time-period reference: "next 12 months", "24-month horizon" (EN) /
-            # "12 mesiacoch", "24-mesačnom horizonte" (SK) — the number of months is
-            # a horizon label, not a cited data value.
-            if re.match(r"[\s-]*(months?\b|mesiac\w*)", following_word, re.IGNORECASE):
+            # Magnitude-marker gate: only check numbers that look like an actual
+            # cited statistic — a "%", a "pp" suffix, or a bare firm/respondent
+            # count. Numbers without one of these (wave, date, horizon, ordinal
+            # references, in any language) are never data citations in this
+            # pipeline's bullet style, so skip them instead of enumerating every
+            # non-data phrasing — see docstring.
+            following = bullet[end:end + 14]
+            has_pct_marker = bool(re.match(r"\s*%", following))
+            has_pp_marker = bool(re.match(r"\s*pp\b", following, re.IGNORECASE))
+            has_sample_marker = bool(re.match(
+                r"\s*(firms?|companies|respondents?|firiem|podnikov|respondentov)\b",
+                following, re.IGNORECASE,
+            ))
+            if not (has_pct_marker or has_pp_marker or has_sample_marker):
                 continue
 
             # Verified pp-delta: "13.8 pp above the EA's 32.7%" where 13.8 is the
@@ -2160,8 +2166,6 @@ def enforce_bullet_style(
     mistral_client,
     cost_tracker: dict,
     label: str,
-    data: dict[str, pd.DataFrame] | None = None,
-    sections_by_id: dict[str, dict] | None = None,
 ) -> tuple[list[dict], list[dict], list[str]]:
     """Final deterministic-style pass, run once each for the EN and SK bullet sets
     right before HTML assembly — the one point guaranteed to see bullets after every
@@ -2170,11 +2174,13 @@ def enforce_bullet_style(
     a prompt. Any bullet still violating after a fix attempt is logged and KEPT
     (never dropped/truncated) — style issues are cosmetic, not correctness bugs.
 
-    Also re-verifies numeric grounding for every rendered section (data/sections_by_id
-    given) since sharpening/translation/this function's own revisions can all rewrite
-    bullet text after the original post-generation grounding check already passed —
-    raises UngroundedNumberError (same class used by _check_grounding_blocking) if a
-    genuinely new unverifiable number appears, since that's a correctness bug, not style.
+    Numeric grounding is deliberately NOT re-verified here — see
+    `check_grounding_safety_net` below. (2026-07-21: it used to be bundled into
+    this function, but that meant a grounding false positive discarded this
+    stage's own already-completed Mistral style-fix work, since the caller's
+    cache write never ran if this function raised. Callers should cache this
+    function's result, THEN call check_grounding_safety_net separately, so a
+    grounding failure doesn't force expensive style-fixing to redo on retry.)
     """
     # Collect every bullet with its write-back location.
     items: dict[str, dict] = {}
@@ -2246,27 +2252,44 @@ def enforce_bullet_style(
         if key in items:
             item["bullet"] = items[key]["text"]
 
-    # Grounding safety net: sharpening/translation/the style fixes above can all
-    # rewrite bullet text after the original grounding check already passed.
-    if data is not None and sections_by_id is not None:
-        ground_errors = []
-        for sec in rendered:
-            sid = sec.get("section_id", "")
-            df = data.get(sid)
-            if df is None:
-                continue
-            sec_cfg = sections_by_id.get(sid, {})
-            value_cols = [sec_cfg.get("value_col", "net_balance_wtd"),
-                          "pct_cited_wtd", "avg_pressingness_wtd"]
-            warns = _check_numeric_grounding(sec.get("bullets", []), df, value_cols)
-            ground_errors.extend(f"[{sid}] {w}" for w in warns)
-        if ground_errors:
-            raise UngroundedNumberError(
-                f"{len(ground_errors)} ungrounded number(s) found after {label} style/translation "
-                f"pass — aborting run: {'; '.join(ground_errors[:5])}"
-            )
-
     return rendered, exec_bullets, flagged
+
+
+def check_grounding_safety_net(
+    rendered: list[dict],
+    data: dict[str, pd.DataFrame],
+    sections_by_id: dict[str, dict],
+    label: str,
+) -> None:
+    """Re-verify numeric grounding for every rendered section, since sharpening,
+    translation, and enforce_bullet_style's own revisions can all rewrite bullet
+    text after the original post-generation grounding check already passed.
+    Raises UngroundedNumberError (same class used by _check_grounding_blocking)
+    if a genuinely new unverifiable number appears, since that's a correctness
+    bug, not style.
+
+    Deliberately a separate stage from enforce_bullet_style (2026-07-21) — call
+    this AFTER the caller has cached enforce_bullet_style's result, not before.
+    Bundling the two meant a grounding false positive discarded that whole
+    stage's already-completed Mistral style-fix work on every retry, since the
+    caller's cache write never ran if enforce_bullet_style raised.
+    """
+    ground_errors = []
+    for sec in rendered:
+        sid = sec.get("section_id", "")
+        df = data.get(sid)
+        if df is None:
+            continue
+        sec_cfg = sections_by_id.get(sid, {})
+        value_cols = [sec_cfg.get("value_col", "net_balance_wtd"),
+                      "pct_cited_wtd", "avg_pressingness_wtd"]
+        warns = _check_numeric_grounding(sec.get("bullets", []), df, value_cols)
+        ground_errors.extend(f"[{sid}] {w}" for w in warns)
+    if ground_errors:
+        raise UngroundedNumberError(
+            f"{len(ground_errors)} ungrounded number(s) found after {label} style/translation "
+            f"pass — aborting run: {'; '.join(ground_errors[:5])}"
+        )
 
 
 def _fetch_ecb_context() -> tuple[str, str]:

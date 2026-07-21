@@ -5,11 +5,11 @@ import pandas as pd
 import pytest
 
 from llm import (
-    _check_exec_provenance, _check_numeric_grounding, _clean_num_token,
+    UngroundedNumberError, _check_exec_provenance, _check_numeric_grounding, _clean_num_token,
     _fix_exec_provenance_mislabels,
     _fmt_data_for_prompt, _NUMBER_RE, _parse_section_response,
     _shorten_question_llm, _sme_divergence_note, build_section_signals,
-    classify_ecb_emphasis, direction_reversal, get_exec_summary,
+    check_grounding_safety_net, classify_ecb_emphasis, direction_reversal, get_exec_summary,
     get_shortened_questions, historical_extremity, reliable_n, sk_ea_gap, translate_to_slovak,
 )
 
@@ -377,6 +377,21 @@ def test_grounding_check_still_flags_invented_number_despite_new_skips():
     assert "77.2" in warnings[0]
 
 
+def test_grounding_check_skips_unrecognized_language_reference_without_a_patch():
+    # 2026-07-21 redesign: the marker-gate (%, pp, sample-count word) replaced
+    # a growing per-language blacklist (EN "wave 37" -> SK "vlny 38" -> ...).
+    # Proves the actual point of that redesign: a reference number in a THIRD
+    # language/format never explicitly coded for (French "vague 41", a made-up
+    # ordinal) is skipped automatically because it carries no magnitude marker
+    # — no new patch needed, unlike the old blacklist design.
+    df = pd.DataFrame([{"net_balance_wtd": 12.3, "wave_number": 41}])
+    warnings = _check_numeric_grounding(
+        ["Le solde net a progressé à 12,3 % lors de la vague 41 de l'enquête"],
+        df, ["net_balance_wtd"],
+    )
+    assert warnings == []
+
+
 # ── _NUMBER_RE / _clean_num_token: EN thousands-comma vs SK decimal-comma ───
 # Real production bug: Slovak formats decimals with a comma ("43,8" = 43.8,
 # not English "43.8"), which the translation pass renders despite its prompt
@@ -414,6 +429,59 @@ def test_grounding_check_accepts_slovak_decimal_comma_citation():
         df, ["net_balance_wtd"],
     )
     assert warnings == []
+
+
+# ── check_grounding_safety_net ───────────────────────────────────────────────
+# Moved here from test_enforce_bullet_style.py (2026-07-21) — the safety net is
+# now its own function/pipeline stage, run by the caller AFTER caching
+# enforce_bullet_style's result, so a grounding false positive can no longer
+# discard already-completed (and paid-for) Mistral style-fix work.
+
+def test_grounding_safety_net_catches_newly_ungrounded_bullet(net_balance_df):
+    """A bullet that's clean style-wise but cites a number never present in the
+    source data (as if introduced by ECB-sharpening or SK translation after the
+    original post-generation grounding check already passed) must still be
+    caught — this is a correctness bug, not a style nit, so it raises."""
+    rendered = [{
+        "section_id": "sec1",
+        "bullets": ["The net balance shifted to a striking 87% this wave for Slovak firms."],
+    }]
+    data = {"sec1": net_balance_df}
+    sections_by_id = {"sec1": {"value_col": "net_balance_wtd"}}
+
+    with pytest.raises(UngroundedNumberError):
+        check_grounding_safety_net(rendered, data, sections_by_id, label="EN")
+
+
+def test_grounding_safety_net_passes_clean_bullets(net_balance_df):
+    rendered = [{
+        "section_id": "sec1",
+        "bullets": ["Net balance rose to 7.0pp in wave 38 for Slovak firms."],
+    }]
+    data = {"sec1": net_balance_df}
+    sections_by_id = {"sec1": {"value_col": "net_balance_wtd"}}
+
+    check_grounding_safety_net(rendered, data, sections_by_id, label="EN")  # must not raise
+
+
+def test_grounding_safety_net_handles_slovak_decimal_comma():
+    """Reproduces a real production failure: Slovak formats decimals with a
+    comma ('43,8' means 43.8), and the translation pass renders numbers this
+    way despite being told to keep them unchanged. The grounding safety-net
+    was tokenizing '43,8' as two separate numbers ('43' and '8'), flagging a
+    real, correctly cited value as fabricated and aborting every SK run."""
+    df = pd.DataFrame([{
+        "wave_number": 39, "country_code": "SK", "net_balance_wtd": 43.8,
+        "n_respondents": 76, "firm_size": "all",
+    }])
+    rendered = [{
+        "section_id": "sec1",
+        "bullets": ["Čistých 43,8 % slovenských firiem (n=76) uviedlo sprísnenie podmienok."],
+    }]
+    data = {"sec1": df}
+    sections_by_id = {"sec1": {"value_col": "net_balance_wtd"}}
+
+    check_grounding_safety_net(rendered, data, sections_by_id, label="SK")  # must not raise
 
 
 # ── _check_exec_provenance / _fix_exec_provenance_mislabels ─────────────────

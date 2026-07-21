@@ -1,10 +1,8 @@
 import json
 
-import pandas as pd
-import pytest
 from unittest.mock import MagicMock
 
-from llm import UngroundedNumberError, enforce_bullet_style
+from llm import enforce_bullet_style
 
 # 59 words but only single-digit pp figures (grounding check always skips iv<=9) —
 # a pure style violation with no grounding entanglement, matching the fixture
@@ -93,68 +91,9 @@ def test_survivor_after_retry_is_kept_and_flagged(sample_cost_tracker):
     assert any("words" in w for w in flagged)
 
 
-def test_grounding_recheck_catches_newly_ungrounded_bullet(sample_cost_tracker, net_balance_df):
-    """A bullet that's clean style-wise but cites a number never present in the
-    source data (as if introduced by ECB-sharpening or SK translation after the
-    original post-generation grounding check already passed) must still be
-    caught — this is a correctness bug, not a style nit, so it raises."""
-    client = MagicMock()  # style check passes, so chat.complete should never be called
-    rendered = [{
-        "section_id": "sec1",
-        "bullets": ["The net balance shifted to a striking 87% this wave for Slovak firms."],
-    }]
-    data = {"sec1": net_balance_df}
-    sections_by_id = {"sec1": {"value_col": "net_balance_wtd"}}
-
-    with pytest.raises(UngroundedNumberError):
-        enforce_bullet_style(
-            rendered, [], client, sample_cost_tracker, label="EN",
-            data=data, sections_by_id=sections_by_id,
-        )
-
-    client.chat.complete.assert_not_called()
-
-
-def test_grounding_recheck_passes_clean_bullets(sample_cost_tracker, net_balance_df):
-    client = MagicMock()
-    rendered = [{
-        "section_id": "sec1",
-        "bullets": ["Net balance rose to 7.0pp in wave 38 for Slovak firms."],
-    }]
-    data = {"sec1": net_balance_df}
-    sections_by_id = {"sec1": {"value_col": "net_balance_wtd"}}
-
-    new_rendered, new_exec, flagged = enforce_bullet_style(
-        rendered, [], client, sample_cost_tracker, label="EN",
-        data=data, sections_by_id=sections_by_id,
-    )
-
-    assert flagged == []
-    client.chat.complete.assert_not_called()
-
-
-def test_grounding_recheck_handles_slovak_decimal_comma(sample_cost_tracker):
-    """Reproduces a real production failure: Slovak formats decimals with a
-    comma ('43,8' means 43.8), and the translation pass renders numbers this
-    way despite being told to keep them unchanged. The grounding safety-net
-    was tokenizing '43,8' as two separate numbers ('43' and '8'), flagging a
-    real, correctly cited value as fabricated and aborting every SK run."""
-    df = pd.DataFrame([{
-        "wave_number": 39, "country_code": "SK", "net_balance_wtd": 43.8,
-        "n_respondents": 76, "firm_size": "all",
-    }])
-    client = MagicMock()
-    rendered = [{
-        "section_id": "sec1",
-        "bullets": ["Čistých 43,8 % slovenských firiem (n=76) uviedlo sprísnenie podmienok."],
-    }]
-    data = {"sec1": df}
-    sections_by_id = {"sec1": {"value_col": "net_balance_wtd"}}
-
-    new_rendered, new_exec, flagged = enforce_bullet_style(
-        rendered, [], client, sample_cost_tracker, label="SK",
-        data=data, sections_by_id=sections_by_id,
-    )
-
-    assert flagged == []
-    client.chat.complete.assert_not_called()
+# Grounding re-verification moved to a separate function, check_grounding_safety_net
+# (2026-07-21) — see test_llm.py, where it now lives alongside _check_numeric_grounding.
+# enforce_bullet_style itself no longer takes data/sections_by_id or raises
+# UngroundedNumberError; a caller runs the safety-net check separately, after
+# caching this function's result, so a grounding false positive can't discard
+# already-completed style-fix work.

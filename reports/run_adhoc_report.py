@@ -22,7 +22,6 @@ Required environment variables:
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -52,7 +51,7 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 from adhoc import (
     build_adhoc_spotlight, detect_adhoc_theme, rebuild_adhoc_charts_en, rebuild_adhoc_charts_sk,
 )
-from cost import _anthropic_client, _mistral_client
+from cost import _anthropic_client, _mistral_client, check_cost_ceiling
 from db import PROD_SCHEMA, _get_connection, fetch_all, wave_period_label
 from html_builder import (
     _SK_UI, _fetch_painting_inner_html, _load_annex_question_texts, build_annex_html, build_html, build_toc,
@@ -62,24 +61,13 @@ from llm import _find_ecb_focus_article, get_exec_summary, translate_to_slovak
 OUTPUT_DIR = Path(__file__).parent / "output"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
-# Abort the run if spend crosses this ceiling — guards against a runaway loop or
-# pricing-table error silently burning API budget. Override via env for testing.
-COST_CEILING_USD = float(os.environ.get("COST_CEILING_USD", "15.0"))
-
-
-class CostCeilingExceeded(RuntimeError):
-    pass
+# COST_CEILING_USD/CostCeilingExceeded/the checkpoint function itself moved to
+# cost.py (2026-07-21, deduplicated with run_report.py's identical copy) —
+# check_cost_ceiling() below is imported from there.
 
 
 class UngroundedNumberError(RuntimeError):
     pass
-
-
-def _check_cost_ceiling(cost_tracker: dict) -> None:
-    if cost_tracker["usd"] > COST_CEILING_USD:
-        raise CostCeilingExceeded(
-            f"Spend ${cost_tracker['usd']:.2f} exceeded ceiling ${COST_CEILING_USD:.2f} — aborting run"
-        )
 
 
 def _check_grounding_blocking(adhoc_section: dict) -> None:
@@ -213,7 +201,7 @@ def main() -> None:
         tool_con.close()
         sys.exit(1)
 
-    _check_cost_ceiling(cost_tracker)
+    check_cost_ceiling(cost_tracker)
     _check_grounding_blocking(adhoc_section)
 
     print(f"  Adhoc spotlight generated: {adhoc_section['finding']}")

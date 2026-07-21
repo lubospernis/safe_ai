@@ -1051,8 +1051,16 @@ def get_section_content_agentic(
     question_texts: dict[str, str] | None = None,
     client: anthropic.Anthropic | None = None,
     historical_context: str = "",
+    sme_df: pd.DataFrame | None = None,
 ) -> dict:
-    """Return {"finding": str, "bullets": [str, ...]} via an agentic Sonnet loop."""
+    """Return {"finding": str, "bullets": [str, ...]} via an agentic Sonnet loop.
+
+    sme_df: optional separate SK-only all-vs-sme comparison df (see config.py's
+    `sme_sql_file`), used only for _sme_divergence_note. `df` itself stays
+    firm_size='all'-only, matching what charts/interest-checks expect — falls
+    back to `df` (which lacks a `firm_size` column, so the note is a no-op)
+    when no sme_df was fetched for this section.
+    """
     system_prompt = SECTION_CONTENT_SYSTEM.format(
         schema_catalogue=mart_catalogue,
         query_templates=MART_QUERY_TEMPLATES,
@@ -1062,7 +1070,13 @@ def get_section_content_agentic(
                       "cache_control": {"type": "ephemeral"}}]
 
     base_data = _fmt_data_for_prompt(sec, df)
-    divergence = _sme_divergence_note(df, sec["value_col"], sec.get("panel_col"))
+    divergence = _sme_divergence_note(
+        sme_df if sme_df is not None else df, sec["value_col"], sec.get("panel_col"))
+    # The divergence note explicitly invites the model to cite the SME-specific
+    # figure ("consider calling this out") — grounding checks below must accept
+    # that figure too, or a bullet correctly citing real SME data gets flagged
+    # as fabricated just because it isn't in the all-firms-only `df`.
+    grounding_df = pd.concat([df, sme_df], ignore_index=True) if sme_df is not None else df
 
     q_text_block = ""
     if question_texts:
@@ -1153,7 +1167,7 @@ def get_section_content_agentic(
         finding = parsed["finding"] or sec["title"]
         bullets = parsed["bullets"]
         chart_subtitle = parsed["chart_subtitle"]
-        grounding_warns = _check_numeric_grounding(bullets, df, value_cols)
+        grounding_warns = _check_numeric_grounding(bullets, grounding_df, value_cols)
         style_warns = [w for b in bullets for w in check_all_style(b)]
 
         # Ungrounded numbers or style violations (bullet too long, magnitude-word
@@ -1208,7 +1222,7 @@ def get_section_content_agentic(
             finding = parsed["finding"] or finding
             bullets = parsed["bullets"]
             chart_subtitle = parsed["chart_subtitle"] or chart_subtitle
-            grounding_warns = _check_numeric_grounding(bullets, df, value_cols)
+            grounding_warns = _check_numeric_grounding(bullets, grounding_df, value_cols)
             style_warns = [w for b in bullets for w in check_all_style(b)]
 
         dropped = []
@@ -1217,7 +1231,7 @@ def get_section_content_agentic(
             # rather than blocking the whole section/report over them.
             kept_bullets = []
             for b in bullets:
-                b_warns = _check_numeric_grounding([b], df, value_cols)
+                b_warns = _check_numeric_grounding([b], grounding_df, value_cols)
                 if b_warns:
                     dropped.append(b)
                     print(f"  [GROUNDING DROPPED] [{sid_label}] excluded after "
@@ -2273,6 +2287,12 @@ def check_grounding_safety_net(
     Bundling the two meant a grounding false positive discarded that whole
     stage's already-completed Mistral style-fix work on every retry, since the
     caller's cache write never ran if enforce_bullet_style raised.
+
+    `data` may also carry a `{section_id}__sme` entry (see config.py's
+    sme_sql_file / db.py's fetch_all) — merged in when present, so a bullet
+    correctly citing the SME-specific divergence figure (which
+    _sme_divergence_note explicitly invites) isn't flagged as fabricated just
+    because that number lives outside the all-firms-only main df.
     """
     ground_errors = []
     for sec in rendered:
@@ -2280,10 +2300,12 @@ def check_grounding_safety_net(
         df = data.get(sid)
         if df is None:
             continue
+        sme_df = data.get(f"{sid}__sme")
+        grounding_df = pd.concat([df, sme_df], ignore_index=True) if sme_df is not None else df
         sec_cfg = sections_by_id.get(sid, {})
         value_cols = [sec_cfg.get("value_col", "net_balance_wtd"),
                       "pct_cited_wtd", "avg_pressingness_wtd"]
-        warns = _check_numeric_grounding(sec.get("bullets", []), df, value_cols)
+        warns = _check_numeric_grounding(sec.get("bullets", []), grounding_df, value_cols)
         ground_errors.extend(f"[{sid}] {w}" for w in warns)
     if ground_errors:
         raise UngroundedNumberError(

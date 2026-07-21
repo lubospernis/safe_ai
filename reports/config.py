@@ -29,6 +29,12 @@ Each entry defines one report section:
   subitem_tiers  — optional {sub_item: exec_tier} overrides for sections that mix
                    tiers (e.g. financing_factors' sub-item 'b' is policy_technical
                    even though the section default is "supporting")
+  sme_sql_file   — optional filename under reports/sql/ for a small SEPARATE query
+                   (SK only, both firm_size='all' and 'sme') feeding _sme_divergence_note
+                   (llm.py). Kept separate from sql_file deliberately — sql_file's df is
+                   also used for charts/interest-checks, which assume one row per
+                   country×wave×panel and would silently pick up the wrong firm_size row
+                   if that grain were widened in place.
 """
 
 SECTIONS = [
@@ -225,6 +231,7 @@ SECTIONS = [
     {
         "id": "business_situation",
         "sql_file": "business_situation.sql",
+        "sme_sql_file": "business_situation_sme.sql",
         "group": "Economic Situation of Firms",
         "title": "Business Situation Indicators (Q2)",
         "question_ids": ["q2"],
@@ -271,6 +278,7 @@ SECTIONS = [
     {
         "id": "expectations_quantitative",
         "sql_file": "expectations_quantitative.sql",
+        "sme_sql_file": "expectations_quantitative_sme.sql",
         "group": "Economic Situation of Firms",
         "title": "Price, Wage and Employment Expectations (Q31/Q34)",
         "question_ids": ["q31", "q34"],
@@ -301,6 +309,7 @@ SECTIONS = [
     {
         "id": "expectations_risk",
         "sql_file": "expectations_risk.sql",
+        "sme_sql_file": "expectations_risk_sme.sql",
         "group": "Economic Situation of Firms",
         "title": "Inflation Risk Outlook (Q33)",
         "question_ids": ["q33"],

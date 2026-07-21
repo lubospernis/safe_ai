@@ -17,19 +17,38 @@ _PRICE = {
     "pixtral-12b-2409":          {"input": 0.15,  "output": 0.15},
 }
 
-# A normal main-report run costs ~$0.30-0.50 (see run_log.json); adhoc adds a
-# similar amount on adhoc waves. $2.00 gives ~4-6x headroom over the most
-# expensive legitimate single-script run while still catching a genuine
-# runaway (e.g. an infinite retry loop, or a section stuck re-querying the
-# same expensive model) before it burns real money unattended in CI.
-MAX_RUN_COST_USD = 2.00
+# 2026-07-21: consolidated from run_report.py/run_adhoc_report.py, which each
+# independently defined an identical COST_CEILING_USD/CostCeilingExceeded/
+# _check_cost_ceiling() (2026-07-07). Same env var name and $15.00 default as
+# the mechanism this replaces, so no external config changes.
+COST_CEILING_USD = float(os.environ.get("COST_CEILING_USD", "15.0"))
 
 
-class CostRunawayError(RuntimeError):
-    """Raised by _track_cost when a single run's cumulative spend crosses
-    MAX_RUN_COST_USD — a hard abort, not a warning, since nothing downstream
-    of a runaway cost is worth spending further API budget to finish."""
+class CostCeilingExceeded(RuntimeError):
+    """Raised when a run's cumulative spend crosses COST_CEILING_USD — a hard
+    abort, not a warning, since nothing downstream of a runaway cost is worth
+    spending further API budget to finish."""
     pass
+
+
+def check_cost_ceiling(tracker: dict) -> None:
+    """Raise CostCeilingExceeded if tracker["usd"] has crossed COST_CEILING_USD.
+
+    Called automatically by _track_cost after every tracked call, so it's a
+    real guard everywhere cost is tracked (llm.py, adhoc.py, gap_agent.py, not
+    just wherever someone remembered to add a checkpoint). ALSO called
+    explicitly by run_report.py/run_adhoc_report.py as a pre-emptive gate
+    before starting each new section in the parallel (ThreadPoolExecutor)
+    phase, against the shared cumulative tracker — the per-call check inside
+    _track_cost alone isn't enough there, since parallel section generation
+    uses a fresh thread-local tracker per section (merged into the shared one
+    only after each section completes), so no single call in that phase would
+    ever see the true running total on its own.
+    """
+    if tracker["usd"] > COST_CEILING_USD:
+        raise CostCeilingExceeded(
+            f"Run cost ${tracker['usd']:.2f} exceeded the ${COST_CEILING_USD:.2f} ceiling — aborting."
+        )
 
 
 class _Usage:
@@ -69,11 +88,7 @@ def _track_cost(tracker: dict, model: str, usage) -> None:
     m["cache_write"] += cache_write
     m["cache_read"] += cache_read
 
-    if tracker["usd"] > MAX_RUN_COST_USD:
-        raise CostRunawayError(
-            f"Run cost ${tracker['usd']:.2f} exceeded the ${MAX_RUN_COST_USD:.2f} "
-            f"ceiling after a {model} call ({tracker['calls']} calls so far) — aborting."
-        )
+    check_cost_ceiling(tracker)
 
 
 # Exponential backoff on transient failures (5xx, connection errors) for every

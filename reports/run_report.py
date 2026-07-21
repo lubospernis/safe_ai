@@ -34,7 +34,6 @@ Required environment variables:
 import argparse
 import inspect
 import json
-import os
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -65,7 +64,7 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 from config import SECTIONS  # noqa: E402
 
 from charts import CHART_STRINGS, SK_LABELS, build_chart, build_financing_gap_chart
-from cost import _anthropic_client, _mistral_client
+from cost import _anthropic_client, _mistral_client, check_cost_ceiling
 from db import (
     MART_QUERY_TEMPLATES, PROD_SCHEMA, _get_connection, build_mart_catalogue, fetch_all,
     wave_period_label,
@@ -88,20 +87,9 @@ import evals
 OUTPUT_DIR = Path(__file__).parent / "output"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
-# Abort the run if spend crosses this ceiling — guards against a runaway loop or
-# pricing-table error silently burning API budget. Override via env for testing.
-COST_CEILING_USD = float(os.environ.get("COST_CEILING_USD", "15.0"))
-
-
-class CostCeilingExceeded(RuntimeError):
-    pass
-
-
-def _check_cost_ceiling(cost_tracker: dict) -> None:
-    if cost_tracker["usd"] > COST_CEILING_USD:
-        raise CostCeilingExceeded(
-            f"Spend ${cost_tracker['usd']:.2f} exceeded ceiling ${COST_CEILING_USD:.2f} — aborting run"
-        )
+# COST_CEILING_USD/CostCeilingExceeded/the checkpoint function itself all moved
+# to cost.py (2026-07-21, deduplicated with run_adhoc_report.py's identical
+# copy) — check_cost_ceiling() below is imported from there.
 
 
 def _check_grounding_blocking(rendered: list[dict]) -> None:
@@ -258,15 +246,16 @@ def main() -> None:
         sid = sec["id"]
         r = interest[sid]
         df = data[sid]
+        sme_df = data.get(f"{sid}__sme")
 
         with cost_lock:
-            _check_cost_ceiling(cost_tracker)
+            check_cost_ceiling(cost_tracker)
 
         q_ids = sec.get("question_ids", [])
         relevant_questions = {qid: question_texts.get(qid.lower(), "") for qid in q_ids}
         source_hash = _pipeline_cache_hash(
             SECTION_CONTENT_SYSTEM, SO_WHAT_SYSTEM, MART_QUERY_TEMPLATES, mart_catalogue,
-            sec, _fmt_data_for_prompt(sec, df), relevant_questions, historical_context,
+            sec, _fmt_data_for_prompt(sec, df), relevant_questions, historical_context, sme_df,
         )
         cache_key = f"main_w{latest_wave}_{sid}"
         cache_path = _cache_dir / f"{sid}_w{latest_wave}.json"
@@ -331,7 +320,7 @@ def main() -> None:
             content = get_section_content_agentic(
                 sec, df, thread_con, schema, mart_catalogue,
                 local_tracker, question_texts, client=anthropic_client,
-                historical_context=historical_context,
+                historical_context=historical_context, sme_df=sme_df,
             )
 
             print(f"  Adding implications for {sid}...")
@@ -419,7 +408,7 @@ def main() -> None:
 
     rendered = [rendered_map[s["id"]] for s in SECTIONS if s["id"] in rendered_map]
 
-    _check_cost_ceiling(cost_tracker)
+    check_cost_ceiling(cost_tracker)
     _check_grounding_blocking(rendered)
 
     def _section_text_snapshot(secs: list[dict]) -> list[dict]:

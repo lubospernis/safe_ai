@@ -135,6 +135,10 @@ def _get_connection() -> duckdb.DuckDBPyConnection:
 
 
 def fetch_all(sections=None) -> dict[str, pd.DataFrame]:
+    """Returns {section_id: df}. A section with an `sme_sql_file` also gets an
+    extra `{section_id}__sme` entry (a small SK-only all-vs-sme comparison df,
+    used solely by _sme_divergence_note) — this key is never a real section_id,
+    so it's invisible to every other consumer that looks up data[sid]."""
     from config import SECTIONS as _SECTIONS
     _sections = sections or _SECTIONS
     con = _get_connection()
@@ -142,6 +146,9 @@ def fetch_all(sections=None) -> dict[str, pd.DataFrame]:
     for sec in _sections:
         sql = (SQL_DIR / sec["sql_file"]).read_text()
         results[sec["id"]] = con.execute(sql).df()
+        if sec.get("sme_sql_file"):
+            sme_sql = (SQL_DIR / sec["sme_sql_file"]).read_text()
+            results[f"{sec['id']}__sme"] = con.execute(sme_sql).df()
     con.close()
     return results
 

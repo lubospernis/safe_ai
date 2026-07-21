@@ -484,6 +484,44 @@ def test_grounding_safety_net_handles_slovak_decimal_comma():
     check_grounding_safety_net(rendered, data, sections_by_id, label="SK")  # must not raise
 
 
+def test_grounding_safety_net_accepts_sme_cited_number_via_data_suffix_key():
+    """2026-07-21 firm-size-splits: _sme_divergence_note explicitly invites the
+    model to cite the SME-specific figure. A bullet doing so must NOT be
+    flagged as fabricated just because that number lives in the separate
+    `{sid}__sme` df, not the all-firms-only main df — the exact bug that would
+    have recreated this session's whole ungrounded-number failure class."""
+    all_df = pd.DataFrame([{"wave_number": 38, "country_code": "SK", "net_balance_wtd": 12.83}])
+    sme_df = pd.DataFrame([
+        {"wave_number": 38, "country_code": "SK", "firm_size": "all", "net_balance_wtd": 12.83},
+        {"wave_number": 38, "country_code": "SK", "firm_size": "sme", "net_balance_wtd": 50.0},
+    ])
+    rendered = [{
+        "section_id": "business_situation",
+        "bullets": ["SMEs report a net 50.0% turnover decline, far worse than the 12.83% seen across all firms."],
+    }]
+    data = {"business_situation": all_df, "business_situation__sme": sme_df}
+    sections_by_id = {"business_situation": {"value_col": "net_balance_wtd"}}
+
+    check_grounding_safety_net(rendered, data, sections_by_id, label="EN")  # must not raise
+
+
+def test_grounding_safety_net_still_flags_sme_number_without_sme_data():
+    """Same bullet as above, but no {sid}__sme entry in data (a section without
+    an sme_sql_file) — the SME figure genuinely isn't traceable to anything
+    fetched, so it must still be flagged, proving the fix above isn't a
+    blanket suppression."""
+    all_df = pd.DataFrame([{"wave_number": 38, "country_code": "SK", "net_balance_wtd": 12.83}])
+    rendered = [{
+        "section_id": "business_situation",
+        "bullets": ["SMEs report a net 50.0% turnover decline, far worse than the 12.83% seen across all firms."],
+    }]
+    data = {"business_situation": all_df}
+    sections_by_id = {"business_situation": {"value_col": "net_balance_wtd"}}
+
+    with pytest.raises(UngroundedNumberError):
+        check_grounding_safety_net(rendered, data, sections_by_id, label="EN")
+
+
 # ── _check_exec_provenance / _fix_exec_provenance_mislabels ─────────────────
 
 def _rendered(section_id, *bullets):
@@ -1215,3 +1253,80 @@ def test_get_section_content_agentic_no_mandatory_instruction_when_unset():
     first_call_messages = client.messages.create.call_args_list[0].kwargs["messages"]
     user_msg = first_call_messages[0]["content"]
     assert "MANDATORY" not in user_msg
+
+
+def _agentic_client_one_shot(finding="F", bullets=("b1",)):
+    """A client that finishes reasoning immediately and emits section JSON on
+    the second call — enough to inspect the first call's prompt content."""
+    client = MagicMock()
+    call_count = {"n": 0}
+
+    def create_side_effect(*args, **kwargs):
+        call_count["n"] += 1
+        resp = MagicMock()
+        resp.usage = MagicMock(input_tokens=10, output_tokens=5,
+                               cache_creation_input_tokens=0, cache_read_input_tokens=0)
+        if call_count["n"] == 1:
+            resp.stop_reason = "end_turn"
+            resp.content = [MagicMock(type="text", text="reasoning done")]
+        else:
+            block = MagicMock()
+            block.type = "tool_use"
+            block.name = "emit_section_json"
+            block.input = {"finding": finding, "bullets": list(bullets), "chart_subtitle": ""}
+            resp.content = [block]
+        return resp
+
+    client.messages.create.side_effect = create_side_effect
+    return client
+
+
+def test_get_section_content_agentic_sme_df_feeds_divergence_note_into_prompt():
+    """2026-07-21 firm-size-splits wiring: an explicit sme_df (SK all-vs-sme
+    comparison, fetched separately from the main all-firms-only df used for
+    charts) must reach the prompt via the previously-dead _sme_divergence_note
+    call, without needing `df` itself to carry a firm_size column."""
+    from llm import get_section_content_agentic
+
+    client = _agentic_client_one_shot()
+    sec = {
+        "id": "business_situation", "title": "Business situation", "value_col": "net_balance_wtd",
+        "panel_col": "sub_item", "sign_note": "note", "focus": "Lead with SK", "pinned_panels": ["a"],
+    }
+    # Main df: no firm_size column at all, exactly like the real all-firms-only query.
+    df = pd.DataFrame([
+        {"wave_number": 38, "country_code": "SK", "sub_item": "a", "net_balance_wtd": 12.83},
+    ])
+    sme_df = pd.DataFrame([
+        {"wave_number": 38, "country_code": "SK", "firm_size": "all", "sub_item": "a", "net_balance_wtd": 12.83},
+        {"wave_number": 38, "country_code": "SK", "firm_size": "sme", "sub_item": "a", "net_balance_wtd": 50.0},
+    ])
+    tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
+
+    get_section_content_agentic(sec, df, MagicMock(), "main_safe", "catalogue", tracker,
+                                 client=client, sme_df=sme_df)
+
+    user_msg = client.messages.create.call_args_list[0].kwargs["messages"][0]["content"]
+    assert "SME divergence check" in user_msg
+    assert "SME divergence" in user_msg  # the note itself, from _sme_divergence_note
+
+
+def test_get_section_content_agentic_no_sme_df_is_a_no_op():
+    """Sections without an sme_sql_file pass sme_df=None (the default) — must
+    behave exactly as before this feature existed: no divergence text at all."""
+    from llm import get_section_content_agentic
+
+    client = _agentic_client_one_shot()
+    sec = {
+        "id": "bank_loan_terms", "title": "Terms", "value_col": "net_balance_wtd",
+        "panel_col": "sub_item", "sign_note": "note", "focus": "Lead with SK", "pinned_panels": ["a"],
+    }
+    df = pd.DataFrame([
+        {"wave_number": 38, "country_code": "SK", "sub_item": "a", "net_balance_wtd": 12.83},
+    ])
+    tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
+
+    get_section_content_agentic(sec, df, MagicMock(), "main_safe", "catalogue", tracker, client=client)
+
+    user_msg = client.messages.create.call_args_list[0].kwargs["messages"][0]["content"]
+    assert "SME divergence check" not in user_msg

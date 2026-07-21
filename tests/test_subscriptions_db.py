@@ -3,7 +3,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from subscriptions_db import NEWSLETTER_ADHOC, NEWSLETTER_REGULAR, get_subscribers
+from subscriptions_db import (
+    NEWSLETTER_ADHOC, NEWSLETTER_REGULAR, _normalize_supabase_url, get_subscribers,
+)
 
 
 def _mock_table_chain(return_data):
@@ -89,3 +91,45 @@ def test_get_subscribers_queries_correct_newsletter_id():
 
     subs_table.select.assert_called_once_with("email")
     subs_table.select.return_value.eq.assert_called_once_with("newsletter_id", "safe-adhoc")
+
+
+# ── _normalize_supabase_url ──────────────────────────────────────────────────
+# Real production failure (2026-07-21): send_newsletter.py's first-ever real
+# send (every prior run had nothing new to send, so this path was never
+# exercised) aborted with postgrest PGRST125 "Invalid path specified in
+# request URL". supabase-py's Client builds every sub-URL via
+# `URL(supabase_url).joinpath("rest", "v1")`, which assumes SUPABASE_URL is a
+# bare origin — if the secret instead already contains a path (e.g. the REST
+# endpoint was pasted instead of the dashboard project URL), joinpath
+# duplicates it into an unresolvable path like "/rest/v1/rest/v1/<table>".
+
+def test_normalize_supabase_url_passes_through_bare_origin():
+    assert _normalize_supabase_url("https://example.supabase.co") == "https://example.supabase.co"
+
+
+def test_normalize_supabase_url_strips_trailing_slash():
+    assert _normalize_supabase_url("https://example.supabase.co/") == "https://example.supabase.co"
+
+
+def test_normalize_supabase_url_strips_rest_v1_suffix():
+    # The exact misconfiguration that caused the real production failure.
+    assert _normalize_supabase_url("https://example.supabase.co/rest/v1") == "https://example.supabase.co"
+    assert _normalize_supabase_url("https://example.supabase.co/rest/v1/") == "https://example.supabase.co"
+
+
+def test_normalize_supabase_url_strips_query_and_fragment():
+    assert _normalize_supabase_url(
+        "https://example.supabase.co/some/path?x=1#frag"
+    ) == "https://example.supabase.co"
+
+
+def test_get_client_normalizes_url_before_create_client(monkeypatch):
+    from subscriptions_db import _get_client
+
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co/rest/v1/")
+    monkeypatch.setenv("SUPABASE_SECRET_KEY", "test-secret-key")
+
+    with patch("subscriptions_db.create_client") as mock_create:
+        _get_client()
+
+    mock_create.assert_called_once_with("https://example.supabase.co", "test-secret-key")

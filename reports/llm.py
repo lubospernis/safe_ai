@@ -177,8 +177,11 @@ def _check_numeric_grounding(bullets: list[str], df: pd.DataFrame, value_cols: l
 
     Monitoring-only: callers log warnings but do not block on these errors.
     Numbers <= single digit or > 200 are skipped (wave numbers, counts, not cited values).
-    Also skipped: sample-size citations ("n=62"), wave references ("wave 37"),
-    time-period references ("next 12 months"), pressingness-scale denominators
+    Also skipped: sample-size citations ("n=62"), wave references ("wave 37",
+    or Slovak "vlny 38" / "vo vlne 37" / "39. vlne" — this check also runs on
+    Slovak-translated bullets, so the wave/months exclusions match both
+    languages), time-period references ("next 12 months", "12 mesiacoch"),
+    pressingness-scale denominators
     ("6.19/10"), pp-deltas that are a verified difference of two other numbers
     in the same bullet ("13.8 pp above ...", where 13.8 = the two other cited
     percentages' difference), and sign-stripped net-balance citations (a
@@ -226,15 +229,24 @@ def _check_numeric_grounding(bullets: list[str], df: pd.DataFrame, value_cols: l
             if start > 0 and bullet[start - 1] == "/":
                 continue
 
-            # Wave reference: "wave 37", "prior wave" style mentions right before the number
-            preceding_word = bullet[max(0, start - 6):start]
-            if re.search(r"wave\s*$", preceding_word, re.IGNORECASE):
+            # Wave reference: "wave 37", "prior wave" (EN) / "vlny 38", "vo vlne 37",
+            # "vlna 36" (SK — this check also runs on Slovak-translated bullets, whose
+            # declensions of "vlna" all share the "vln" root: vlna/vlny/vlne/vlnu/vlnou).
+            preceding_word = bullet[max(0, start - 8):start]
+            if re.search(r"(wave|vln\w*)\s*$", preceding_word, re.IGNORECASE):
                 continue
 
-            # Time-period reference: "next 12 months", "24-month horizon" —
-            # the number of months is a horizon label, not a cited data value.
-            following_word = bullet[end:end + 10]
-            if re.match(r"[\s-]*months?\b", following_word, re.IGNORECASE):
+            # Same reference with the number first: "39. vlne", "36. vlny" — Slovak
+            # commonly puts the wave word after the number as an ordinal ("v 39. vlne"
+            # = "in wave 39"), unlike English's "wave 39".
+            following_word = bullet[end:end + 12]
+            if re.match(r"\.?\s*vln\w*", following_word, re.IGNORECASE):
+                continue
+
+            # Time-period reference: "next 12 months", "24-month horizon" (EN) /
+            # "12 mesiacoch", "24-mesačnom horizonte" (SK) — the number of months is
+            # a horizon label, not a cited data value.
+            if re.match(r"[\s-]*(months?\b|mesiac\w*)", following_word, re.IGNORECASE):
                 continue
 
             # Verified pp-delta: "13.8 pp above the EA's 32.7%" where 13.8 is the

@@ -214,6 +214,40 @@ def test_grounding_check_skips_wave_number_reference():
     assert warnings == []
 
 
+def test_grounding_check_skips_slovak_wave_reference_number_first():
+    df = pd.DataFrame([{"net_balance_wtd": 12.83, "wave_number": 39}])
+    # Real false positive from a production run (2026-07-20, wave 39 SK report):
+    # "v 39. vlne" ("in wave 39") puts the number before the Slovak wave word,
+    # unlike English's "wave 39" — must not be flagged as an invented number.
+    warnings = _check_numeric_grounding(
+        ["Čistých 12,83 % slovenských firiem (n=242) hlásilo pokles obratu v 39. vlne"],
+        df, ["net_balance_wtd"],
+    )
+    assert warnings == []
+
+
+def test_grounding_check_skips_slovak_wave_reference_word_first():
+    df = pd.DataFrame([{"net_balance_wtd": 14.67, "wave_number": 39}])
+    # "vlny 38" / "vo vlne 37" / "vlna 36" — Slovak declensions of "vlna" (wave)
+    # preceding the number, mirroring the existing English "wave 37" exclusion.
+    warnings = _check_numeric_grounding(
+        ["Čistá investičná dôvera vzrástla o 3,88 pp z vlny 38"],
+        df, ["net_balance_wtd"],
+    )
+    assert warnings == []
+
+
+def test_grounding_check_skips_slovak_months_reference():
+    df = pd.DataFrame([{"pct_wtd": 4.63, "wave_number": 39}])
+    # "v prištích 12 mesiacoch" ("in the next 12 months") — Slovak equivalent of
+    # the existing English "next 12 months" horizon-label exclusion.
+    warnings = _check_numeric_grounding(
+        ["Slovenské firmy očakávajú, že priemerné predajné ceny stúpnu o 4,63% v prištích 12 mesiacoch"],
+        df, ["pct_wtd"],
+    )
+    assert warnings == []
+
+
 def test_grounding_check_skips_pressingness_scale_denominator():
     df = pd.DataFrame([{"avg_pressingness_wtd": 6.19, "wave_number": 38}])
     # "6.19/10" — the "10" is the fixed scale denominator, not a cited data value.

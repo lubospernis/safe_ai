@@ -15,6 +15,7 @@ _PRICE = {
     "mistral-medium-2505":       {"input": 0.40,  "output": 2.00},
     "mistral-large-2512":        {"input": 2.00,  "output": 6.00},
     "pixtral-12b-2409":          {"input": 0.15,  "output": 0.15},
+    "mistral-embed":             {"input": 0.10,  "output": 0.00},
 }
 
 # 2026-07-21: consolidated from run_report.py/run_adhoc_report.py, which each

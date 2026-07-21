@@ -10,6 +10,8 @@ import duckdb
 import pandas as pd
 import yaml
 
+from cost import _track_cost
+
 PROD_SCHEMA = "main_safe"
 SQL_DIR = Path(__file__).parent / "sql"
 MARTS_SCHEMA_YML = Path(__file__).parent.parent / "dbt_project" / "models" / "marts" / "schema.yml"
@@ -225,3 +227,77 @@ def build_mart_catalogue(con, schema: str) -> str:
     ]
 
     return "\n".join(lines)
+
+
+def run_agentic_query_turns(
+    client,
+    system_prompt_cached: list[dict],
+    messages: list[dict],
+    tool_con,
+    schema: str,
+    cost_tracker: dict,
+    model: str = "claude-sonnet-4-6",
+    max_turns: int = MAX_TOOL_TURNS,
+    extra_tools: list[dict] | None = None,
+    extra_tool_handler=None,
+) -> tuple[list[dict], int]:
+    """Run the query_mart agentic tool loop: repeatedly call `model` with
+    QUERY_MART_TOOL (plus any extra_tools) available, execute any query_mart
+    calls via _run_query_tool, dispatch any other tool call to
+    extra_tool_handler(name, input) -> str, and feed results back as
+    tool_results — until the model stops calling tools or max_turns is
+    reached.
+
+    This is the single implementation of that loop, extracted from
+    llm.py::get_section_content_agentic (which still owns everything specific
+    to report-section generation: the emit-tool structured output, grounding
+    checks, and revision retries) so reports/qa_tool.py's Q&A agent can reuse
+    the exact same query loop — including offering its own search_narrative
+    tool alongside query_mart via extra_tools/extra_tool_handler — rather than
+    a second copy of the loop mechanics.
+
+    Returns (messages, tool_calls_made) — `messages` has the full turn
+    history appended (ending on the model's final non-tool-use response, or
+    the last tool_result if max_turns was reached without the model
+    stopping); the caller decides what happens next (force structured output,
+    extract a plain-text answer, etc.), since that part is caller-specific.
+    """
+    tools = [QUERY_MART_TOOL] + (extra_tools or [])
+    tool_calls_made = 0
+    for turn in range(max_turns):
+        response = client.messages.create(
+            model=model,
+            max_tokens=600,
+            system=system_prompt_cached,
+            tools=tools,
+            messages=messages,
+            extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
+        )
+        _track_cost(cost_tracker, model, response.usage)
+
+        messages.append({"role": "assistant", "content": response.content})
+        if response.stop_reason != "tool_use":
+            break
+
+        tool_results = []
+        for block in response.content:
+            if block.type != "tool_use":
+                continue
+            if block.name == "query_mart":
+                sql = block.input.get("sql", "")
+                print(f"    [tool_use] query_mart called (turn {turn + 1}): {sql[:120]!r}")
+                result = _run_query_tool(sql, tool_con, schema)
+            elif extra_tool_handler is not None:
+                print(f"    [tool_use] {block.name} called (turn {turn + 1}): {block.input}")
+                result = extra_tool_handler(block.name, block.input)
+            else:
+                result = f"ERROR: no handler registered for tool {block.name!r}"
+            tool_calls_made += 1
+            tool_results.append({
+                "type": "tool_result",
+                "tool_use_id": block.id,
+                "content": result,
+            })
+        messages.append({"role": "user", "content": tool_results})
+
+    return messages, tool_calls_made

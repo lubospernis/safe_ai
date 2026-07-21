@@ -4,6 +4,15 @@ wave: 37
 # 2. "broadly comparable" comparison when gap ≥ 5pp (adhoc_spotlight / QA1)
 # 3. "export" framing in QB1 (QB1 is peer-estimate % of AI adopters, not exports)
 # 4. Numbers cited in bullets must match the data snapshot values
+#
+# judge_baseline (per section, optional): human-approved LLM-judge scores from
+# reports/eval_judge.py, captured by running `python reports/eval_harness.py
+# --wave 37 --approve` with live MOTHERDUCK_TOKEN/ANTHROPIC_API_KEY access and
+# reviewing the printed scores before confirming. Not yet captured for this
+# file — no live pipeline access in the environment that authored this golden
+# file. Sections without a judge_baseline are skipped by the harness's
+# judge-score regression check (logged, non-blocking) until one is captured;
+# the assertions above already run and block regardless.
 
 sections:
   - section_id: business_situation

@@ -13,10 +13,7 @@ import pandas as pd
 from json_repair import repair_json
 
 from cost import _Usage, _anthropic_client, _mistral_client, _track_cost
-from db import (
-    MART_QUERY_TEMPLATES, MAX_TOOL_TURNS, PROD_SCHEMA, QUERY_MART_TOOL, _get_connection,
-    _run_query_tool,
-)
+from db import MART_QUERY_TEMPLATES, PROD_SCHEMA, _get_connection, run_agentic_query_turns
 from evals import check_all_style
 
 MAX_SECTION_REVISION_RETRIES = 2  # feedback-and-regenerate attempts for grounding/style issues
@@ -1108,40 +1105,12 @@ def get_section_content_agentic(
     if client is None:
         client = _anthropic_client()
     messages = [{"role": "user", "content": initial_msg}]
-    tool_calls_made = 0
 
-    for turn in range(MAX_TOOL_TURNS):
-        response = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=600,
-            system=cached_system,
-            tools=[QUERY_MART_TOOL],
-            messages=messages,
-            extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
-        )
-
-        _track_cost(cost_tracker, "claude-sonnet-4-6", response.usage)
-
-        if response.stop_reason != "tool_use":
-            # Model finished reasoning — now force structured output via dedicated emit tool
-            messages.append({"role": "assistant", "content": response.content})
-            break
-
-        messages.append({"role": "assistant", "content": response.content})
-        tool_results = []
-        for block in response.content:
-            if block.type != "tool_use":
-                continue
-            sql = block.input.get("sql", "")
-            print(f"    [tool_use] query_mart called (turn {turn + 1}): {sql[:120]!r}")
-            result = _run_query_tool(sql, tool_con, schema)
-            tool_calls_made += 1
-            tool_results.append({
-                "type": "tool_result",
-                "tool_use_id": block.id,
-                "content": result,
-            })
-        messages.append({"role": "user", "content": tool_results})
+    # Model finished reasoning after this loop (with or without query_mart calls) —
+    # structured output is then forced via the dedicated emit tool below.
+    messages, tool_calls_made = run_agentic_query_turns(
+        client, cached_system, messages, tool_con, schema, cost_tracker,
+    )
 
     # Force structured output: model MUST call emit_section_json — cannot return plain text
     messages.append({

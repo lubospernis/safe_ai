@@ -4,67 +4,16 @@ Layer 1 — deterministic style checks (no golden set, run in CI on every commit
 Layer 2 — golden assertion checks (wave-specific YAML, run against actual run output).
 
 Layer 3 (LLM-as-judge) lives in reports/eval_judge.py and is run manually.
+Layer 2's implementation (_load_golden/run_golden_assertions) now lives in
+reports/evals.py — it's production code (reports/eval_harness.py runs it
+against real pipeline output), not test-only, even though these tests exercise
+it with hand-typed example bullets.
 """
 
-from pathlib import Path
-
-import yaml
-
 from evals import (
-    check_all_style, check_bare_response_codes, check_bullet_length,
-    check_magnitude_calibration, check_sign_language,
+    _load_golden, check_all_style, check_bare_response_codes, check_bullet_length,
+    check_magnitude_calibration, check_sign_language, run_golden_assertions,
 )
-
-GOLDEN_DIR = Path(__file__).parent / "golden"
-
-# ── Layer 2: golden assertion checks ─────────────────────────────────────────
-
-
-def _load_golden(wave: int) -> dict:
-    path = GOLDEN_DIR / f"wave_{wave}.yaml"
-    if not path.exists():
-        return {}
-    return yaml.safe_load(path.read_text())
-
-
-def run_golden_assertions(section_id: str, bullets: list[str], wave: int) -> list[str]:
-    """Check bullets against golden YAML assertions for a given section and wave.
-
-    Returns a list of error strings (empty = pass).
-    """
-    golden = _load_golden(wave)
-    if not golden:
-        return []
-    errors = []
-    for sec in golden.get("sections", []):
-        if sec["section_id"] != section_id:
-            continue
-        for assertion in sec.get("assertions", []):
-            atype = assertion["type"]
-
-            if atype == "contains_number":
-                val = str(assertion["value"])
-                if not any(val in b for b in bullets):
-                    errors.append(
-                        f"[{section_id}] Expected number {val} not found in any bullet"
-                    )
-
-            elif atype == "not_contains_phrase":
-                phrase = assertion["phrase"].lower()
-                for b in bullets:
-                    if phrase in b.lower():
-                        errors.append(
-                            f"[{section_id}] Forbidden phrase '{phrase}' in: {b[:100]}"
-                        )
-
-            elif atype == "direction_word":
-                expected = assertion["expected"].lower()
-                if not any(expected in b.lower() for b in bullets):
-                    errors.append(
-                        f"[{section_id}] Expected direction word '{expected}' not found in any bullet"
-                    )
-
-    return errors
 
 
 # ── pytest tests — Layer 1 (no data needed, run in CI) ───────────────────────

@@ -83,10 +83,23 @@ def parse_report(html: str) -> dict:
     )
     exec_bullets = [_re.sub(r":(\S)", r": \1", b) for b in exec_bullets]
 
-    # Section findings: h3 (finding headline) + p.section-subtitle (question context)
+    # Section findings: h3 (finding headline) + p.section-subtitle (question context).
+    # Deliberately excludes the adhoc spotlight (id="adhoc_spotlight") entirely — it's
+    # a fundamentally different shape depending on how it rendered (html_builder.py has
+    # 3 variants: a <section> wrapping multiple <div class="ai-sub-section"> blocks each
+    # with their own h3; a <div> wrapping one <section> per adhoc question; or a <div>
+    # with one flat h3/subtitle and no nested <section> at all). Naively grabbing the
+    # first h3/subtitle under it silently mislabelled a random sub-section as a top-level
+    # finding and dropped the rest; the flat variant would be silently omitted anyway
+    # since a <div> never matches `section[id]`. Adhoc content has its own newsletter
+    # (send_adhoc_newsletter.py, "safe-adhoc" subscribers) — this digest doesn't need to
+    # (mis)represent it too.
     findings = []
     for sec in soup.select("section[id]"):
-        if sec.get("id") == "exec-summary":
+        sec_id = sec.get("id")
+        if sec_id in ("exec-summary", "adhoc_spotlight"):
+            continue
+        if sec.find_parent(id="adhoc_spotlight"):
             continue
         h3 = sec.select_one("h3")
         subtitle = sec.select_one("p.section-subtitle")

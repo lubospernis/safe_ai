@@ -1,0 +1,46 @@
+name: SAFE — Check Newsletter Config
+
+# Safety net: the newsletter's Supabase dependency (subscriptions +
+# allowed_emails.lang lookup) is only ever exercised inside send_newsletter.py
+# during a REAL send. Both the 2026-07-21 malformed-SUPABASE_URL bug (PGRST125)
+# and the missing allowed_emails.lang column bug (42703) went undetected for
+# ~2 weeks because every send in between had nothing new to send — the whole
+# Supabase-dependent code path was silently untested in production until the
+# first real send finally hit it.
+#
+# This runs reports/send_newsletter.py --check, which validates Supabase
+# connectivity/schema and report parseability WITHOUT sending any email — no
+# newsletter-gate approval needed, and no GMAIL_ADDRESS/GMAIL_16CHAR secret
+# required, since nothing here touches sending.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Daily, 07:00 UTC — cheap (one Supabase round-trip, no LLM calls), so
+    # frequent enough to catch config drift within a day rather than waiting
+    # for the next real send.
+    - cron: "0 7 * * *"
+
+jobs:
+  check:
+    name: Check newsletter Supabase config
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run newsletter config check
+        env:
+          SUPABASE_URL:        ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+        run: python reports/send_newsletter.py --check

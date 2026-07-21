@@ -876,6 +876,27 @@ def test_translate_to_slovak_no_question_texts_returns_empty_dict():
     assert sk_question_texts == {}
 
 
+def test_translate_to_slovak_api_outage_falls_back_to_english_content():
+    """2026-07-21 weak-link fix: a sustained Mistral outage (retries already
+    exhausted by the client's RetryConfig) must degrade to English-only for
+    this run, not crash the whole pipeline and lose the already-generated EN
+    report too. Previously only the JSON-parse-failure path after a successful
+    call had this fallback; the call itself was unguarded."""
+    client = MagicMock()
+    client.chat.complete.side_effect = RuntimeError("API down")
+    tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
+    rendered = [{"section_id": "x", "title": "T", "finding": "F", "bullets": ["b"]}]
+    exec_bullets = [{"bullet": "Original bullet", "section_id": "x"}]
+    with patch("llm._mistral_client", return_value=client):
+        sk_rendered, sk_exec_bullets, sk_question_texts = translate_to_slovak(
+            rendered, exec_bullets, tracker, question_texts={"q5": "Original question"},
+        )
+    assert sk_rendered == rendered
+    assert sk_exec_bullets == exec_bullets
+    assert sk_question_texts == {"q5": "Original question"}
+    assert tracker["calls"] == 0  # the failed call must not be counted as a tracked cost
+
+
 def test_translate_to_slovak_parse_failure_falls_back_to_english_questions():
     client = _mock_mistral_response("not valid json")
     tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}

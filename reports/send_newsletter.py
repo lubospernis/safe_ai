@@ -194,6 +194,44 @@ def build_email_html(data: dict, pages_url: str, lang: str = "en") -> str:
 
 
 # ---------------------------------------------------------------------------
+# Config check (no email sent — see check_newsletter_config.yml)
+# ---------------------------------------------------------------------------
+
+def check_newsletter_config() -> None:
+    """Validate Supabase connectivity/schema and report parseability without
+    sending any real email — exit 0 if everything a real send depends on
+    looks right, exit 1 otherwise.
+
+    Exists specifically to catch config/schema drift early (2026-07-21: a
+    malformed SUPABASE_URL and a missing allowed_emails.lang column both went
+    undetected for ~2 weeks, because get_subscribers() was never exercised —
+    every run before the first real send had nothing new to send, so the
+    whole Supabase-dependent path was silently untested in production).
+    Deliberately does not require GMAIL_ADDRESS/GMAIL_16CHAR — nothing here
+    touches email sending, only the parts that broke.
+    """
+    ok = True
+    try:
+        subscribers = get_subscribers(NEWSLETTER_REGULAR)
+        print(f"  OK: Supabase reachable, schema valid — {len(subscribers)} subscriber(s)")
+    except Exception as e:
+        print(f"  FAIL: Supabase check failed — {e}")
+        ok = False
+
+    if REPORT_HTML.exists():
+        data = parse_report(REPORT_HTML.read_text(encoding="utf-8"))
+        if data["exec_bullets"]:
+            print(f"  OK: EN report parses — {len(data['exec_bullets'])} exec bullet(s), "
+                  f"{len(data['findings'])} finding(s)")
+        else:
+            print("  WARN: EN report present but no exec bullets found")
+    else:
+        print(f"  WARN: no EN report at {REPORT_HTML} yet (expected before the first real report run)")
+
+    sys.exit(0 if ok else 1)
+
+
+# ---------------------------------------------------------------------------
 # Send
 # ---------------------------------------------------------------------------
 
@@ -254,4 +292,7 @@ def send_newsletter() -> None:
 
 
 if __name__ == "__main__":
-    send_newsletter()
+    if "--check" in sys.argv:
+        check_newsletter_config()
+    else:
+        send_newsletter()

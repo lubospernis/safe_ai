@@ -6,8 +6,13 @@ import re
 import textwrap
 from datetime import date
 from functools import lru_cache
+from urllib.parse import quote
 
 from db import SQL_DIR
+
+# ROADMAP.md "Report-level feedback link" (2026-07-21) — single "was this
+# useful?" mailto at the foot of every report. User-confirmed destination.
+FEEDBACK_EMAIL = "lubos.pernis@gmail.com"
 
 ARTWORK = {
     "page_url": "https://www.webumenia.sk/dielo/SVK:SNG.IM_127",
@@ -46,6 +51,7 @@ _SK_UI = {
         "mínus % podnikov hlásiacich pokles. Kladná hodnota = sprísnenie / rast "
         "(nepriaznivé pre firmy, ak nie je uvedené inak). Záporná hodnota = uvoľnenie / pokles."
     ),
+    "feedback_label": "Bola táto správa užitočná? Napíšte nám →",
     "footnote_routed": (
         "<p class=\"footnote\">* Túto otázku dostávajú iba firmy, ktoré v minulosti využili "
         "alebo žiadali o daný typ financovania. Nižší počet respondentov oproti celkovej vzorke "
@@ -126,6 +132,9 @@ HTML_PAGE = textwrap.dedent("""
   .chart-img.chart-img--flex-third {{ max-width: calc(34% - 0.5rem); min-width: 220px; flex: 1 1 220px; }}
   .footnote   {{ font-size: 11px; color: #888; margin-top: 10px; line-height: 1.4; }}
   .footer     {{ color: #adadad; font-size: 11px; margin-top: 32px; text-align: center; }}
+  .feedback-link {{ color: #888; font-size: 12px; margin-top: 8px; text-align: center; }}
+  .feedback-link a {{ color: #2B5291; text-decoration: none; }}
+  .feedback-link a:hover {{ text-decoration: underline; }}
   .lang-switch {{ float: right; font-size: 12px; color: #2B5291; text-decoration: none;
                   border: 1px solid #2B5291; border-radius: 4px; padding: 2px 8px;
                   margin-top: 4px; }}
@@ -196,6 +205,7 @@ HTML_PAGE = textwrap.dedent("""
 {toc}
 {sections}
 <p class="footer">{footer_str}</p>
+<p class="feedback-link">{feedback_str}</p>
 </body>
 </html>
 """).strip()
@@ -826,6 +836,12 @@ def build_html(
         else '<a class="lang-switch" href="index.html">🇸🇰 SK</a>\n'
     )
 
+    feedback_label = _ui.get("feedback_label", "Was this useful? Let us know →")
+    feedback_subject = quote(f"SAFE Report feedback — Wave {wave_str}")
+    feedback_str = (
+        f'<a href="mailto:{FEEDBACK_EMAIL}?subject={feedback_subject}">{feedback_label}</a>'
+    )
+
     return HTML_PAGE.format(
         lang=_ui.get("lang", "en"),
         lang_switch=lang_switch,
@@ -837,6 +853,7 @@ def build_html(
             "Source: ECB SAFE microdata. Net balance = % reporting increase minus % reporting decrease. "
             "Positive = tightening/rising (adverse for firms unless noted). Negative = easing/falling."
         ),
+        feedback_str=feedback_str,
         annex=annex_html,
         exec_flex=exec_flex,
         toc=toc_html,

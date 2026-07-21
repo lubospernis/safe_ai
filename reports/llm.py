@@ -2064,11 +2064,19 @@ def translate_to_slovak(
     prompt = TRANSLATE_SYSTEM + "\n\n" + json.dumps(payload, ensure_ascii=False)
     client = _mistral_client()
     _TRANSLATE_MODEL = "mistral-large-2512"
-    resp = client.chat.complete(
-        model=_TRANSLATE_MODEL,
-        max_tokens=7000,
-        messages=[{"role": "user", "content": prompt}],
-    )
+    try:
+        resp = client.chat.complete(
+            model=_TRANSLATE_MODEL,
+            max_tokens=7000,
+            messages=[{"role": "user", "content": prompt}],
+        )
+    except Exception as e:
+        # A sustained Mistral outage (retries in _mistral_client's RetryConfig
+        # already exhausted) must not crash the whole run and lose the
+        # already-generated EN report — degrade to English-only for this run,
+        # same fallback already used below for a JSON-parse failure.
+        print(f"  [SK] Translation call failed ({e}) — falling back to English content")
+        return rendered, exec_bullets, (question_texts or {})
     if resp.usage:
         _track_cost(cost_tracker, _TRANSLATE_MODEL,
                     _Usage(resp.usage.prompt_tokens, resp.usage.completion_tokens))

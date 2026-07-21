@@ -2,9 +2,9 @@ import re
 from unittest.mock import MagicMock, patch
 
 from html_builder import (
-    _fetch_painting_inner_html, _format_period_suffix, _load_sql_snippet, _md_to_html,
-    _clean_question_text, _sql_tooltip_attr, build_annex_html, build_html, build_toc,
-    render_section,
+    FEEDBACK_EMAIL, _fetch_painting_inner_html, _format_period_suffix, _load_sql_snippet,
+    _md_to_html, _clean_question_text, _sql_tooltip_attr, build_annex_html, build_html,
+    build_toc, render_section,
 )
 
 
@@ -369,3 +369,24 @@ def test_build_html_regular_section_without_sql_file_has_no_icon():
         rendered_sections=[section], annex_html="", exec_bullets=[], toc_html="",
     )
     assert '<span class="sql-info-icon"' not in html
+
+
+# ── Report-level feedback link ───────────────────────────────────────────────
+
+def test_build_html_en_feedback_link_uses_english_label_and_mailto():
+    html = build_html(rendered_sections=[], annex_html="", exec_bullets=[], toc_html="", latest_wave=38)
+    assert f'href="mailto:{FEEDBACK_EMAIL}?subject=' in html
+    assert "Was this useful? Let us know" in html
+
+
+def test_build_html_sk_feedback_link_uses_slovak_label():
+    from html_builder import _SK_UI
+    html = build_html(rendered_sections=[], annex_html="", exec_bullets=[], toc_html="", ui=_SK_UI, latest_wave=38)
+    assert f'href="mailto:{FEEDBACK_EMAIL}?subject=' in html
+    assert "Bola táto správa užitočná?" in html
+
+
+def test_build_html_feedback_link_subject_mentions_wave():
+    html = build_html(rendered_sections=[], annex_html="", exec_bullets=[], toc_html="", latest_wave=39)
+    # Subject is URL-encoded (spaces -> %20) — check the encoded wave marker survives.
+    assert "Wave%2039" in html or "Wave+39" in html

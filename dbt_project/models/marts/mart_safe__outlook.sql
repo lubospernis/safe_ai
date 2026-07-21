@@ -23,8 +23,18 @@
   Net balance = % will increase − % will decrease (standard ECB definition).
 
   firm_size: 'all' = all respondents; 'sme' = employee_band_code 1–3.
-  Three-month reference period only (wave 30 / 2024Q1 onward).
-  Aggregation: wave × country × sub_item × firm_size.
+  Wave 30 (2024Q1) onward. Aggregation: wave × country × sub_item × firm_size.
+
+  Uses response_raw directly, not response_3m (2026-07-21, audited alongside
+  ROADMAP.md's "ref periods are really 3m" item): Q26 is forward-looking
+  ("over the next two quarters") and has no 3-month-reference-period variant
+  at all in the source data — int_safe__core_questions_long.sql hardcodes
+  response_3m to null for every q26 row. Same situation, same fix, as
+  mart_safe__expectations.sql's Q31/Q33/Q34 (also forward-looking, also no
+  3m/6m split) — every OTHER mart here does use response_3m where a real
+  3-month variant exists (financing_conditions, financing_factors,
+  financing_purpose, business_situation, availability_expectations,
+  loan_applications, question_coverage — all audited and confirmed correct).
 */
 
 with source_all as (

@@ -123,8 +123,15 @@ HTML_PAGE = textwrap.dedent("""
   h3          {{ font-family: "Sitka Banner", "Sitka Text", Georgia, serif;
                  font-size: 15px; font-weight: bold; margin: 0 0 4px 0; color: #231f20; }}
   .section-subtitle {{ font-size: 11px; color: #888; margin: 0 0 12px 0; }}
-  .sql-info-icon {{ font-size: 10px; color: #aaa; cursor: help; border-bottom: 1px dotted #aaa;
-                     margin-left: 4px; white-space: nowrap; }}
+  .sql-details {{ margin-top: 10px; font-size: 11px; }}
+  .sql-details summary {{ font-size: 11px; font-weight: normal; color: #aaa;
+                           cursor: pointer; border-bottom: 1px dotted #aaa;
+                           display: inline-block; }}
+  .sql-details summary:hover {{ color: #666; }}
+  .sql-details .sql-pre {{ margin: 8px 0 0; padding: 10px 12px; background: #f8f8f8;
+                            border: 1px solid #eee; border-radius: 4px; font-size: 11px;
+                            line-height: 1.5; overflow-x: auto; white-space: pre;
+                            color: #444; }}
   ul          {{ padding-left: 20px; margin: 0 0 16px 0; }}
   li          {{ margin-bottom: 6px; font-size: 13.5px; line-height: 1.5; }}
   .chart-img  {{ display: block; max-width: 560px; width: 100%; margin-top: 8px; }}
@@ -232,21 +239,27 @@ def _load_sql_snippet(sql_file: str) -> str:
         return ""
 
 
-def _sql_tooltip_attr(sql_file: str | None, value_col: str | None) -> str:
-    """A ` title="..."` HTML attribute (leading space, empty string if unavailable)
+def _sql_details_html(sql_file: str | None, value_col: str | None) -> str:
+    """A collapsible <details><summary>ⓘ SQL</summary>...<pre>...</pre></details> block
     showing the literal SQL query that produced this section's numbers, plus which
-    column is plotted/cited — native-browser tooltip, no JS. See ROADMAP.md
-    "SQL-provenance-on-hover"."""
+    column is plotted/cited. Empty string if unavailable.
+
+    Previously a native `title="..."` hover tooltip (browser default), which reliably
+    disappeared on any mouse movement and couldn't be read, scrolled, or copied for a
+    multi-line SQL query — reported as broken. Same collapsible pattern the annex
+    already uses, just scoped per-section instead of one big table."""
     if not sql_file:
         return ""
     sql_text = _load_sql_snippet(sql_file)
     if not sql_text:
         return ""
-    tooltip = f"SQL source: {sql_file}"
-    if value_col:
-        tooltip += f" (cited column: {value_col})"
-    tooltip += f"\n\n{sql_text}"
-    return f' title="{html.escape(tooltip, quote=True)}"'
+    col_note = f" (cited column: <code>{html.escape(value_col)}</code>)" if value_col else ""
+    return (
+        f'<details class="sql-details">'
+        f'<summary>ⓘ SQL — {html.escape(sql_file)}{col_note}</summary>'
+        f'<pre class="sql-pre">{html.escape(sql_text)}</pre>'
+        f'</details>'
+    )
 
 
 def render_section(
@@ -258,7 +271,7 @@ def render_section(
     chart_html: str = "",
     footnote: str = "",
     section_class: str = "",
-    sql_tooltip_attr: str = "",
+    sql_details_html: str = "",
 ) -> str:
     """Canonical section shape used by every report — main and adhoc alike:
 
@@ -266,14 +279,15 @@ def render_section(
         <p class="section-subtitle">subtitle</p>   (topic/question this section is about)
         <ul>bullets</ul>
         chart(s) last
+        collapsible SQL-provenance details, if available
 
     New report types must render their sections through this function rather than
     hand-building section HTML, so the chart-after-bullets order and headline-as-story
     convention can't silently drift per report. `headline`/`subtitle` are inserted as-is
     (format/escape before calling); `bullets` are markdown-bold-converted automatically.
 
-    `sql_tooltip_attr`: a pre-built ` title="..."` attribute (see _sql_tooltip_attr)
-    rendered as a small "ⓘ SQL" hover icon next to the subtitle, when available.
+    `sql_details_html`: a pre-built <details>...</details> block (see _sql_details_html)
+    rendered after the chart, collapsed by default, when available.
     """
     bullets_html = "\n".join(
         f"    <li>{_md_to_html(b.lstrip('• ').strip())}</li>"
@@ -281,14 +295,14 @@ def render_section(
     )
     bullets_block = f'  <ul>\n{bullets_html}\n  </ul>\n' if bullets_html else ""
     class_attr = f' class="{section_class}"' if section_class else ""
-    sql_icon = f'<span class="sql-info-icon"{sql_tooltip_attr}>ⓘ SQL</span>' if sql_tooltip_attr else ""
     return (
         f'<section id="{section_id}"{class_attr}>\n'
         f'  <h3>{headline}</h3>\n'
-        f'  <p class="section-subtitle">{subtitle} {sql_icon}</p>\n'
+        f'  <p class="section-subtitle">{subtitle}</p>\n'
         f'{bullets_block}'
         f'{footnote}'
         f'{chart_html}'
+        f'{sql_details_html}'
         f'</section>'
     )
 
@@ -632,7 +646,7 @@ def build_html(
                     bullets=s["bullets"],
                     chart_html=chart_html,
                     footnote=footnote,
-                    sql_tooltip_attr=_sql_tooltip_attr(s.get("sql_file"), s.get("value_col")),
+                    sql_details_html=_sql_details_html(s.get("sql_file"), s.get("value_col")),
                 )
             )
 

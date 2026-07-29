@@ -1,14 +1,14 @@
 {
   "section_id": "expectations_risk",
   "wave_number": 39,
-  "source_hash": "99bf3e5b60776fe7",
-  "finding": "Slovak firms' upside inflation risk balance widened further above the euro area",
+  "source_hash": "62843d40e78f1a3c",
+  "finding": "Slovak firms see upside inflation risk above the euro area average",
   "bullets": [
-    "A net 61.23% of Slovak firms (n=242) saw upside risks to five-year inflation expectations in wave 39, up 2.30 pp from a net 58.93% in wave 38 — suggesting firms anticipate persistent price pressures.",
-    "The SK–EA gap widened to 7.2 pp in wave 39, as Slovak firms' balance rose while the euro area's eased 1.28 pp to a net 54.04% (n=5,087) — highlighting diverging inflation concerns.",
-    "Euro area firms' upside inflation risk balance edged down from a net 55.32% in wave 38, placing Slovakia as the more inflation-risk-concerned economy."
+    "A net 61.2% of Slovak firms (n=242) saw upside risks to five-year inflation expectations, 7.2 pp above the euro area's net 54.0% (n=5,087) in wave 39 — implying tighter cost pressures for Slovak firms than peers.",
+    "The SK–EA divergence widened as Slovak firms' net balance rose mildly by 2.3 pp from wave 38, while the euro area's net balance eased by 1.3 pp over the same period — suggesting growing divergence in inflation expectations.",
+    "German firms reported a net 51.3% upside inflation risk, remaining below both Slovakia and the euro area aggregate in wave 39."
   ],
-  "chart_subtitle": "Slovak firms' upside inflation risk balance reached net 61.23%.",
+  "chart_subtitle": "Net 61.2% of Slovak firms see upside inflation risk.",
   "grounding_warnings": [],
   "grounding_dropped": [],
   "style_warnings": [],

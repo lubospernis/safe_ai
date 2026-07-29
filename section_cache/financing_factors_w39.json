@@ -1,14 +1,14 @@
 {
   "section_id": "financing_factors",
   "wave_number": 39,
-  "source_hash": "bc91833f1e064015",
-  "finding": "Bank willingness stable but economic outlook weighs on Slovak firms",
+  "source_hash": "392dc644cfcbd3af",
+  "finding": "Bank willingness to lend holds steady in Slovakia above EA",
   "bullets": [
-    "A net 7.8% of Slovak firms (n=310) reported improved bank willingness to lend, unchanged from wave 38 and above both the EA's net 5.6% and Germany's net -4.2% — suggesting stable credit supply conditions.",
-    "The general economic outlook deteriorated for a net 51.6% of Slovak firms (n=472), worsening by 7.2 pp from wave 38's net 44.4% — 22.2 pp more adverse than the EA's net 29.4%, putting pressure on financing access.",
-    "Access to public financial support improved by 12.6 pp to a net 21.2% of firms reporting deterioration (n=310), compared with a net 33.8% in wave 38, though conditions remain negative."
+    "A net 7.8% of Slovak firms (n=310) reported improved bank willingness to provide credit, unchanged from the previous wave and above the EA's net 5.6% (n=6,350) — suggesting stable credit supply conditions.",
+    "Access to public financial support improved notably in Slovakia, with the net balance rising from -33.8% to -21.2% (n=310), compared with a marginal easing from -15.5% to -13.6% in the EA — easing pressure on firms reliant on guarantees.",
+    "The general economic outlook deteriorated further for a net 51.6% of Slovak firms (n=472), worsening by 7.2 pp from the previous wave and running 22.2 pp below the EA's net 29.4%."
   ],
-  "chart_subtitle": "Net 7.8% of Slovak firms report improved bank lending willingness.",
+  "chart_subtitle": "Bank willingness net +7.8% in Slovakia, above EA's +5.6%.",
   "grounding_warnings": [],
   "grounding_dropped": [],
   "style_warnings": [],

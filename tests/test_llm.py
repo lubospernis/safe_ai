@@ -10,8 +10,8 @@ from llm import (
     _fmt_data_for_prompt, _NUMBER_RE, _parse_section_response,
     _shorten_question_llm, _sme_divergence_note, build_section_signals,
     check_grounding_safety_net, classify_ecb_emphasis, direction_reversal, get_exec_summary,
-    get_shortened_questions, historical_extremity, reliable_n, sk_ea_gap, top_pressingness_panel,
-    translate_to_slovak,
+    get_shortened_questions, has_cadence_gap, historical_extremity, reliable_n, sk_ea_gap,
+    top_pressingness_panel, translate_to_slovak,
 )
 
 
@@ -108,6 +108,79 @@ def test_fmt_data_for_prompt_delta_present(section_stub, net_balance_df):
     # Should include Δ= lines showing wave-over-wave change
     text = _fmt_data_for_prompt(section_stub, net_balance_df)
     assert "Δ=" in text
+
+
+# ── _fmt_data_for_prompt: cadence note (GitHub #6) ───────────────────────────
+
+def _semi_annual_df():
+    """Shaped like Q26 (outlook): waves 2 quarters apart, not consecutive."""
+    rows = []
+    for wave, period in [(36, "2025Q3"), (38, "2026Q1")]:
+        for country, val in [("SK", 5.0), ("EA", 3.0)]:
+            rows.append({
+                "wave_number": wave,
+                "country_code": country,
+                "net_balance_wtd": val,
+                "n_respondents": 80,
+                "survey_period_label": period,
+                "firm_size": "all",
+            })
+    return pd.DataFrame(rows)
+
+
+def test_fmt_data_for_prompt_cadence_note_on_multi_quarter_gap(section_stub):
+    text = _fmt_data_for_prompt(section_stub, _semi_annual_df())
+    assert "CADENCE NOTE" in text
+    assert "2 quarters" in text
+
+
+def test_fmt_data_for_prompt_no_cadence_note_when_consecutive(section_stub, net_balance_df):
+    net_balance_df["survey_period_label"] = net_balance_df["wave_number"].map(
+        {37: "2025Q4", 38: "2026Q1"}
+    )
+    text = _fmt_data_for_prompt(section_stub, net_balance_df)
+    assert "CADENCE NOTE" not in text
+
+
+def test_fmt_data_for_prompt_no_cadence_note_without_period_label(section_stub, net_balance_df):
+    # net_balance_df has no survey_period_label column at all
+    text = _fmt_data_for_prompt(section_stub, net_balance_df)
+    assert "CADENCE NOTE" not in text
+
+
+def test_fmt_data_for_prompt_cadence_note_on_financing_gap():
+    df = _financing_gap_df({"SK": {"a": 5.0}, "EA": {"a": 2.0}})
+    df = df[df["wave_number"] == 38].copy()
+    df["survey_period_label"] = "2026Q1"
+    df2 = _financing_gap_df({"SK": {"a": 6.0}, "EA": {"a": 3.0}})
+    df2 = df2[df2["wave_number"] == 37].copy()
+    df2["wave_number"] = 35
+    df2["survey_period_label"] = "2025Q2"
+    combined = pd.concat([df, df2], ignore_index=True)
+    text = _fmt_data_for_prompt(_financing_gap_section_stub(), combined)
+    assert "CADENCE NOTE" in text
+
+
+# ── has_cadence_gap (GitHub #6 reader-facing footnote) ───────────────────────
+
+def test_has_cadence_gap_true_for_semi_annual_shape():
+    assert has_cadence_gap(_semi_annual_df()) is True
+
+
+def test_has_cadence_gap_false_for_consecutive_quarters(net_balance_df):
+    net_balance_df["survey_period_label"] = net_balance_df["wave_number"].map(
+        {37: "2025Q4", 38: "2026Q1"}
+    )
+    assert has_cadence_gap(net_balance_df) is False
+
+
+def test_has_cadence_gap_false_without_period_label(net_balance_df):
+    assert has_cadence_gap(net_balance_df) is False
+
+
+def test_has_cadence_gap_false_single_wave():
+    df = pd.DataFrame([{"wave_number": 38, "survey_period_label": "2026Q1"}])
+    assert has_cadence_gap(df) is False
 
 
 # ── _fmt_data_for_prompt: financing_gap composite ────────────────────────────

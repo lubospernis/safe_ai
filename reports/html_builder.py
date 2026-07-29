@@ -32,6 +32,12 @@ MISSINGNESS_FOOTNOTE = (
     "insufficient data for that period.</p>"
 )
 
+CADENCE_FOOTNOTE = (
+    "<p class=\"footnote\">‡ This question is not fielded every quarter — consecutive "
+    "points on this chart may be more than one quarter apart. See point labels for the "
+    "actual survey period.</p>"
+)
+
 _AGENTIC_FOOTNOTE = (
     '<p class="footnote">🤖 This section includes data retrieved by an AI agent '
     'querying the SAFE database directly during report generation.</p>\n'
@@ -65,6 +71,11 @@ _SK_UI = {
     "footnote_agentic": (
         "<p class=\"footnote\">🤖 Táto sekcia obsahuje dáta získané AI agentom priamym "
         "dopytovaním databázy SAFE počas generovania správy.</p>\n"
+    ),
+    "footnote_cadence": (
+        "<p class=\"footnote\">‡ Táto otázka sa nekladie každý štvrťrok — susedné body "
+        "v grafe môžu byť vzdialené viac než jeden štvrťrok. Skutočné obdobie zisťovania "
+        "nájdete v popiskoch bodov.</p>"
     ),
     "adhoc_special_focus":   "Špeciálna téma",
     "adhoc_read_more":       "Čítaj viac:",
@@ -612,6 +623,7 @@ def build_html(
     fn_routed  = _ui.get("footnote_routed",   ROUTED_FOOTNOTE)
     fn_missing = _ui.get("footnote_missing",  MISSINGNESS_FOOTNOTE)
     fn_agentic = _ui.get("footnote_agentic",  _AGENTIC_FOOTNOTE)
+    fn_cadence = _ui.get("footnote_cadence",  CADENCE_FOOTNOTE)
 
     adhoc_s = next((s for s in rendered_sections if s.get("section_id") == "adhoc_spotlight"), None)
     regular_sections = [s for s in rendered_sections if s.get("section_id") != "adhoc_spotlight"]
@@ -636,6 +648,7 @@ def build_html(
             footnote = (
                 (fn_routed + "\n" if s.get("routed") else "") +
                 (fn_missing + "\n" if s.get("has_missingness_caveat") else "") +
+                (fn_cadence + "\n" if s.get("has_cadence_caveat") else "") +
                 (fn_agentic if s.get("tool_calls", 0) > 0 else "")
             )
             sections_parts.append(

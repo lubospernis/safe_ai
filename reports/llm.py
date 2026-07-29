@@ -543,6 +543,10 @@ SECTION_CONTENT_SYSTEM = textwrap.dedent("""
            outpacing the EA median of +3.6%."
         ✗ "The net balance was 12 in wave 38 and 14 in wave 37." — never list raw wave numbers;
            always translate into direction language.
+      Not every question is fielded every quarter. If the data below includes a
+      CADENCE NOTE, the previous data point is MORE than one quarter back — do not
+      say "previous quarter" or "prior quarter" in that case; say "previous wave"
+      or name the actual gap (e.g. "two quarters earlier").
 
     Available mart tables and columns:
     {schema_catalogue}
@@ -757,6 +761,62 @@ ECB_SHARPEN_SYSTEM = textwrap.dedent("""
 """).strip()
 
 
+def _quarter_index(period_label: str | None) -> int | None:
+    """"2025Q3" -> 8103 (year*4 + quarter), for computing a gap in quarters between
+    two survey_period_label values. None if the label isn't in YYYYQ# form (e.g. a
+    semi-annual "2025H1" label, or missing)."""
+    if not period_label:
+        return None
+    m = re.match(r"^(\d{4})Q([1-4])$", str(period_label))
+    if not m:
+        return None
+    return int(m.group(1)) * 4 + int(m.group(2))
+
+
+def has_cadence_gap(df: pd.DataFrame) -> bool:
+    """True if this section's latest wave is more than 1 quarter after its previous
+    wave (GitHub #6 — e.g. Q26/outlook is fielded every OTHER wave). Used to attach
+    a reader-facing footnote so a chart spanning irregular waves doesn't silently
+    read as a smooth quarterly trend. Same detection as _cadence_note, exposed
+    standalone so run_report.py can compute it without needing prev_wave itself."""
+    if "survey_period_label" not in df.columns or "wave_number" not in df.columns:
+        return False
+    waves_sorted = sorted(df["wave_number"].dropna().unique())
+    if len(waves_sorted) < 2:
+        return False
+    latest_wave, prev_wave = waves_sorted[-1], waves_sorted[-2]
+    return _cadence_note(df, latest_wave, prev_wave) != ""
+
+
+def _cadence_note(df: pd.DataFrame, latest_wave, prev_wave) -> str:
+    """Not every question is fielded every quarter (GitHub #6 — e.g. Q26 is asked
+    every OTHER wave). The Δ/"previous wave" columns always compare latest to
+    whatever wave immediately precedes it in the data, which silently becomes a
+    2-quarter (or more) gap for such questions. Detect the actual gap from
+    survey_period_label (authoritative, not a hardcoded question-id list) and tell
+    the LLM explicitly so it doesn't default to "previous quarter" phrasing when
+    the true gap is longer."""
+    if "survey_period_label" not in df.columns or latest_wave == prev_wave:
+        return ""
+    latest_label = df.loc[df["wave_number"] == latest_wave, "survey_period_label"].dropna()
+    prev_label = df.loc[df["wave_number"] == prev_wave, "survey_period_label"].dropna()
+    if latest_label.empty or prev_label.empty:
+        return ""
+    latest_q = _quarter_index(latest_label.iloc[0])
+    prev_q = _quarter_index(prev_label.iloc[0])
+    if latest_q is None or prev_q is None:
+        return ""
+    gap = latest_q - prev_q
+    if gap <= 1:
+        return ""
+    return (
+        f"\nCADENCE NOTE: this question is NOT fielded every quarter — the previous "
+        f"data point ({prev_label.iloc[0]}) is {gap} quarters before the latest "
+        f"({latest_label.iloc[0]}), not 1. Do NOT write \"previous quarter\" — say "
+        f"\"previous wave\" or name the actual gap (e.g. \"{gap} quarters earlier\")."
+    )
+
+
 def _fmt_data_for_prompt(sec: dict, df: pd.DataFrame) -> str:
     """Serialize latest + previous wave data for the LLM prompt."""
     latest_wave = df["wave_number"].max()
@@ -764,6 +824,7 @@ def _fmt_data_for_prompt(sec: dict, df: pd.DataFrame) -> str:
     prev_wave = waves_sorted[-2] if len(waves_sorted) >= 2 else latest_wave
     latest = df[df["wave_number"] == latest_wave]
     prev = df[df["wave_number"] == prev_wave]
+    cadence_note = _cadence_note(df, latest_wave, prev_wave)
 
     if sec["id"] == "financing_gap":
         def composite_gap(d: pd.DataFrame) -> dict[str, float]:
@@ -824,7 +885,7 @@ def _fmt_data_for_prompt(sec: dict, df: pd.DataFrame) -> str:
                     f"{n_instruments} instruments\", never as \"the ECB composite gap\"."
                 )
             return "\n".join(rows)
-        return fmt_gap(latest, f"Wave {latest_wave} (latest)") + "\n\n" + fmt_gap(prev, f"Wave {prev_wave} (previous)")
+        return fmt_gap(latest, f"Wave {latest_wave} (latest)") + "\n\n" + fmt_gap(prev, f"Wave {prev_wave} (previous)") + cadence_note
 
     value_col = sec["value_col"]
     panel_col = sec["panel_col"]
@@ -866,7 +927,11 @@ def _fmt_data_for_prompt(sec: dict, df: pd.DataFrame) -> str:
             rows.append(f"  {r['country_code']}{panel_part} | {value_col}={val_str}{n_part}")
         return "\n".join(rows)
 
-    return fmt_latest_with_delta(latest, f"Wave {latest_wave} (latest)") + "\n\n" + fmt_prev(prev, f"Wave {prev_wave} (previous)")
+    return (
+        fmt_latest_with_delta(latest, f"Wave {latest_wave} (latest)")
+        + "\n\n" + fmt_prev(prev, f"Wave {prev_wave} (previous)")
+        + cadence_note
+    )
 
 
 def _sme_divergence_note(df: pd.DataFrame, value_col: str, panel_col: str | None, threshold: float = 30.0) -> str:

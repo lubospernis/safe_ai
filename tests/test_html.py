@@ -370,6 +370,30 @@ def test_build_html_regular_section_without_sql_file_has_no_details():
     assert 'class="sql-details"' not in html
 
 
+# ── Cadence caveat footnote (GitHub #6) ──────────────────────────────────────
+
+def test_build_html_includes_cadence_footnote_when_flagged():
+    section = {
+        "section_id": "outlook", "title": "Outlook", "group": "Economic Situation of Firms",
+        "finding": "F", "bullets": ["B"], "has_cadence_caveat": True,
+    }
+    html = build_html(
+        rendered_sections=[section], annex_html="", exec_bullets=[], toc_html="",
+    )
+    assert "not fielded every quarter" in html
+
+
+def test_build_html_omits_cadence_footnote_by_default():
+    section = {
+        "section_id": "bank_loan_terms", "title": "Terms", "group": "Financing Conditions",
+        "finding": "F", "bullets": ["B"],
+    }
+    html = build_html(
+        rendered_sections=[section], annex_html="", exec_bullets=[], toc_html="",
+    )
+    assert "not fielded every quarter" not in html
+
+
 # ── Report-level feedback link ───────────────────────────────────────────────
 
 def test_build_html_en_feedback_link_uses_english_label_and_mailto():

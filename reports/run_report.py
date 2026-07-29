@@ -80,7 +80,7 @@ from llm import (
     _pipeline_cache_get, _pipeline_cache_hash, _pipeline_cache_put, _sharpen_with_ecb,
     _write_wave_memory, build_section_signals, check_all_interest, check_grounding_safety_net,
     classify_ecb_emphasis, enforce_bullet_style, get_exec_summary, get_section_content_agentic,
-    get_shortened_questions, top_pressingness_panel, translate_to_slovak,
+    get_shortened_questions, has_cadence_gap, top_pressingness_panel, translate_to_slovak,
 )
 import evals
 
@@ -307,6 +307,7 @@ def main() -> None:
                 "value_col": sec.get("value_col"),
                 "routed": sec.get("routed", False),
                 "has_missingness_caveat": sec.get("has_missingness_caveat", False),
+                "has_cadence_caveat": has_cadence_gap(df),
                 "tool_calls": cached.get("tool_calls", 0),
                 "grounding_warnings": cached.get("grounding_warnings", []),
                 "grounding_dropped": cached.get("grounding_dropped", []),
@@ -390,6 +391,7 @@ def main() -> None:
                 "value_col": sec.get("value_col"),
                 "routed": sec.get("routed", False),
                 "has_missingness_caveat": sec.get("has_missingness_caveat", False),
+                "has_cadence_caveat": has_cadence_gap(df),
                 "tool_calls": content.get("tool_calls", 0),
                 "grounding_warnings": content.get("grounding_warnings", []),
                 "grounding_dropped": content.get("grounding_dropped", []),

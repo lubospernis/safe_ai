@@ -53,7 +53,15 @@ SECTIONS = [
         "panel_col": "sub_item",
         "panel_label_col": "sub_item_label",
         "series_col": "country_code",
-        "pinned_panels": ["a"],
+        # 'a' (interest rates) is the headline panel. Second panel is 'c' (available
+        # loan/credit-line size), not an arbitrary alphabetic fallback — verified
+        # against real MotherDuck data (2026-07-29) as the only other Q10 sub-item
+        # with zero NULL net_balance_wtd for SK across all 10 waves on record. The
+        # previous fallback ('b', non-interest costs) has 4 NULL waves for SK
+        # including the most recent one — GitHub #8 reported this as "weird,
+        # missing SK data", which is real small-N sparsity, not a bug (see
+        # bank_loan_terms.sql), but a panel that's actually populated is a better pin.
+        "pinned_panels": ["a", "c"],
         "max_panels": 2,
         "always_include": True,
         "routed": True,

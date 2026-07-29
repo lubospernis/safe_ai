@@ -61,7 +61,7 @@ matplotlib.rcParams.update({
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-from config import SECTIONS  # noqa: E402
+from config import SECTIONS as _SECTIONS  # noqa: E402
 
 from charts import CHART_STRINGS, SK_LABELS, build_chart, build_financing_gap_chart
 from cost import _anthropic_client, _mistral_client, check_cost_ceiling
@@ -80,7 +80,7 @@ from llm import (
     _pipeline_cache_get, _pipeline_cache_hash, _pipeline_cache_put, _sharpen_with_ecb,
     _write_wave_memory, build_section_signals, check_all_interest, check_grounding_safety_net,
     classify_ecb_emphasis, enforce_bullet_style, get_exec_summary, get_section_content_agentic,
-    get_shortened_questions, translate_to_slovak,
+    get_shortened_questions, top_pressingness_panel, translate_to_slovak,
 )
 import evals
 
@@ -169,6 +169,19 @@ def main() -> None:
         print(f"  {sid}: {len(df)} rows")
     latest_wave = int(max(df["wave_number"].max() for df in data.values()))
     print(f"  Latest wave: {latest_wave}")
+
+    # business_problems' pinned_panels was a static config value that could name a
+    # different problem than whichever one is actually most pressing this wave (the
+    # section's own prompt tells the LLM to report the top problem BY SCORE — a
+    # data-driven fact the static config couldn't track). Compute it fresh each run
+    # and use a local copy of SECTIONS so the chart panel and the finding text can't
+    # structurally diverge (GitHub #5) — never mutate the shared config.SECTIONS list.
+    SECTIONS = [dict(s) for s in _SECTIONS]
+    for sec in SECTIONS:
+        if sec["id"] == "business_problems" and sec["id"] in data:
+            top_panel = top_pressingness_panel(data[sec["id"]])
+            if top_panel is not None:
+                sec["pinned_panels"] = [top_panel]
 
     cost_tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
 
@@ -269,7 +282,10 @@ def main() -> None:
                 chart_png = build_financing_gap_chart(sec, df,
                                                       chart_title=chart_title, chart_question=chart_question)
             elif sid == "bank_loan_terms":
-                chart_png = build_chart(sec, df, "bar", r["best_panel"],
+                # Line chart of net-balance trend over waves — GitHub #8 reported
+                # the previous bar-chart (single-wave snapshot) as wrong for a
+                # section about "levels of interest rates" over time.
+                chart_png = build_chart(sec, df, "line", r["best_panel"],
                                         chart_subtitle=chart_subtitle,
                                         chart_title=chart_title, chart_question=chart_question,
                                         panel_title_suffix=CHART_STRINGS["net_change_pct_suffix"],
@@ -348,7 +364,10 @@ def main() -> None:
                 chart_png = build_financing_gap_chart(sec, df,
                                                       chart_title=chart_title, chart_question=chart_question)
             elif sid == "bank_loan_terms":
-                chart_png = build_chart(sec, df, "bar", r["best_panel"],
+                # Line chart of net-balance trend over waves — GitHub #8 reported
+                # the previous bar-chart (single-wave snapshot) as wrong for a
+                # section about "levels of interest rates" over time.
+                chart_png = build_chart(sec, df, "line", r["best_panel"],
                                         chart_subtitle=chart_subtitle,
                                         chart_title=chart_title, chart_question=chart_question,
                                         panel_title_suffix=CHART_STRINGS["net_change_pct_suffix"],
@@ -618,7 +637,7 @@ def main() -> None:
                 )
             elif sid == "bank_loan_terms":
                 sk_sec["chart_png"] = build_chart(
-                    sec, data[sid], "bar", r["best_panel"], chart_subtitle=chart_subtitle,
+                    sec, data[sid], "line", r["best_panel"], chart_subtitle=chart_subtitle,
                     chart_title=chart_title, chart_question=chart_question, labels=SK_LABELS,
                     panel_title_suffix=SK_LABELS["strings"]["net_change_pct_suffix"],
                     pct_axis=True,

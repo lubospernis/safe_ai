@@ -10,7 +10,8 @@ from llm import (
     _fmt_data_for_prompt, _NUMBER_RE, _parse_section_response,
     _shorten_question_llm, _sme_divergence_note, build_section_signals,
     check_grounding_safety_net, classify_ecb_emphasis, direction_reversal, get_exec_summary,
-    get_shortened_questions, historical_extremity, reliable_n, sk_ea_gap, translate_to_slovak,
+    get_shortened_questions, historical_extremity, reliable_n, sk_ea_gap, top_pressingness_panel,
+    translate_to_slovak,
 )
 
 
@@ -1351,3 +1352,64 @@ def test_get_section_content_agentic_no_sme_df_is_a_no_op():
 
     user_msg = client.messages.create.call_args_list[0].kwargs["messages"][0]["content"]
     assert "SME divergence check" not in user_msg
+
+
+# ── top_pressingness_panel (GitHub #5) ───────────────────────────────────────
+
+def _business_problems_df():
+    # Real-shaped scenario from GitHub #5 (wave 39): skilled-labour (problem_id 5)
+    # is SK's actual top-scoring problem, but pinned_panels was hardcoded to '3'
+    # (Access to finance) — SK's LOWEST-scoring problem that wave.
+    rows = [
+        {"wave_number": 39, "country_code": "SK", "problem_id": "1", "avg_pressingness_wtd": 5.24},
+        {"wave_number": 39, "country_code": "SK", "problem_id": "2", "avg_pressingness_wtd": 5.39},
+        {"wave_number": 39, "country_code": "SK", "problem_id": "3", "avg_pressingness_wtd": 3.77},
+        {"wave_number": 39, "country_code": "SK", "problem_id": "4", "avg_pressingness_wtd": 6.62},
+        {"wave_number": 39, "country_code": "SK", "problem_id": "5", "avg_pressingness_wtd": 6.64},
+        {"wave_number": 39, "country_code": "SK", "problem_id": "6", "avg_pressingness_wtd": 6.10},
+        {"wave_number": 39, "country_code": "SK", "problem_id": "7", "avg_pressingness_wtd": 5.87},
+        # An earlier wave where a different problem was on top — must be ignored.
+        {"wave_number": 38, "country_code": "SK", "problem_id": "3", "avg_pressingness_wtd": 9.0},
+    ]
+    return pd.DataFrame(rows)
+
+
+def test_top_pressingness_panel_picks_highest_scoring_problem_in_latest_wave():
+    df = _business_problems_df()
+    assert top_pressingness_panel(df) == "5"
+
+
+def test_top_pressingness_panel_ignores_prior_wave():
+    # Wave 38's problem_id '3' scored 9.0 (higher than anything in wave 39) but
+    # must not win — only the LATEST wave counts.
+    df = _business_problems_df()
+    result = top_pressingness_panel(df)
+    assert result != "3"
+
+
+def test_top_pressingness_panel_defaults_to_sk():
+    df = pd.DataFrame([
+        {"wave_number": 39, "country_code": "SK", "problem_id": "1", "avg_pressingness_wtd": 5.0},
+        {"wave_number": 39, "country_code": "EA", "problem_id": "2", "avg_pressingness_wtd": 9.0},
+    ])
+    assert top_pressingness_panel(df) == "1"
+
+
+def test_top_pressingness_panel_none_when_columns_missing():
+    df = pd.DataFrame([{"wave_number": 39, "country_code": "SK", "net_balance_wtd": 5.0}])
+    assert top_pressingness_panel(df) is None
+
+
+def test_top_pressingness_panel_none_when_country_absent():
+    df = pd.DataFrame([
+        {"wave_number": 39, "country_code": "EA", "problem_id": "1", "avg_pressingness_wtd": 5.0},
+    ])
+    assert top_pressingness_panel(df) is None
+
+
+def test_top_pressingness_panel_skips_null_scores():
+    df = pd.DataFrame([
+        {"wave_number": 39, "country_code": "SK", "problem_id": "1", "avg_pressingness_wtd": None},
+        {"wave_number": 39, "country_code": "SK", "problem_id": "2", "avg_pressingness_wtd": 4.0},
+    ])
+    assert top_pressingness_panel(df) == "2"

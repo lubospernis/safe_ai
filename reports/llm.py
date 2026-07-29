@@ -1241,6 +1241,29 @@ def get_section_content_agentic(
 _N_CANDIDATE_COLS = ("n_respondents", "n_respondents_need", "n_firms")
 
 
+def top_pressingness_panel(df: pd.DataFrame, country: str = "SK") -> str | None:
+    """The problem_id with the highest avg_pressingness_wtd for `country` in the
+    latest wave present in df. None if the section/column isn't shaped like this
+    (defensive — caller should only use this for business_problems).
+
+    Fixes a real bug (GitHub #5): business_problems' pinned_panels was a static
+    config value (problem_id '3', Access to finance) that stayed fixed regardless
+    of which problem is actually most pressing that wave — while the section's own
+    prompt tells the LLM to report "the top problems... by avg_pressingness_wtd
+    score", a completely independent, data-driven selection. The two were never
+    reconciled, so the chart could (and did) show a different problem than the one
+    the finding text was about. This computes the SAME fact the LLM is told to
+    report, in code, so the chart panel and the finding can't structurally diverge."""
+    if "problem_id" not in df.columns or "avg_pressingness_wtd" not in df.columns:
+        return None
+    latest = df["wave_number"].max()
+    latest_rows = df[(df["wave_number"] == latest) & (df["country_code"] == country)]
+    latest_rows = latest_rows.dropna(subset=["avg_pressingness_wtd"])
+    if latest_rows.empty:
+        return None
+    return str(latest_rows.loc[latest_rows["avg_pressingness_wtd"].idxmax(), "problem_id"])
+
+
 def _lead_panel(sec: dict) -> str | None:
     if sec.get("must_lead_with"):
         return sec["must_lead_with"]

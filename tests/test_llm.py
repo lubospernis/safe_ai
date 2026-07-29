@@ -932,7 +932,7 @@ def test_translate_to_slovak_translates_annex_questions_when_provided():
     )
     tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
     with patch("llm._mistral_client", return_value=client):
-        sk_rendered, sk_exec_bullets, sk_question_texts = translate_to_slovak(
+        sk_rendered, sk_exec_bullets, sk_question_texts, _ = translate_to_slovak(
             [], [{"bullet": "Original bullet", "section_id": "x"}], tracker,
             question_texts={"q5": "Original question"},
         )
@@ -944,7 +944,7 @@ def test_translate_to_slovak_no_question_texts_returns_empty_dict():
     client = _mock_mistral_response('{"exec_bullets": ["Bod"], "sections": []}')
     tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
     with patch("llm._mistral_client", return_value=client):
-        _, _, sk_question_texts = translate_to_slovak(
+        _, _, sk_question_texts, _ = translate_to_slovak(
             [], [{"bullet": "Original bullet", "section_id": "x"}], tracker,
         )
     assert sk_question_texts == {}
@@ -962,7 +962,7 @@ def test_translate_to_slovak_api_outage_falls_back_to_english_content():
     rendered = [{"section_id": "x", "title": "T", "finding": "F", "bullets": ["b"]}]
     exec_bullets = [{"bullet": "Original bullet", "section_id": "x"}]
     with patch("llm._mistral_client", return_value=client):
-        sk_rendered, sk_exec_bullets, sk_question_texts = translate_to_slovak(
+        sk_rendered, sk_exec_bullets, sk_question_texts, _ = translate_to_slovak(
             rendered, exec_bullets, tracker, question_texts={"q5": "Original question"},
         )
     assert sk_rendered == rendered
@@ -975,7 +975,7 @@ def test_translate_to_slovak_parse_failure_falls_back_to_english_questions():
     client = _mock_mistral_response("not valid json")
     tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
     with patch("llm._mistral_client", return_value=client):
-        sk_rendered, sk_exec_bullets, sk_question_texts = translate_to_slovak(
+        sk_rendered, sk_exec_bullets, sk_question_texts, _ = translate_to_slovak(
             [], [{"bullet": "Original bullet", "section_id": "x"}], tracker,
             question_texts={"q5": "Original question"},
         )
@@ -1002,7 +1002,7 @@ def test_translate_to_slovak_malformed_section_entry_does_not_crash():
          "finding": "Other original finding", "bullets": ["Other original bullet"]},
     ]
     with patch("llm._mistral_client", return_value=client):
-        sk_rendered, sk_exec_bullets, _ = translate_to_slovak(rendered, [], tracker)
+        sk_rendered, sk_exec_bullets, _, _ = translate_to_slovak(rendered, [], tracker)
 
     by_id = {s["section_id"]: s for s in sk_rendered}
     assert by_id["financing_gap"]["finding"] == "Zistenie"
@@ -1036,7 +1036,7 @@ def test_translate_to_slovak_translates_bullets_by_question_and_synthesis():
         "theme_label": "Artificial Intelligence",
     }
     with patch("llm._mistral_client", return_value=client):
-        sk_rendered, _, _ = translate_to_slovak([adhoc_section], [], tracker)
+        sk_rendered, _, _, _ = translate_to_slovak([adhoc_section], [], tracker)
 
     sk_adhoc = sk_rendered[0]
     assert sk_adhoc["bullets_by_question"]["qa1"] == ["Preložený bod QA1"]
@@ -1064,11 +1064,47 @@ def test_translate_to_slovak_bullets_by_question_falls_back_per_question():
         "theme_label": "Artificial Intelligence",
     }
     with patch("llm._mistral_client", return_value=client):
-        sk_rendered, _, _ = translate_to_slovak([adhoc_section], [], tracker)
+        sk_rendered, _, _, _ = translate_to_slovak([adhoc_section], [], tracker)
 
     sk_adhoc = sk_rendered[0]
     assert sk_adhoc["bullets_by_question"]["qa1"] == ["Preložený bod QA1"]
     assert sk_adhoc["bullets_by_question"]["qa2"] == ["English bullet QA2"]
+
+
+def test_translate_to_slovak_translates_chart_question_captions():
+    """The SK report previously showed the English 'Q: ...' chart caption verbatim
+    under a Slovak 'Ot:' label — chart_question_captions must be translated too."""
+    client = _mock_mistral_response(json.dumps({
+        "exec_bullets": [],
+        "sections": [],
+        "chart_captions": {"bank_loan_terms": "Aké boli vaše úrokové sadzby?"},
+    }))
+    tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
+    with patch("llm._mistral_client", return_value=client):
+        _, _, _, sk_captions = translate_to_slovak(
+            [], [], tracker,
+            chart_question_captions={"bank_loan_terms": "What were your interest rates?"},
+        )
+    assert sk_captions == {"bank_loan_terms": "Aké boli vaše úrokové sadzby?"}
+
+
+def test_translate_to_slovak_chart_captions_missing_falls_back_to_english():
+    client = _mock_mistral_response('{"exec_bullets": [], "sections": []}')
+    tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
+    with patch("llm._mistral_client", return_value=client):
+        _, _, _, sk_captions = translate_to_slovak(
+            [], [], tracker,
+            chart_question_captions={"bank_loan_terms": "What were your interest rates?"},
+        )
+    assert sk_captions == {"bank_loan_terms": "What were your interest rates?"}
+
+
+def test_translate_to_slovak_no_chart_captions_returns_empty_dict():
+    client = _mock_mistral_response('{"exec_bullets": [], "sections": []}')
+    tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
+    with patch("llm._mistral_client", return_value=client):
+        _, _, _, sk_captions = translate_to_slovak([], [], tracker)
+    assert sk_captions == {}
 
 
 # ── build_section_signals ────────────────────────────────────────────────────

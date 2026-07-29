@@ -2063,6 +2063,12 @@ TRANSLATE_SYSTEM = (
     "naturally take in Slovak (e.g. \"Credit line stress widened sharply\" — \"stres sa "
     "rozšíril\" is not idiomatic; restructure around what actually widened, e.g. \"medzera "
     "vo financovaní úverových liniek sa výrazne rozšírila\", or lead with the cause). "
+    "A net balance over a DIRECTIONAL/CATEGORICAL judgement (e.g. Q33 upside vs downside "
+    "inflation risk) is firms choosing a CATEGORY, not a quantity of risk itself — never "
+    "translate \"a net X% of firms saw upside risk\" as \"firmy uviedli čistých X % rizika "
+    "rastu inflácie\" (nonsensical: risk doesn't come in a net percentage). Say firms "
+    "PERCEIVE/SEE the risk as skewed in a direction: \"čistých X % firiem vníma riziko "
+    "vývoja inflácie ako smerujúce nahor\" (upside) / \"nadol\" (downside). "
     "When in doubt, translate the MEANING, not the sentence structure. "
     "Each translated bullet must stay at or under 35 words. If a literal translation "
     "would exceed this, choose more concise Slovak phrasing rather than a longer "
@@ -2072,6 +2078,10 @@ TRANSLATE_SYSTEM = (
     "(keep the keys, i.e. question IDs, unchanged) — these are official survey question "
     "wordings shown in a glossary; for THIS field only, translate faithfully/literally "
     "rather than paraphrasing, since it must match the ECB's published wording. "
+    "If a \"chart_captions\" object is present, translate every short question caption "
+    "value (keep the keys, i.e. section IDs, unchanged) into a short, natural Slovak "
+    "question in second person (\"vy\"/\"vaša firma\"), at most 12 words, ending in a "
+    "question mark — paraphrase, do not translate word-for-word. "
     "Return valid JSON only — no markdown fences — with exactly the same structure as the input."
 )
 
@@ -2081,7 +2091,8 @@ def translate_to_slovak(
     exec_bullets: list[dict],
     cost_tracker: dict,
     question_texts: dict | None = None,
-) -> tuple[list[dict], list[dict], dict]:
+    chart_question_captions: dict | None = None,
+) -> tuple[list[dict], list[dict], dict, dict]:
     exec_bullet_texts = [item.get("bullet", "") for item in exec_bullets]
 
     adhoc_s = next((s for s in rendered if s.get("section_id") == "adhoc_spotlight"), None)
@@ -2101,6 +2112,8 @@ def translate_to_slovak(
     }
     if question_texts:
         payload["annex_questions"] = question_texts
+    if chart_question_captions:
+        payload["chart_captions"] = chart_question_captions
     if adhoc_s:
         payload["adhoc"] = {
             "theme_label": adhoc_s.get("theme_label", ""),
@@ -2133,7 +2146,7 @@ def translate_to_slovak(
         # already-generated EN report — degrade to English-only for this run,
         # same fallback already used below for a JSON-parse failure.
         print(f"  [SK] Translation call failed ({e}) — falling back to English content")
-        return rendered, exec_bullets, (question_texts or {})
+        return rendered, exec_bullets, (question_texts or {}), (chart_question_captions or {})
     if resp.usage:
         _track_cost(cost_tracker, _TRANSLATE_MODEL,
                     _Usage(resp.usage.prompt_tokens, resp.usage.completion_tokens))
@@ -2145,7 +2158,7 @@ def translate_to_slovak(
         translated = json.loads(repair_json(raw))
     except Exception:
         print("  [SK] Translation JSON parse failed — falling back to English content")
-        return rendered, exec_bullets, (question_texts or {})
+        return rendered, exec_bullets, (question_texts or {}), (chart_question_captions or {})
 
     sk_rendered = []
     raw_sections = translated.get("sections", [])
@@ -2202,7 +2215,12 @@ def translate_to_slovak(
     if question_texts and not translated.get("annex_questions"):
         print("  [SK] Annex question translation missing from response — falling back to English annex text")
 
-    return sk_rendered, sk_exec_bullets, sk_question_texts
+    sk_chart_captions = translated.get("chart_captions") or (chart_question_captions or {})
+    if chart_question_captions and not translated.get("chart_captions"):
+        print("  [SK] Chart question caption translation missing from response — "
+              "falling back to English captions")
+
+    return sk_rendered, sk_exec_bullets, sk_question_texts, sk_chart_captions
 
 
 ENFORCE_STYLE_SYSTEM = textwrap.dedent("""

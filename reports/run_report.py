@@ -550,6 +550,7 @@ def main() -> None:
         TRANSLATE_SYSTEM, _section_text_snapshot(rendered),
         sorted((s["section_id"], s.get("title", "")) for s in rendered),
         [item.get("bullet", "") for item in exec_bullets], question_texts,
+        chart_question_captions,
     )
     _translate_cached = _stage_cache_check(
         tool_con, schema, "translate_sk", _translate_key, _translate_hash, args.no_cache)
@@ -560,11 +561,14 @@ def main() -> None:
         sk_rendered = _apply_section_overlay(rendered, overlay)
         sk_exec_bullets = _translate_cached["exec_bullets"]
         sk_question_texts = _translate_cached["question_texts"]
+        sk_chart_question_captions = _translate_cached.get("chart_question_captions", {})
     else:
-        sk_rendered, sk_exec_bullets, sk_question_texts = translate_to_slovak(
+        sk_rendered, sk_exec_bullets, sk_question_texts, sk_chart_question_captions = translate_to_slovak(
             rendered, exec_bullets, cost_tracker, question_texts=question_texts,
+            chart_question_captions=chart_question_captions,
         )
         _pipeline_cache_put(tool_con, schema, "translate_sk", _translate_key, _translate_hash, {
+            "chart_question_captions": sk_chart_question_captions,
             "sections": [
                 {"section_id": s["section_id"], "title": s.get("title", ""),
                  "finding": s.get("finding", ""), "bullets": s.get("bullets", [])}
@@ -629,7 +633,10 @@ def main() -> None:
         r = interest[sid]
         sec = sections_by_id[sid]
         chart_title = sk_sec["finding"]
-        chart_question = chart_question_captions.get(sid, "")
+        # Slovak-translated caption (GitHub feedback: the SK report previously showed
+        # the English "Q: ..." caption verbatim under a Slovak "Ot:" label) — falls
+        # back to English only if the translation pass genuinely omitted it.
+        chart_question = sk_chart_question_captions.get(sid) or chart_question_captions.get(sid, "")
         chart_subtitle = sk_sec.get("chart_subtitle", "")
         try:
             if sid == "financing_gap":

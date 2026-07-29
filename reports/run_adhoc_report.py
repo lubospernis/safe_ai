@@ -266,7 +266,7 @@ def main() -> None:
         sk_question_texts = _translation_cached["sk_question_texts"]
     else:
         print("Translating to Slovak...")
-        sk_rendered, sk_exec_bullets, sk_question_texts = translate_to_slovak(
+        sk_rendered, sk_exec_bullets, sk_question_texts, _ = translate_to_slovak(
             rendered, exec_bullets, cost_tracker, question_texts=question_texts,
         )
         _translation_cache_path.write_bytes(pickle.dumps({

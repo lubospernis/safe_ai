@@ -10,7 +10,7 @@ PyMuPDF>=1.24,<2
 jinja2>=3.1,<4
 pandas>=2.0,<3
 ecbdata>=0.1.1
-duckdb>=1.0,<2
+duckdb>=1.0,<=1.5.4  # MotherDuck extension caps out at 1.5.4 as of 2026-07-29 (1.5.5 broke CI); bump once MotherDuck confirms support for a newer version
 matplotlib>=3.8,<4
 numpy>=1.26,<3
 seaborn>=0.13,<1

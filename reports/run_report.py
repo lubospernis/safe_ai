@@ -139,6 +139,88 @@ def _apply_section_overlay(rendered: list[dict], overlay: dict) -> list[dict]:
     return result
 
 
+def _df_records(df) -> list[dict]:
+    """JSON-safe row records with stable null handling."""
+    return json.loads(df.to_json(orient="records", date_format="iso"))
+
+
+def _chart_payload_for_section(
+    sec: dict,
+    sid: str,
+    df,
+    interest_row: dict,
+    chart_question_captions: dict[str, str],
+) -> dict:
+    """Serialize chart-driving data so the web app can render interactive charts
+    without a live database connection."""
+    chart_type = "line" if sid == "bank_loan_terms" else str(interest_row.get("chart_type", "line"))
+    return {
+        "chart_type": chart_type,
+        "best_panel": interest_row.get("best_panel"),
+        "panel_col": sec.get("panel_col"),
+        "panel_label_col": sec.get("panel_label_col"),
+        "series_col": sec.get("series_col"),
+        "value_col": sec.get("value_col"),
+        "question_caption": chart_question_captions.get(sid, ""),
+        "chart_subtitle": "",
+        "panel_title_suffix": CHART_STRINGS["net_change_pct_suffix"] if sid == "bank_loan_terms" else "",
+        "pct_axis": sid == "bank_loan_terms",
+        "records": _df_records(df),
+    }
+
+
+def _build_report_payload(
+    *,
+    rendered: list[dict],
+    data: dict,
+    sections: list[dict],
+    interest: dict,
+    exec_bullets: list[dict],
+    chart_question_captions: dict[str, str],
+    wave_number: int,
+    period_label: str | None,
+    language: str,
+) -> dict:
+    """Produce a machine-readable report payload for the web app."""
+    section_cfg = {s["id"]: s for s in sections}
+    payload_sections: list[dict] = []
+    for row in rendered:
+        sid = row["section_id"]
+        sec = section_cfg.get(sid)
+        df = data.get(sid)
+        if sec is None or df is None:
+            continue
+        chart_payload = _chart_payload_for_section(sec, sid, df, interest[sid], chart_question_captions)
+        chart_payload["chart_subtitle"] = row.get("chart_subtitle", "")
+        payload_sections.append(
+            {
+                "section_id": sid,
+                "title": row.get("title", ""),
+                "group": row.get("group", "Other"),
+                "finding": row.get("finding", ""),
+                "bullets": row.get("bullets", []),
+                "chart": chart_payload,
+            }
+        )
+
+    from datetime import datetime as _dt
+
+    return {
+        "wave": int(wave_number),
+        "period_label": period_label,
+        "language": language,
+        "generated_at": _dt.utcnow().isoformat() + "Z",
+        "exec_summary": [
+            {
+                "section_id": item.get("section_id", ""),
+                "bullet": item.get("bullet", ""),
+            }
+            for item in exec_bullets
+        ],
+        "sections": payload_sections,
+    }
+
+
 def main() -> None:
     from datetime import datetime as _dt
     _run_start = _dt.now()
@@ -670,10 +752,41 @@ def main() -> None:
     from datetime import date as _date
 
     _pages_base = "https://lubospernis.github.io/safe_ai"
+    _payload_en = _build_report_payload(
+        rendered=rendered,
+        data=data,
+        sections=SECTIONS,
+        interest=interest,
+        exec_bullets=exec_bullets,
+        chart_question_captions=chart_question_captions,
+        wave_number=latest_wave,
+        period_label=period_label,
+        language="en",
+    )
+    _payload_sk = _build_report_payload(
+        rendered=sk_rendered,
+        data=data,
+        sections=SECTIONS,
+        interest=interest,
+        exec_bullets=sk_exec_bullets,
+        chart_question_captions=chart_question_captions,
+        wave_number=latest_wave,
+        period_label=period_label,
+        language="sk",
+    )
+    _payload_wave_en = f"report_payload_q{latest_wave}.json"
+    _payload_wave_sk = f"report_payload_q{latest_wave}_sk.json"
+    (OUTPUT_DIR / _payload_wave_en).write_text(json.dumps(_payload_en, ensure_ascii=False))
+    (OUTPUT_DIR / _payload_wave_sk).write_text(json.dumps(_payload_sk, ensure_ascii=False))
+    (OUTPUT_DIR / "report_payload_latest.json").write_text(json.dumps(_payload_en, ensure_ascii=False))
+    (OUTPUT_DIR / "report_payload_latest_sk.json").write_text(json.dumps(_payload_sk, ensure_ascii=False))
+
     _links = {
         "wave": latest_wave,
         "en": f"{_pages_base}/{wave_en}",
         "sk": f"{_pages_base}/{wave_sk}",
+        "report_json_en": f"{_pages_base}/{_payload_wave_en}",
+        "report_json_sk": f"{_pages_base}/{_payload_wave_sk}",
         "last_updated": _date.today().isoformat(),
     }
     if _next_release_date:

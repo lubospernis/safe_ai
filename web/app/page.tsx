@@ -71,7 +71,9 @@ export default async function Home() {
           const isSubscribed = subscribedIds.has(nl.id);
           const nlText = { name: nl.name[lang], description: nl.description[lang], periodicity: nl.periodicity[lang] };
           const latestLinks = linksByNewsletter[nl.id] ?? null;
-          const reportUrl = nl.linkUrl ?? (latestLinks ? (latestLinks[lang] || latestLinks.en) : null);
+          const reportUrl = nl.id === "safe-regular"
+            ? "/report"
+            : (nl.linkUrl ?? (latestLinks ? (latestLinks[lang] || latestLinks.en) : null));
           return (
             <div key={nl.id} className={styles.card}>
               <div className={styles.cardIcon}>{nl.icon}</div>

@@ -1,0 +1,212 @@
+.main {
+  min-height: 100vh;
+  background: #f2f6f9;
+  color: #231f20;
+  font-family: Arial, sans-serif;
+  padding: 24px 16px 48px;
+}
+
+.header {
+  max-width: 1080px;
+  margin: 0 auto 16px;
+}
+
+.title {
+  margin: 0;
+  font-size: 28px;
+  color: #2b5291;
+}
+
+.meta {
+  margin: 8px 0 0;
+  color: #5d6a78;
+  font-size: 14px;
+}
+
+.execCard {
+  max-width: 1080px;
+  margin: 0 auto 20px;
+  background: #eaf1fb;
+  border-left: 4px solid #2b5291;
+  border-radius: 8px;
+  padding: 16px 20px;
+}
+
+.execCard h2 {
+  margin: 0 0 10px;
+  font-size: 18px;
+  color: #2b5291;
+}
+
+.execCard ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.sections {
+  max-width: 1080px;
+  margin: 0 auto;
+  display: grid;
+  gap: 14px;
+}
+
+.sectionCard {
+  background: #fff;
+  border: 1px solid #d7e0e7;
+  border-radius: 10px;
+  padding: 18px 20px;
+}
+
+.sectionFinding {
+  margin: 0;
+  font-size: 18px;
+}
+
+.sectionTitle {
+  margin: 6px 0 10px;
+  color: #6e7782;
+  font-size: 12px;
+}
+
+.bulletList {
+  margin: 0 0 10px;
+  padding-left: 20px;
+  line-height: 1.5;
+  font-size: 14px;
+}
+
+.chartWrap {
+  margin-top: 6px;
+  border: 1px solid #e2e8ee;
+  border-radius: 8px;
+  padding: 10px;
+  background: #fbfcfd;
+}
+
+.chartSvg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.chartLegend {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.chartLegendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.chartLegendDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.chartEmpty {
+  font-size: 12px;
+  color: #8a97a6;
+  margin: 6px 0;
+}
+
+.feedbackCard {
+  margin-top: 12px;
+  border-top: 1px solid #e4ebf1;
+  padding-top: 10px;
+}
+
+.feedbackTitle {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #2f3d4c;
+}
+
+.feedbackRow {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.feedbackBtn,
+.feedbackBtnActive {
+  border: 1px solid #b7c5d5;
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.feedbackBtnActive {
+  background: #e8f1fd;
+  border-color: #2b5291;
+  color: #2b5291;
+  font-weight: 700;
+}
+
+.feedbackLabel {
+  display: block;
+  margin: 4px 0 4px;
+  font-size: 12px;
+  color: #5f6f82;
+}
+
+.feedbackInput {
+  width: 100%;
+  border: 1px solid #c9d5e2;
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 13px;
+  resize: vertical;
+  min-height: 72px;
+}
+
+.feedbackFooter {
+  margin-top: 8px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.feedbackSubmit {
+  border: none;
+  background: #2b5291;
+  color: #fff;
+  border-radius: 6px;
+  padding: 7px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.feedbackSubmit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.feedbackMsg {
+  font-size: 12px;
+  color: #5f6f82;
+}
+
+@media (max-width: 700px) {
+  .main {
+    padding: 14px 10px 28px;
+  }
+
+  .title {
+    font-size: 22px;
+  }
+
+  .sectionCard {
+    padding: 14px;
+  }
+}

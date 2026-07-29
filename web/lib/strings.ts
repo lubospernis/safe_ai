@@ -12,6 +12,8 @@ export const STRINGS = {
     nextRelease: "Next release: {date}*",
     nextReleaseFootnote: "*Newsletter will be sent out around this date.",
     experimentalBadge: "Experimental",
+    reportUnavailable: "Report data is not available yet.",
+    reportLoadError: "Unable to load report content.",
   },
   sk: {
     subscriptionService: "Služba odberu newslettra",
@@ -24,5 +26,7 @@ export const STRINGS = {
     nextRelease: "Ďalšie vydanie: {date}*",
     nextReleaseFootnote: "*Newsletter bude odoslaný približne v tomto termíne.",
     experimentalBadge: "Experimentálne",
+    reportUnavailable: "Dáta správy ešte nie sú dostupné.",
+    reportLoadError: "Nepodarilo sa načítať obsah správy.",
   },
 } as const;

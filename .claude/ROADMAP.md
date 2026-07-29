@@ -62,6 +62,8 @@ Claude: tick items off as they get built; don't add speculative sub-tasks.
 
 (Removed 2026-07-21 as part of a roadmap clear-out: **Country selector**, **Wave comparison toggle**, **EA breakdown by country** — all three were explicitly marked "speculative without user feedback" from the day they were added, i.e. never validated demand, not scoped work. Re-add with real scoping if "User interviews" (see Now) surfaces actual demand for any of them — don't resurrect blind.)
 
+- [x] User story 1 — interactive report feedback (2026-07-29) — shipped Phase 1 in the Vercel app for the main SAFE report: `run_report.py` now exports machine-readable report payloads (`report_payload_latest*.json` and wave-versioned payloads) plus JSON pointers in `latest_links.json`; new authenticated `/report` page renders section findings/bullets with interactive client-side trend charts from the exported data (no live DB from web). Added editable per-section feedback collection (`like`/`dislike` + optional comment-only submission) to dedicated Supabase table `public.report_section_feedback` with per-user RLS and upsert semantics (`email + wave_number + section_id`) so users can revise feedback without duplicates.
+
 ---
 
 ## Later

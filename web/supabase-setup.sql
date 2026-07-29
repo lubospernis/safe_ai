@@ -177,3 +177,46 @@ VALUES
     true, true, 1
   )
 ON CONFLICT (id) DO NOTHING;
+
+-- ============================================================
+-- Report feedback — editable per-user/per-wave/per-section feedback for
+-- the interactive Vercel-hosted report (thumbs up/down + optional comment).
+-- verdict is optional so users can submit comment-only feedback.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS public.report_section_feedback (
+  id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  email         TEXT NOT NULL,
+  wave_number   INTEGER NOT NULL,
+  section_id    TEXT NOT NULL,
+  language      TEXT NOT NULL DEFAULT 'sk' CHECK (language IN ('en', 'sk')),
+  verdict       TEXT CHECK (verdict IN ('up', 'down')),
+  comment       TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (email, wave_number, section_id)
+);
+
+CREATE INDEX IF NOT EXISTS report_section_feedback_wave_section_idx
+  ON public.report_section_feedback (wave_number, section_id);
+
+CREATE INDEX IF NOT EXISTS report_section_feedback_created_at_idx
+  ON public.report_section_feedback (created_at DESC);
+
+ALTER TABLE public.report_section_feedback ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "self_read" ON public.report_section_feedback;
+CREATE POLICY "self_read" ON public.report_section_feedback
+  FOR SELECT
+  USING (email = auth.jwt() ->> 'email');
+
+DROP POLICY IF EXISTS "self_insert" ON public.report_section_feedback;
+CREATE POLICY "self_insert" ON public.report_section_feedback
+  FOR INSERT
+  WITH CHECK (email = auth.jwt() ->> 'email');
+
+DROP POLICY IF EXISTS "self_update" ON public.report_section_feedback;
+CREATE POLICY "self_update" ON public.report_section_feedback
+  FOR UPDATE
+  USING (email = auth.jwt() ->> 'email')
+  WITH CHECK (email = auth.jwt() ->> 'email');

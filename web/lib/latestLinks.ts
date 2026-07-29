@@ -2,6 +2,8 @@ export interface LatestLinks {
   wave: number;
   en: string;
   sk: string;
+  report_json_en?: string;
+  report_json_sk?: string;
   last_updated?: string;
   next_release?: string;
   next_release_note?: string;

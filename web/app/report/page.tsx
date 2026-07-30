@@ -38,6 +38,29 @@ interface ExistingFeedback {
   comment: string | null;
 }
 
+function deriveReportJsonUrlFromHtml(htmlUrl: string | undefined, lang: "en" | "sk"): string | null {
+  if (!htmlUrl) return null;
+
+  // Expected SAFE report naming patterns on GitHub Pages:
+  // - report_q39.html          -> report_payload_q39.json
+  // - report_q39_sk.html       -> report_payload_q39_sk.json
+  // - report_latest.html       -> report_payload_latest.json
+  // - report_latest_sk.html    -> report_payload_latest_sk.json
+  if (lang === "sk") {
+    return htmlUrl
+      .replace(/report_(q\d+)_sk\.html$/i, "report_payload_$1_sk.json")
+      .replace(/report_latest_sk\.html$/i, "report_payload_latest_sk.json")
+      .replace(/report_(q\d+)\.html$/i, "report_payload_$1_sk.json")
+      .replace(/report_latest\.html$/i, "report_payload_latest_sk.json");
+  }
+
+  return htmlUrl
+    .replace(/report_(q\d+)_sk\.html$/i, "report_payload_$1.json")
+    .replace(/report_latest_sk\.html$/i, "report_payload_latest.json")
+    .replace(/report_(q\d+)\.html$/i, "report_payload_$1.json")
+    .replace(/report_latest\.html$/i, "report_payload_latest.json");
+}
+
 async function loadReportPayload(reportJsonUrl: string): Promise<ReportPayload | null> {
   try {
     const res = await fetch(reportJsonUrl, { cache: "no-store" });
@@ -72,7 +95,23 @@ export default async function ReportPage() {
     .maybeSingle();
 
   const links = newsletterRow?.links_json_url ? await fetchLinks(newsletterRow.links_json_url) : null;
-  const reportJsonUrl = links ? (lang === "sk" ? (links.report_json_sk ?? links.report_json_en) : (links.report_json_en ?? links.report_json_sk)) : null;
+  const reportJsonUrl = links
+    ? (
+      lang === "sk"
+        ? (
+          links.report_json_sk
+          ?? deriveReportJsonUrlFromHtml(links.sk ?? links.en, "sk")
+          ?? links.report_json_en
+          ?? deriveReportJsonUrlFromHtml(links.en ?? links.sk, "en")
+        )
+        : (
+          links.report_json_en
+          ?? deriveReportJsonUrlFromHtml(links.en ?? links.sk, "en")
+          ?? links.report_json_sk
+          ?? deriveReportJsonUrlFromHtml(links.sk ?? links.en, "sk")
+        )
+    )
+    : null;
 
   if (!reportJsonUrl) {
     return (

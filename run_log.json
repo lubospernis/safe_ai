@@ -1345,5 +1345,208 @@
     "context_sources": {
       "annex_loaded": true
     }
+  },
+  {
+    "run_type": "main",
+    "run_date": "2026-08-01",
+    "run_time": "08:12:12",
+    "sections_summary": [
+      {
+        "section_id": "bank_loan_terms",
+        "finding": "Slovak interest rate tightening rose sharply, reaching a net 43.8% in wave 39",
+        "bullets": [
+          "A net 43.8% of Slovak firms (n=76) reported higher interest rates in wave 39, rising 38.3 pp from a net 5.5% in wave 38 — the largest swing across all three geographies, signalling sharply higher financing costs.",
+          "Available loan or credit line size tightened for a net 12.4% of Slovak firms (n=74), up 6.3 pp from wave 38, with loan maturity conditions also tightening at a net 11.6% (n=76) — squeezing liquidity buffers.",
+          "Euro area interest rate tightening also intensified, with a net 40.0% of firms (n=1,906) reporting higher rates, up 12.7 pp from wave 38, leaving Slovakia 3.8 pp above the EA — widening the regional cost gap."
+        ],
+        "grounding_warnings": [],
+        "grounding_dropped": [],
+        "style_warnings": []
+      },
+      {
+        "section_id": "financing_gap",
+        "finding": "Credit line stress persists despite easing Slovak bank loan conditions",
+        "bullets": [
+          "The Slovak credit line gap held at +15.3pp (n=270), 1.3pp above the EA, as rising need (+15.2pp) outweighed near-flat availability (-0.1pp) — the most stressed instrument for Slovak firms.",
+          "The bank loan gap deepened to -6.0pp (n=214) from -4.0pp in the prior wave, 8.8pp below the EA's +2.8pp, as availability improved to +5.6pp — signalling tighter conditions for Slovak firms.",
+          "The trade credit gap improved by 8.0pp to -1.7pp (n=180), driven by a sharp fall in need from +7.1pp to -3.4pp, leaving SK 12.7pp less stressed than the EA."
+        ],
+        "grounding_warnings": [],
+        "grounding_dropped": [],
+        "style_warnings": []
+      },
+      {
+        "section_id": "availability_expectations",
+        "finding": "Slovak firms' bank loan availability expectations diverged from improving EA trend",
+        "bullets": [
+          "A net 6.5% of Slovak firms (n=104) expected bank loan availability to deteriorate in wave 39—suggesting tightening conditions ahead for local borrowers.",
+          "Slovak firms' trade credit expectations improved 4.0 pp to a net 6.2% expecting deterioration (n=90), while EA firms saw only a 1.0 pp rise to 1.9%.",
+          "Credit line availability expectations improved for both SK and EA firms, with Slovak firms' net deterioration share falling 3.2 pp to 3.9% (n=136)—signalling slightly better short-term liquidity prospects."
+        ],
+        "grounding_warnings": [],
+        "grounding_dropped": [],
+        "style_warnings": []
+      },
+      {
+        "section_id": "financing_purpose",
+        "finding": "Slovak firms lead EA in working capital financing at 57%",
+        "bullets": [
+          "Inventory and working capital remained the dominant financing purpose for Slovak firms, cited by 57.0% (n=242) — 16.2 pp above the euro area's 40.8% — compared with 55.7% in the previous wave, underlining their heavy reliance on short-term liquidity.",
+          "Fixed investment financing rose from 34.2% to 40.7% among Slovak firms (n=242), a gain of 6.5 pp that brought Slovakia above the euro area rate of 38.4%, suggesting growing capacity for long-term growth investments.",
+          "Refinancing or paying off obligations declined from 21.5% to 17.0% among Slovak firms (n=241), narrowing the gap with the euro area's 15.8%, indicating reduced debt servicing pressure."
+        ],
+        "grounding_warnings": [],
+        "grounding_dropped": [],
+        "style_warnings": []
+      },
+      {
+        "section_id": "financing_factors",
+        "finding": "Bank willingness stable in Slovakia but macro outlook deteriorates further",
+        "bullets": [
+          "A net 7.8% of Slovak firms (n=310) reported that banks' willingness to provide credit improved, unchanged from the previous wave and above the EA's net 5.6% and Germany's net -4.2% — suggesting stable financing conditions.",
+          "A net 51.6% of Slovak firms (n=472) reported a deteriorating general economic outlook, worsening by 7.2 pp from wave 38, and 22.2 pp more negative than the EA's net 29.4% — putting pressure on future investment plans.",
+          "Access to public financial support remained negative for Slovak firms (n=310) at a net -21.2%, though notably less so than wave 38's net -33.8%, compared with the EA's net -13.6% — limiting mitigation options for firms."
+        ],
+        "grounding_warnings": [],
+        "grounding_dropped": [],
+        "style_warnings": []
+      },
+      {
+        "section_id": "business_situation",
+        "finding": "Slovak turnover still contracting despite 13 pp improvement in wave 39",
+        "bullets": [
+          "A net 12.83% of Slovak firms (n=242) reported declining turnover in wave 39, improving 13.39 pp from a net 26.22% decline in wave 38 — yet still signalling weak demand conditions.",
+          "A net 34.38% of Slovak firms (n=242) reported falling profits — 18.99 pp worse than the EA's net 15.39% — highlighting profitability pressures.",
+          "Labour costs continued to rise for a net 78.81% of Slovak firms (n=242), 19.85 pp above the EA's net 58.96% — squeezing margins further."
+        ],
+        "grounding_warnings": [],
+        "grounding_dropped": [],
+        "style_warnings": []
+      },
+      {
+        "section_id": "outlook",
+        "finding": "Slovak turnover expectations fell sharply while EA firms remained optimistic",
+        "bullets": [
+          "A net 6.75% of Slovak firms (n=228) expected turnover to increase over the next two quarters, down 14.15 pp from two quarters earlier, against a net 25.88% for the euro area (n=5,266) — signalling weaker domestic demand.",
+          "Slovak fixed investment expectations rose to a net 14.67% (n=228), up 3.88 pp from two quarters earlier, outpacing the euro area's net 9.45% and Germany's net -2.42% — suggesting some firms are betting on future growth despite current headwinds.",
+          "The 19.1 pp gap between Slovak and euro area turnover expectations points to diverging near-term growth trajectories, with Slovak firms' revenue outlook the weakest among the three economies compared."
+        ],
+        "grounding_warnings": [],
+        "grounding_dropped": [],
+        "style_warnings": []
+      },
+      {
+        "section_id": "expectations_quantitative",
+        "finding": "Slovak firms face margin compression as input costs outpace selling prices",
+        "bullets": [
+          "Slovak firms (n=224) expected production input prices to rise 7.33% over the next 12 months, far exceeding selling price expectations of 3.75% (n=222), pointing to sustained margin compression.",
+          "Slovak wage expectations held at 4.12% (n=233), easing only 0.09 pp from wave 38, and ran 1.52 pp above the euro area's 2.60%, reinforcing the cost-side squeeze.",
+          "Five-year inflation expectations among Slovak firms stood at 7.66% (n=165), declining 0.91 pp from wave 38 but remaining 1.72 pp above the EA average of 5.94%."
+        ],
+        "grounding_warnings": [],
+        "grounding_dropped": [],
+        "style_warnings": []
+      },
+      {
+        "section_id": "expectations_risk",
+        "finding": "Slovak firms' upside inflation risk balance diverges further from euro area",
+        "bullets": [
+          "A net 61.2% of Slovak firms (n=242) saw upside risks to five-year inflation, rising 2.3 pp from net 58.9% in wave 38, while the EA balance eased to net 54.0% (n=5,087) — suggesting growing divergence in inflation expectations.",
+          "The SK–EA gap widened to 7.2 pp as Slovak firms' upside risk balance rose and the euro area's declined by 1.3 pp — indicating increasing local inflation concerns.",
+          "Upside inflation risk remained the dominant view across all three economies, with net balances well above zero for Slovakia, the euro area, and Germany."
+        ],
+        "grounding_warnings": [],
+        "grounding_dropped": [],
+        "style_warnings": []
+      },
+      {
+        "section_id": "business_problems",
+        "finding": "Skilled staff shortage tops Slovak business concerns in Wave 39",
+        "bullets": [
+          "Skilled staff availability ranked as the most pressing problem among the seven tested for Slovak firms (n=239), scoring 6.64/10 — up from 6.07 in the previous wave, exceeding the EA's 6.57, signalling rising operational strain.",
+          "Costs of production or labour scored 6.62/10 (n=240), rising from 6.19 in the previous wave, though remaining below the EA average of 6.74 — highlighting cost pressures without yet matching peers.",
+          "Regulation scored 6.10/10 (n=236), easing 0.08 from the previous wave, yet still above the EA's 5.87 — suggesting persistent compliance burdens for Slovak firms."
+        ],
+        "grounding_warnings": [],
+        "grounding_dropped": [],
+        "style_warnings": []
+      }
+    ],
+    "wave_number": 39,
+    "total_cost_usd": 1.04532,
+    "input_tokens": 271588,
+    "output_tokens": 25898,
+    "cache_read_tokens": 120771,
+    "model_sonnet": "claude-opus-4-8",
+    "model_mistral": "mistral-large-2512",
+    "cost_by_model": {
+      "claude-opus-4-8": {
+        "calls": 3,
+        "input_tokens": 26563,
+        "output_tokens": 1221,
+        "usd": 0.49002
+      },
+      "claude-sonnet-4-6": {
+        "calls": 27,
+        "input_tokens": 211786,
+        "output_tokens": 10505,
+        "usd": 0.49281
+      },
+      "mistral-large-2512": {
+        "calls": 1,
+        "input_tokens": 7903,
+        "output_tokens": 7000,
+        "usd": 0.05781
+      },
+      "mistral-small-latest": {
+        "calls": 25,
+        "input_tokens": 25336,
+        "output_tokens": 7172,
+        "usd": 0.00469
+      }
+    },
+    "n_sections": 10,
+    "grounding_warning_count": 0,
+    "grounding_dropped_count": 0,
+    "style_warning_count": 0,
+    "style_flagged_en": [
+      "Bullet is 37 words (target ~25, hard ceiling 35): A net 43.8% of Slovak firms (n=76) reported higher interest rates in wave 39, rising 38.3 pp from a ",
+      "Bullet is 36 words (target ~25, hard ceiling 35): Available loan or credit line size tightened for a net 12.4% of Slovak firms (n=74), up 6.3 pp from ",
+      "Bullet is 36 words (target ~25, hard ceiling 35): Euro area interest rate tightening also intensified, with a net 40.0% of firms (n=1,906) reporting h",
+      "'slightly' used for 3.2pp change (implies ≤2.0pp): Credit line availability expectations improved for both SK and EA firms, with Sl",
+      "Bullet is 39 words (target ~25, hard ceiling 35): Inventory and working capital remained the dominant financing purpose for Slovak firms, cited by 57.",
+      "Bullet is 37 words (target ~25, hard ceiling 35): A net 51.6% of Slovak firms (n=472) reported a deteriorating general economic outlook, worsening by ",
+      "Bullet is 36 words (target ~25, hard ceiling 35): Access to public financial support remained negative for Slovak firms (n=310) at a net -21.2%, thoug",
+      "Bullet is 37 words (target ~25, hard ceiling 35): A net 6.75% of Slovak firms (n=228) expected turnover to increase over the next two quarters, down 1",
+      "Bullet is 39 words (target ~25, hard ceiling 35): Slovak fixed investment expectations rose to a net 14.67% (n=228), up 3.88 pp from two quarters earl",
+      "Bullet is 38 words (target ~25, hard ceiling 35): A net 61.2% of Slovak firms (n=242) saw upside risks to five-year inflation, rising 2.3 pp from net "
+    ],
+    "style_flagged_sk": [
+      "Bullet is 41 words (target ~25, hard ceiling 35): V 39. kole uviedlo čistých 43,8 % slovenských firiem (n=76) vyššie úrokové sadzby, čo predstavuje ná",
+      "Bullet is 44 words (target ~25, hard ceiling 35): Dostupná veľkosť úveru alebo úverovej linky sa zhoršila pre čistých 12,4 % slovenských firiem (n=74)",
+      "Bullet is 49 words (target ~25, hard ceiling 35): V eurozóne sa tiež zvýšil tlak na úrokové sadzby, keď čistých 40,0 % firiem (n=1 906) uviedlo ich ná",
+      "Bullet is 46 words (target ~25, hard ceiling 35): Rozdiel medzi potrebou a dostupnosťou úverových liniek na Slovensku zostal na úrovni +15,3 percentuá",
+      "Bullet is 46 words (target ~25, hard ceiling 35): Rozdiel v bankových úveroch sa prehĺbil na -6,0 percentuálneho bodu (n=214) oproti -4,0 percentuálne",
+      "Bullet is 38 words (target ~25, hard ceiling 35): Rozdiel v obchodnom úvere sa zlepšil o 8,0 percentuálneho bodu na -1,7 percentuálneho bodu (n=180), ",
+      "Bullet is 44 words (target ~25, hard ceiling 35): Zásoby a prevádzkový kapitál zostávajú hlavným účelom financovania slovenských firiem, uviedlo ich 5",
+      "Bullet is 38 words (target ~25, hard ceiling 35): Financovanie investícií do dlhodobého majetku vzrástlo zo 34,2 % na 40,7 % medzi slovenskými firmami",
+      "Bullet is 38 words (target ~25, hard ceiling 35): Čistých 7,8 % slovenských firiem (n=310) uviedlo, že ochota bánk poskytovať úvery sa zlepšila, čo je",
+      "Bullet is 43 words (target ~25, hard ceiling 35): Čistých 51,6 % slovenských firiem (n=472) uviedlo zhoršujúce sa všeobecné ekonomické vyhliadky, čo j",
+      "Bullet is 41 words (target ~25, hard ceiling 35): Prístup k verejnej finančnej podpore zostáva pre slovenské firmy (n=310) negatívny na úrovni čistých",
+      "Bullet is 37 words (target ~25, hard ceiling 35): Čistých 6,75 % slovenských firiem (n=228) očakáva nárast obratu v nasledujúcich dvoch štvrťrokoch, č",
+      "Bullet is 46 words (target ~25, hard ceiling 35): Očakávania investícií do dlhodobého majetku na Slovensku vzrástli na čistých 14,67 % (n=228), čo je ",
+      "Bullet is 41 words (target ~25, hard ceiling 35): Očakávania rastu miezd na Slovensku zostávajú na úrovni 4,12 % (n=233), čo je iba o 0,09 percentuáln",
+      "Bullet is 47 words (target ~25, hard ceiling 35): Čistých 61,2 % slovenských firiem (n=242) vníma riziko rastu päťročnej inflácie ako prevládajúce, čo",
+      "Bullet is 40 words (target ~25, hard ceiling 35): Dostupnosť kvalifikovanej pracovnej sily sa umiestnila ako najnaliehavejší problém zo siedmich sledo",
+      "Bullet is 37 words (target ~25, hard ceiling 35): Náklady na výrobu alebo pracovnú silu dosiahli skóre 6,62 z 10 (n=240), čo je nárast z 6,19 v predch",
+      "Bullet is 37 words (target ~25, hard ceiling 35): **Zvýšenie úrokových sadzieb:** Čistých 43,8 % slovenských firiem uviedlo vyššie úrokové sadzby z ba",
+      "Bullet is 46 words (target ~25, hard ceiling 35): **Tlak na marže:** Pre čistých 78,81 % slovenských firiem vzrástli náklady na pracovnú silu, čo je o",
+      "Bullet is 38 words (target ~25, hard ceiling 35): **Napätie v úverových linkách pretrváva:** Rozdiel medzi potrebou a dostupnosťou úverových liniek na",
+      "Bullet is 40 words (target ~25, hard ceiling 35): **Očakávania obratu sa rozchádzajú:** Čistých 6,75 % slovenských firiem očakáva nárast obratu, čo je"
+    ],
+    "duration_seconds": 250.0,
+    "context_sources": {
+      "annex_loaded": true
+    }
   }
 ]

@@ -1,14 +1,14 @@
 {
   "section_id": "outlook",
   "wave_number": 39,
-  "source_hash": "16bb04d39f4e1deb",
-  "finding": "Slovak turnover outlook fell while euro area expectations rose",
+  "source_hash": "535ad0d2949cde5c",
+  "finding": "Slovak turnover expectations fell sharply while EA firms remained optimistic",
   "bullets": [
-    "A net 6.75% of Slovak firms (n=228) expected turnover to increase, down 14.15 pp from two waves earlier, while the euro area rose to a net 25.88% — widening the SK–EA gap to 19.1 pp, signalling weaker Slovak competitiveness.",
-    "Slovak fixed investment expectations rose to a net 14.67% (n=228), up 3.88 pp from two waves earlier, outpacing the euro area's net 9.45% and reversing the relative positions of the two regions — suggesting catch-up potential.",
-    "Euro area and German turnover outlooks both improved from two waves earlier, reaching net 25.88% and net 19.08% respectively, confirming Slovakia as the regional outlier on turnover pessimism — highlighting structural challenges."
+    "A net 6.75% of Slovak firms (n=228) expected turnover to increase over the next two quarters, down 14.15 pp from two quarters earlier, against a net 25.88% for the euro area (n=5,266) — signalling weaker domestic demand.",
+    "Slovak fixed investment expectations rose to a net 14.67% (n=228), up 3.88 pp from two quarters earlier, outpacing the euro area's net 9.45% and Germany's net -2.42% — suggesting some firms are betting on future growth despite current headwinds.",
+    "The 19.1 pp gap between Slovak and euro area turnover expectations points to diverging near-term growth trajectories, with Slovak firms' revenue outlook the weakest among the three economies compared."
   ],
-  "chart_subtitle": "Slovak turnover outlook fell to net 6.75%, EA at 25.88%.",
+  "chart_subtitle": "Slovak turnover expectations fell to a net 6.75%.",
   "grounding_warnings": [],
   "grounding_dropped": [],
   "style_warnings": [],

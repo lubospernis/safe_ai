@@ -1,14 +1,14 @@
 {
   "section_id": "financing_gap",
   "wave_number": 39,
-  "source_hash": "ae550a4dd3cb3afe",
-  "finding": "Credit line stress diverges sharply from easing bank loan conditions in Slovakia",
+  "source_hash": "45b6766ca4efce96",
+  "finding": "Credit line stress persists despite easing Slovak bank loan conditions",
   "bullets": [
-    "The Slovak credit line gap widened to +15.3pp (n=270), exceeding the EA's +14.0pp, as need rose to +15.2pp against near-flat availability (-0.1pp) — worsening access for firms.",
-    "Slovak trade credit stress reversed from +6.3pp to -1.7pp (n=180), as need fell from +7.1pp to -3.4pp, leaving Slovakia 12.7pp less stressed than the EA's +11.0pp gap.",
-    "The Slovak bank loan gap eased to -6.0pp (n=214) from -4.0pp in the previous wave, with availability rising from +1.4pp to +5.6pp, well below the EA's +2.8pp gap — signalling improving conditions."
+    "The Slovak credit line gap held at +15.3pp (n=270), 1.3pp above the EA, as rising need (+15.2pp) outweighed near-flat availability (-0.1pp) — the most stressed instrument for Slovak firms.",
+    "The bank loan gap deepened to -6.0pp (n=214) from -4.0pp in the prior wave, 8.8pp below the EA's +2.8pp, as availability improved to +5.6pp — signalling tighter conditions for Slovak firms.",
+    "The trade credit gap improved by 8.0pp to -1.7pp (n=180), driven by a sharp fall in need from +7.1pp to -3.4pp, leaving SK 12.7pp less stressed than the EA."
   ],
-  "chart_subtitle": "Slovak credit line gap at +15.3pp, exceeding EA's +14.0pp.",
+  "chart_subtitle": "Slovak credit line gap at +15.3pp, bank loans at -6.0pp.",
   "grounding_warnings": [],
   "grounding_dropped": [],
   "style_warnings": [],

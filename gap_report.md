@@ -1,23 +1,17 @@
 # SAFE Report Gap Analysis
 
-_Generated 29 Jul 2026 — ECB source: [https://www.ecb.europa.eu/stats/ecb_surveys/safe/html/ecb.safe202607.en.html](https://www.ecb.europa.eu/stats/ecb_surveys/safe/html/ecb.safe202607.en.html)_
+_Generated 01 Aug 2026 — ECB source: [https://www.ecb.europa.eu/stats/ecb_surveys/safe/html/ecb.safe202607.en.html](https://www.ecb.europa.eu/stats/ecb_surveys/safe/html/ecb.safe202607.en.html)_
 
 ## Structural Gaps
-**Slovak AI investment breakdown missing:** No granularity on AI investment types (e.g., tools vs. training) or financing sources (e.g., internal funds vs. loans) for Slovakia, tied to ECB Box 1 — critical for assessing SK’s digitalisation financing trends.
-
-**Trade credit willingness gap:** ECB reports net 2% improvement in trade credit willingness (EA), but our report lacks supplier-side willingness metrics for Slovakia (Q7) — key for SK’s SME liquidity analysis.
-
-**Financing purpose by size class:** ECB splits financing use (Q6A) by SMEs vs. large firms (e.g., 36% SMEs vs. 47% large firms for working capital); our report lacks SK size-class breakdowns — obscures SME-specific pressures.
-
-**Economic outlook impact on financing:** ECB links worsening economic outlook (net 29% EA) to financing constraints (Chart 6); our report lacks SK-specific linkage between outlook (Q4) and availability (Q9) — limits causal analysis.
-
-**Credit standards cross-reference:** ECB explicitly ties SME financing gaps to euro area Bank Lending Survey credit standards; our report cannot replicate this SK-specific bank survey linkage — structural limitation.
-
----
+**Missing AI investment breakdown:** No Slovakia-specific data on planned AI investment types (e.g., tools vs. training) or financing sources (e.g., internal funds vs. bank loans), which ECB Q39 Box 1 details — critical for assessing SK’s digital transformation priorities.
+**No credit line collateral data:** ECB Chart 1 includes collateral requirement changes (Q10), but our report lacks this for Slovakia — key for evaluating SME credit constraints.
+**Absent trade credit availability split:** ECB Chart 3 separates trade credit availability by firm size; our report aggregates it, masking SME vs. large firm disparities in SK.
+**Missing financing gap by size:** ECB Chart 2 shows SME vs. large firm financing gaps; our report only provides aggregate SK gap — obscures size-based stress differences.
+**No inflation expectation dispersion:** ECB Chart 17/18 includes dispersion metrics (e.g., SME vs. large firm inflation expectation spread); our report omits this for SK — limits risk assessment granularity.
 
 ## Interpretation Notes
-- Compare SK’s 43.8% interest rate tightening (vs. EA 40%) to highlight domestic cost pressures.
-- Emphasise SK’s 15.3pp credit line gap (vs. EA 14pp) as a liquidity stress signal.
-- Note SK’s 57% working capital financing (vs. EA 40.8%) as a liquidity priority.
-- Frame SK’s 6.75% turnover outlook (vs. EA 25.88%) as a competitiveness red flag.
-- Contrast SK’s 7.33% input cost vs. 3.75% selling price expectations to stress margin squeeze.
+- Compare SK’s 57% working capital financing (vs. EA 41%) to its higher input cost expectations (7.33% vs. EA 5.2%) to highlight liquidity-cost squeeze.
+- Contrast SK’s net -6.0pp bank loan gap (vs. EA +2.8pp) with its stable bank willingness (net +7.8%) to explore demand-side constraints.
+- Note SK’s 7.66% 5-year inflation expectation (vs. EA 5.94%) alongside its 61.2% upside risk balance to emphasize persistent inflation concerns.
+- Frame SK’s skilled labour shortage (6.64/10) against EA’s 6.57 to contextualize structural labour market tightness.
+- Highlight SK’s turnover expectation divergence (net +6.75% vs. EA +25.88%) as a domestic demand weakness signal.

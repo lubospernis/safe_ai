@@ -2,7 +2,9 @@
   "wave": 39,
   "en": "https://lubospernis.github.io/safe_ai/report_q39.html",
   "sk": "https://lubospernis.github.io/safe_ai/report_q39_sk.html",
-  "last_updated": "2026-07-29",
+  "report_json_en": "https://lubospernis.github.io/safe_ai/report_payload_q39.json",
+  "report_json_sk": "https://lubospernis.github.io/safe_ai/report_payload_q39_sk.json",
+  "last_updated": "2026-08-01",
   "next_release": "2026-07-20",
   "next_release_note": "Q2 2026"
 }

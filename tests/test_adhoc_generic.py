@@ -231,6 +231,21 @@ def test_detect_adhoc_theme_returns_question_texts(mock_con, mock_mistral_theme)
     assert isinstance(result["question_texts"], dict)
 
 
+def test_detect_adhoc_theme_propagates_query_failure(mock_mistral_theme):
+    """A real mart_safe__adhoc_responses query failure (mart renamed, MotherDuck
+    outage, schema drift) must raise, not return None. Returning None here made a
+    genuine infra failure indistinguishable from "no adhoc module this wave" — a
+    normal, expected outcome for roughly half of SAFE waves — so run_adhoc_report.py
+    would silently print "No adhoc data for this wave — skipping" and exit 0 either
+    way, and a broken query could go unnoticed indefinitely. Found 2026-08-20."""
+    broken_con = MagicMock()
+    broken_con.execute.side_effect = RuntimeError("Catalog Error: Table does not exist")
+    cost = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
+
+    with pytest.raises(RuntimeError, match="Catalog Error"):
+        detect_adhoc_theme(39, broken_con, "main_safe", mock_mistral_theme, cost)
+
+
 def test_resolve_item_labels_uses_annex_when_present():
     """When mart_safe__annex_items has rows for a module (e.g. QB1-style), those
     labels are used as-is, in preference to any fallback."""

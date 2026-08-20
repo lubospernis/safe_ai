@@ -20,6 +20,25 @@ function formatDate(iso: string, lang: "en" | "sk"): string {
   });
 }
 
+/** True if latestLinks.next_release is a real, still-upcoming date.
+ *
+ * latest_links.json is only rewritten when the quarterly pipeline runs
+ * (run_report.py), but the underlying release-calendar source can go stale
+ * in between (ECB's stats-calendar page doesn't always list SAFE — it's a
+ * semi-annual survey, not on the routine monthly-dataset calendar — so
+ * fetch_release_calendar.py's soft-fail leaves the previous value in place).
+ * This page renders server-side on every request (`force-dynamic`), so
+ * checking "is this date still in the future" here self-corrects the badge
+ * immediately once a date passes, without waiting for the next report run.
+ * Found live 2026-08-20: a 2026-07-20 date was still showing a month later. */
+function isUpcoming(iso: string): boolean {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return d >= today;
+}
+
 export default async function Home() {
   const supabase = await createServerSideClient();
   const {
@@ -72,6 +91,9 @@ export default async function Home() {
           const nlText = { name: nl.name[lang], description: nl.description[lang], periodicity: nl.periodicity[lang] };
           const latestLinks = linksByNewsletter[nl.id] ?? null;
           const reportUrl = nl.linkUrl ?? (latestLinks ? (latestLinks[lang] || latestLinks.en) : null);
+          const nextRelease = latestLinks?.next_release && isUpcoming(latestLinks.next_release)
+            ? latestLinks.next_release
+            : null;
           return (
             <div key={nl.id} className={styles.card}>
               <div className={styles.cardIcon}>{nl.icon}</div>
@@ -102,13 +124,13 @@ export default async function Home() {
                       {t.lastUpdated.replace("{date}", formatDate(latestLinks.last_updated, lang))}
                     </span>
                   )}
-                  {latestLinks?.next_release && (
+                  {nextRelease && (
                     <span className={styles.badgeMuted}>
-                      {t.nextRelease.replace("{date}", formatDate(latestLinks.next_release, lang))}
+                      {t.nextRelease.replace("{date}", formatDate(nextRelease, lang))}
                     </span>
                   )}
                 </div>
-                {latestLinks?.next_release && (
+                {nextRelease && (
                   <p className={styles.footnote}>{t.nextReleaseFootnote}</p>
                 )}
               </div>

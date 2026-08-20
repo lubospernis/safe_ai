@@ -789,10 +789,22 @@ def main() -> None:
         "report_json_sk": f"{_pages_base}/{_payload_wave_sk}",
         "last_updated": _date.today().isoformat(),
     }
-    if _next_release_date:
+    # Guard against publishing a stale date: fetch_release_calendar.py soft-fails
+    # (continue-on-error) when ECB's stats calendar doesn't currently list a SAFE
+    # row (SAFE is semi-annual, not on the routine monthly-dataset calendar — it
+    # often just isn't listed until close to the actual release), leaving
+    # whatever value was last written in main_safe.ref_safe__release_calendar.
+    # Showing a "next release" date that has already passed is worse than
+    # showing nothing — found live 2026-08-20: the stored date was 2026-07-20,
+    # over a month stale, still being surfaced as an upcoming date on the
+    # Vercel site's freshness badge.
+    if _next_release_date and _date.fromisoformat(_next_release_date) >= _date.today():
         _links["next_release"] = _next_release_date
         if _next_release_note:
             _links["next_release_note"] = _next_release_note
+    elif _next_release_date:
+        print(f"  Release calendar date {_next_release_date} is in the past — "
+              "omitting next_release from latest_links.json rather than showing stale data")
 
     (OUTPUT_DIR / "latest_links.json").write_text(
         json.dumps(_links, indent=2), encoding="utf-8"

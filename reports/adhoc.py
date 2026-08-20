@@ -435,17 +435,26 @@ def _module_sort_key(module_id: str) -> tuple[str, int, str]:
 
 
 def detect_adhoc_theme(wave_number: int, con, schema: str, mistral_client=None, cost_tracker: dict | None = None) -> dict | None:
-    """Return {module_id, theme_label, question_texts} for the wave's adhoc modules, or None."""
-    try:
-        rows = con.execute(f"""
-            SELECT module_id, sum(n_firms) as n
-            FROM {schema}.mart_safe__adhoc_responses
-            WHERE wave_number = {wave_number}
-            GROUP BY module_id
-            ORDER BY n DESC
-        """).fetchall()
-    except Exception:
-        return None
+    """Return {module_id, theme_label, question_texts} for the wave's adhoc modules,
+    or None if this wave genuinely has no adhoc module (a normal, expected outcome —
+    roughly half of SAFE waves carry none).
+
+    Deliberately does NOT catch the query itself: a real infrastructure failure here
+    (mart renamed, MotherDuck outage, schema drift) must not look identical to "no
+    adhoc module this wave" — the caller (run_adhoc_report.py) has no way to tell
+    those apart otherwise, and previously it couldn't: both produced the same silent
+    "No adhoc data for this wave — skipping" and a clean exit 0, so a broken query
+    could sit unnoticed for months, indistinguishable from every legitimate no-adhoc
+    wave. Letting this raise means run_adhoc_report.py fails loudly and CI reports it,
+    same as every other real data-fetch failure in this pipeline (annex fetch, release
+    calendar). Found 2026-08-20 auditing weak links/SPOFs — see ROADMAP.md."""
+    rows = con.execute(f"""
+        SELECT module_id, sum(n_firms) as n
+        FROM {schema}.mart_safe__adhoc_responses
+        WHERE wave_number = {wave_number}
+        GROUP BY module_id
+        ORDER BY n DESC
+    """).fetchall()
     if not rows:
         return None
 

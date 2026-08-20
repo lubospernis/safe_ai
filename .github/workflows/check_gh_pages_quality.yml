@@ -61,7 +61,15 @@ jobs:
             python reports/quality_check.py --html "gh-pages/$f"
             status=$?
             echo "::endgroup::"
-            if [ $status -ne 0 ]; then
+            # quality_check.py exits 3 for tier-1 style-only findings (logged,
+            # non-blocking by design — see its own print statement) and 0 for a
+            # clean pass; only treat other non-zero codes as a real failure.
+            # generate_report.yml/generate_adhoc_report.yml already draw this
+            # same distinction (they read tier2_fail from the JSON instead of
+            # trusting the raw exit code) — this workflow hadn't caught up, so
+            # it was flagging every report that had ANY 30+-word bullet as a
+            # gate failure even when every dimension scored 8-10/10.
+            if [ $status -ne 0 ] && [ $status -ne 3 ]; then
               echo "FAILED: $f"
               failed=1
             else

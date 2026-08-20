@@ -35,7 +35,6 @@ Identify the top 3 single points of failure and their blast radius:
 - What breaks if MotherDuck is unavailable? (no fallback — the pipeline is MotherDuck-only by design)
 - What breaks if Mistral API is down? (quality gate, sharpener, interest checks all fail)
 - What breaks if ECB changes their website structure? (URL parsing in gap_agent.py)
-- Is there a wave detection failure mode? (detect_adhoc_theme fails silently on mart absence)
 - Is there cost runaway protection? (no max-cost abort in the pipeline)
 Score based on number of addressed vs unaddressed SPOFs.
 
@@ -74,23 +73,6 @@ Score based on ROADMAP.md "User interviews" item status and structure review.
 
 ---
 
-## New Adhoc Wave Checklist
-
-When a new wave arrives with previously unseen adhoc modules (e.g., a module not in `_MODULE_THEME_FALLBACK`):
-
-**No code changes required** — the generic pipeline handles unknown modules automatically:
-
-1. **dbt mart update** — run `dbt run --select mart_safe__adhoc_responses` after the new wave lands in the microdata. This table is the single source of truth for all adhoc modules.
-
-2. **Annex entries** — run `fetch_annex.py` (or let CI do it) so the new module's question texts appear in `ref_safe__annex`. The `_fetch_question_texts()` helper in `adhoc.py` queries this table live.
-
-3. **Verify detection** — run `run_report.py --adhoc-only` and confirm `detect_adhoc_theme()` logs the correct module ID. The theme label comes from `_MODULE_THEME_FALLBACK` if the module is known, or from Mistral Small classification otherwise.
-
-4. **Optional: add fallback label** — if the auto-classified label is poor, add the module ID to `_MODULE_THEME_FALLBACK` in `reports/adhoc.py` with the correct label.
-
-5. **Questionnaire URL** — `reports/questionnaire.py` derives the PDF URL automatically from the dlt load timestamp (`raw._dlt_loads.inserted_at` → YYYYMM suffix). If the run log shows `questionnaire_labels_parsed: false`, add the wave's entry to `_PERIOD_TO_QUESTIONNAIRE_SUFFIX` in `questionnaire.py` as a confirmed override. The suffix is `{YYYY}{MM}` of the ECB release month (same month raw data was loaded).
-
-6. **Quality gate** — after the full run, `quality_check.py` runs a second supervisor call on the adhoc spotlight. If it scores < 8 on any dimension, CI blocks the deploy and you must investigate the prompt/data.
 When you complete a task that corresponds to a roadmap item, tick it off (change `[ ]` to `[x]`
 and move it to the Done section). Do not add speculative sub-tasks — only mark things done
 when the code is actually shipped.
@@ -125,10 +107,10 @@ Use `set -a && source .env && set +a` if you need those vars exported to a Pytho
 
 **Python env**: use `env/bin/python3` (the project venv). matplotlib is installed there.
 
-**Retrospective/past-wave runs**: use `--wave N` (already supported by both `run_report.py`
-and `run_adhoc_report.py`) to cap data at a specific past wave — useful for regenerating an
-older report or testing against historical data without touching a separate database. This
-is also exposed as a manual `workflow_dispatch` input on the GitHub Actions report workflow
+**Retrospective/past-wave runs**: use `--wave N` (supported by `run_report.py`) to cap data
+at a specific past wave — useful for regenerating an older report or testing against
+historical data without touching a separate database. This is also exposed as a manual
+`workflow_dispatch` input on the GitHub Actions report workflow
 (see `.github/workflows/generate_report_manual.yml`).
 
 ---

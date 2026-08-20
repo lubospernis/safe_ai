@@ -9,8 +9,6 @@ Loops over SECTIONS in config.py:
   5. Build collapsible question annex from MotherDuck ref_safe__annex
   6. Assemble single multi-section HTML report
 
-Adhoc spotlight is handled separately by run_adhoc_report.py.
-
 Every LLM stage (section content, sharpen, exec summary, style enforcement,
 translation) is cached in MotherDuck's ref_safe__pipeline_stage_cache, keyed
 on a hash of that stage's actual inputs (prompt text, upstream content,
@@ -87,9 +85,8 @@ import evals
 OUTPUT_DIR = Path(__file__).parent / "output"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
-# COST_CEILING_USD/CostCeilingExceeded/the checkpoint function itself all moved
-# to cost.py (2026-07-21, deduplicated with run_adhoc_report.py's identical
-# copy) — check_cost_ceiling() below is imported from there.
+# COST_CEILING_USD/CostCeilingExceeded/the checkpoint function itself live
+# in cost.py — check_cost_ceiling() below is imported from there.
 
 
 def _check_grounding_blocking(rendered: list[dict]) -> None:

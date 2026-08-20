@@ -1,4 +1,3 @@
-import re
 from unittest.mock import MagicMock, patch
 
 from html_builder import (
@@ -64,51 +63,6 @@ def test_build_toc_contains_section_id():
     toc = build_toc(sections)
     assert "bank_loan_terms" in toc
     assert "Rates tightened" in toc
-
-
-def test_build_toc_adhoc_spotlight_appended_alongside_regular_sections():
-    sections = [
-        {"section_id": "bank_loan_terms", "finding": "Rates tightened", "group": "Financing Conditions"},
-        {"section_id": "adhoc_spotlight", "finding": "AI adoption", "theme_label": "AI Adoption", "group": "Other"},
-    ]
-    toc = build_toc(sections)
-    assert "adhoc_spotlight" in toc
-    assert "AI Adoption" in toc
-
-
-def test_build_toc_standalone_adhoc_report_still_renders_toc():
-    """A standalone adhoc-only report (no regular sections) still gets a TOC now
-    that every adhoc question is its own <section> — falls back to a single
-    "Special Focus" link when question_descriptions isn't provided."""
-    sections = [
-        {"section_id": "adhoc_spotlight", "finding": "AI adoption", "theme_label": "AI Adoption", "group": "Other"},
-    ]
-    toc = build_toc(sections)
-    assert "adhoc_spotlight" in toc
-    assert "AI Adoption" in toc
-
-
-def test_build_toc_lists_every_adhoc_question_as_its_own_entry():
-    """Since every adhoc question renders as its own <section id="{qid}">, the TOC
-    must link to each one individually (nested under the theme), not just to the
-    spotlight as a whole."""
-    sections = [{
-        "section_id": "adhoc_spotlight",
-        "finding": "AI adoption",
-        "theme_label": "AI Adoption",
-        "group": "Other",
-        "question_descriptions": [
-            {"question_id": "qa1", "question_text": "How would you assess the use of AI technologies?"},
-            {"question_id": "qb1", "question_text": "- What percentage of similar firms invested in AI?"},
-        ],
-    }]
-    toc = build_toc(sections)
-    assert '<a href="#qa1">QA1' in toc
-    assert '<a href="#qb1">QB1' in toc
-    assert "How would you assess the use of AI technologies?" in toc
-    # Leading bullet/dash artefacts must be stripped from the TOC label.
-    assert "- What percentage" not in toc
-    assert "What percentage of similar firms invested in AI?" in toc
 
 
 # ── _fetch_painting_inner_html retry behaviour ──────────────────────────────
@@ -206,28 +160,6 @@ def test_build_annex_html_override_is_case_insensitive_and_partial():
     assert "Preložený text" in html
 
 
-def _adhoc_section_stub():
-    return {
-        "section_id": "adhoc_spotlight",
-        "finding": "Slovak firms trail the EA in AI adoption depth.",
-        "title": "Special Focus",
-        "theme_label": "Artificial intelligence technologies",
-        "group": "Other",
-        "selected_question_ids": ["qa1", "qa2"],
-        "bullets_by_question": {
-            "qa1": ["46.5% of Slovak firms report only pilot AI use."],
-            "qa2": ["Improving non-core processes is the top reason cited."],
-        },
-        "question_descriptions": [
-            {"question_id": "qa1", "question_text": "How would you assess the use of AI technologies?",
-             "interest_score": 4, "description": "desc", "key_finding": "kf"},
-            {"question_id": "qa2", "question_text": "Please indicate the two main reasons.",
-             "interest_score": 3, "description": "desc", "key_finding": "kf"},
-        ],
-        "chart_pngs": [b"fake-png-bytes-1", b"fake-png-bytes-2"],
-    }
-
-
 # ── _format_period_suffix / report title period label ───────────────────────
 
 def test_format_period_suffix_formats_quarter_and_year():
@@ -270,23 +202,6 @@ def test_build_html_sk_report_links_to_en_at_en_html():
     from html_builder import _SK_UI
     html = build_html(rendered_sections=[], annex_html="", exec_bullets=[], toc_html="", ui=_SK_UI)
     assert '<a class="lang-switch" href="en.html">🇬🇧 EN</a>' in html
-
-
-def test_build_html_adhoc_per_question_chart_has_no_inline_width_style():
-    """Regression guard: per-question adhoc chart-img tags must rely on the shared
-    .chart-img CSS class for sizing, not an inline style= override (the root cause of
-    adhoc charts rendering oversized relative to the main report's charts)."""
-    html = build_html(
-        rendered_sections=[_adhoc_section_stub()],
-        annex_html="",
-        exec_bullets=[],
-        toc_html="",
-    )
-    chart_imgs = re.findall(r'<img class="chart-img[^"]*"[^>]*>', html)
-    assert len(chart_imgs) == 2
-    for tag in chart_imgs:
-        assert "style=" not in tag
-        assert "chart-img--adhoc" in tag
 
 
 # ── SQL-provenance-on-hover ──────────────────────────────────────────────────

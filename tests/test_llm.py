@@ -1011,66 +1011,6 @@ def test_translate_to_slovak_malformed_section_entry_does_not_crash():
     assert by_id["outlook"]["finding"] == "Other original finding"
 
 
-def test_translate_to_slovak_translates_bullets_by_question_and_synthesis():
-    """Regression guard: per-question adhoc bullets and the cross-cutting synthesis
-    bullets must be translated too, not just the flat 'bullets' list — a prior gap
-    left every per-question adhoc subsection showing English text in the SK report."""
-    client = _mock_mistral_response(json.dumps({
-        "exec_bullets": ["Preložený exec bod"],
-        "sections": [],
-        "adhoc": {
-            "theme_label": "Umelá inteligencia",
-            "title": "Špeciálne zameranie",
-            "finding": "Preložené zistenie",
-            "bullets": ["Preložený bod"],
-            "bullets_by_question": {"qa1": ["Preložený bod QA1"], "qa2": ["Preložený bod QA2"]},
-        },
-    }))
-    tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
-    adhoc_section = {
-        "section_id": "adhoc_spotlight",
-        "title": "Special Focus",
-        "finding": "English finding",
-        "bullets": ["English bullet"],
-        "bullets_by_question": {"qa1": ["English bullet QA1"], "qa2": ["English bullet QA2"]},
-        "theme_label": "Artificial Intelligence",
-    }
-    with patch("llm._mistral_client", return_value=client):
-        sk_rendered, _, _, _ = translate_to_slovak([adhoc_section], [], tracker)
-
-    sk_adhoc = sk_rendered[0]
-    assert sk_adhoc["bullets_by_question"]["qa1"] == ["Preložený bod QA1"]
-    assert sk_adhoc["bullets_by_question"]["qa2"] == ["Preložený bod QA2"]
-
-
-def test_translate_to_slovak_bullets_by_question_falls_back_per_question():
-    """If the SK translation only returns some questions' bullets (or the model omits
-    the key entirely), each question falls back to its own English bullets rather than
-    losing every question because one was missing."""
-    client = _mock_mistral_response(json.dumps({
-        "exec_bullets": [],
-        "sections": [],
-        "adhoc": {
-            "bullets_by_question": {"qa1": ["Preložený bod QA1"]},  # qa2 missing
-        },
-    }))
-    tracker = {"input_tokens": 0, "output_tokens": 0, "usd": 0.0, "calls": 0, "by_model": {}}
-    adhoc_section = {
-        "section_id": "adhoc_spotlight",
-        "title": "Special Focus",
-        "finding": "English finding",
-        "bullets": ["English bullet"],
-        "bullets_by_question": {"qa1": ["English bullet QA1"], "qa2": ["English bullet QA2"]},
-        "theme_label": "Artificial Intelligence",
-    }
-    with patch("llm._mistral_client", return_value=client):
-        sk_rendered, _, _, _ = translate_to_slovak([adhoc_section], [], tracker)
-
-    sk_adhoc = sk_rendered[0]
-    assert sk_adhoc["bullets_by_question"]["qa1"] == ["Preložený bod QA1"]
-    assert sk_adhoc["bullets_by_question"]["qa2"] == ["English bullet QA2"]
-
-
 def test_translate_to_slovak_translates_chart_question_captions():
     """The SK report previously showed the English 'Q: ...' chart caption verbatim
     under a Slovak 'Ot:' label — chart_question_captions must be translated too."""
@@ -1161,8 +1101,8 @@ def test_build_section_signals_resolves_tier_and_deprioritized_subitem():
 
 
 def test_build_section_signals_skips_sections_not_in_registry():
-    rendered = [{"section_id": "adhoc_spotlight", "title": "Spotlight", "finding": "F", "bullets": ["b1"]}]
-    data = {"adhoc_spotlight": pd.DataFrame([{"wave_number": 38, "country_code": "SK"}])}
+    rendered = [{"section_id": "unregistered_section", "title": "Unregistered", "finding": "F", "bullets": ["b1"]}]
+    data = {"unregistered_section": pd.DataFrame([{"wave_number": 38, "country_code": "SK"}])}
     signals = build_section_signals(rendered, data, sections_by_id={}, ecb_emphasis={})
     assert signals == {}
 

@@ -1,7 +1,7 @@
 name: SAFE — Check gh-pages Quality Gate
 
-# Safety net: quality_check.py normally only runs INSIDE generate_report.yml /
-# generate_adhoc_report.yml, on freshly-generated content, before it's published.
+# Safety net: quality_check.py normally only runs INSIDE generate_report.yml,
+# on freshly-generated content, before it's published.
 # If content is ever published to gh-pages by any other path (a manual
 # `git push` to the branch, a hand-edited file, etc.), it bypasses that gate
 # entirely and nothing else in this repo would ever notice. This workflow
@@ -52,7 +52,7 @@ jobs:
         run: |
           set +e
           failed=0
-          for f in index.html en.html adhoc.html adhoc-en.html; do
+          for f in index.html en.html; do
             if [ ! -f "gh-pages/$f" ]; then
               echo "SKIP: gh-pages/$f does not exist"
               continue
@@ -64,8 +64,8 @@ jobs:
             # quality_check.py exits 3 for tier-1 style-only findings (logged,
             # non-blocking by design — see its own print statement) and 0 for a
             # clean pass; only treat other non-zero codes as a real failure.
-            # generate_report.yml/generate_adhoc_report.yml already draw this
-            # same distinction (they read tier2_fail from the JSON instead of
+            # generate_report.yml already draws this same distinction (it
+            # reads tier2_fail from the JSON instead of
             # trusting the raw exit code) — this workflow hadn't caught up, so
             # it was flagging every report that had ANY 30+-word bullet as a
             # gate failure even when every dimension scored 8-10/10.
@@ -82,5 +82,5 @@ jobs:
         if: always()
         run: |
           if [ "${{ steps.check.outcome }}" = "failure" ]; then
-            echo "::error::One or more files currently live on gh-pages failed the quality gate — see the job log above for which file(s) and why. This means published content did not go through (or no longer passes) the normal generate_report.yml/generate_adhoc_report.yml quality check."
+            echo "::error::One or more files currently live on gh-pages failed the quality gate — see the job log above for which file(s) and why. This means published content did not go through (or no longer passes) the normal generate_report.yml quality check."
           fi

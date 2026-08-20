@@ -1,6 +1,6 @@
 ---
 name: pipeline-run
-description: Run the SAFE report pipeline (run_report.py, run_adhoc_report.py) or the pytest suite locally, with correct env-var loading and Python interpreter. Use when running/regenerating a report, running tests, or debugging a "MOTHERDUCK_TOKEN not set" / "command not found" / module-import error from this project.
+description: Run the SAFE report pipeline (run_report.py) or the pytest suite locally, with correct env-var loading and Python interpreter. Use when running/regenerating a report, running tests, or debugging a "MOTHERDUCK_TOKEN not set" / "command not found" / module-import error from this project.
 ---
 
 # Pipeline Run
@@ -41,24 +41,20 @@ Keys live in `.env` (gitignored) at the project root.
 ```bash
 source .env && env/bin/python3 reports/run_report.py            # latest wave
 source .env && env/bin/python3 reports/run_report.py --wave 37  # retrospective, capped at wave 37
-source .env && env/bin/python3 reports/run_adhoc_report.py       # adhoc, latest wave
-source .env && env/bin/python3 reports/run_adhoc_report.py --wave 37
 ```
 
 `--wave N` caps data at a specific past wave — use this to regenerate an
 older report or test against historical data without touching production
 state. Also exposed as a `workflow_dispatch` input on
-`generate_report_manual.yml` / `generate_adhoc_report_manual.yml` in CI.
+`generate_report_manual.yml` in CI.
 
 **Important**: a local run only writes files under `reports/output/` — it
 does **not** commit them, publish to `gh-pages`, or send a newsletter. Those
-only happen via the real `generate_report.yml` / `generate_adhoc_report.yml`
-GitHub Actions workflows (triggered by the dbt-completion `workflow_run`, or
-manually via `gh workflow run generate_report.yml`). If a report needs to
-actually go live, either push the run's output files yourself or trigger the
-CI workflow — don't assume a local run alone is enough. See the
-`new-adhoc-wave` skill for the full publish-diagnosis flow if a report isn't
-appearing where expected.
+only happen via the real `generate_report.yml` GitHub Actions workflow
+(triggered by the dbt-completion `workflow_run`, or manually via
+`gh workflow run generate_report.yml`). If a report needs to actually go
+live, either push the run's output files yourself or trigger the CI
+workflow — don't assume a local run alone is enough.
 
 ## Running tests
 
@@ -73,7 +69,6 @@ test, not a missing env var.
 
 ```bash
 gh workflow run generate_report.yml           # main report, publishes to gh-pages
-gh workflow run generate_adhoc_report.yml      # adhoc report, publishes to gh-pages
 gh workflow run generate_report_manual.yml     # past-wave retrospective, artifact only — does NOT touch production
 gh run list --workflow=<file>.yml --limit 5    # check recent runs
 gh run view <run-id> --log-failed              # inspect a failure

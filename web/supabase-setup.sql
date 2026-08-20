@@ -152,8 +152,11 @@ CREATE POLICY "authenticated_read" ON public.newsletters
   FOR SELECT
   USING (auth.role() = 'authenticated');
 
--- 11. Seed the two existing SAFE newsletters (migrated from the old
--- hardcoded web/lib/newsletters.ts + web/lib/strings.ts STRINGS.newsletters).
+-- 11. Seed the SAFE newsletter (migrated from the old hardcoded
+-- web/lib/newsletters.ts + web/lib/strings.ts STRINGS.newsletters). The
+-- adhoc special-focus newsletter ('safe-adhoc') was removed along with the
+-- rest of the adhoc report pipeline — see note below for cleaning up a
+-- pre-existing 'safe-adhoc' row/subscriptions in an already-provisioned DB.
 INSERT INTO public.newsletters
   (id, icon, name_en, name_sk, description_en, description_sk, periodicity_en, periodicity_sk,
    links_json_url, is_experimental, is_subscribable, sort_order)
@@ -166,17 +169,15 @@ VALUES
     'Quarterly', 'Štvrťročne',
     'https://raw.githubusercontent.com/lubospernis/safe_ai/main/reports/output/latest_links.json',
     false, true, 0
-  ),
-  (
-    'safe-adhoc', '🔦',
-    'SAFE Slovakia — Special Focus', 'SAFE Slovensko — Špeciálna téma',
-    'Ad-hoc deep dive on a special survey topic (e.g. AI adoption, green transition), sent whenever the ECB adds a one-off module to the SAFE survey.',
-    'Mimoriadny prehľad na špeciálnu tému prieskumu (napr. adopcia AI, zelená transformácia), zasielaný vždy, keď ECB doplní do prieskumu SAFE jednorazový modul.',
-    'Ad hoc', 'Príležitostne',
-    'https://raw.githubusercontent.com/lubospernis/safe_ai/main/reports/output/latest_adhoc_links.json',
-    true, true, 1
   )
 ON CONFLICT (id) DO NOTHING;
+
+-- 11b. Remove the adhoc newsletter and its subscriptions from an
+-- already-provisioned database (this script's INSERT above only ever adds
+-- rows via ON CONFLICT DO NOTHING — it never removes a row seeded by a
+-- previous run). Safe to run repeatedly; no-op once already cleaned up.
+DELETE FROM public.subscriptions WHERE newsletter_id = 'safe-adhoc';
+DELETE FROM public.newsletters WHERE id = 'safe-adhoc';
 
 -- ============================================================
 -- Report feedback — editable per-user/per-wave/per-section feedback for

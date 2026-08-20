@@ -1,12 +1,9 @@
 name: SAFE — Generate Report (Manual, Past Wave)
 
-# Manual-only workflow for regenerating the MAIN report against a specific past wave,
+# Manual-only workflow for regenerating the report against a specific past wave,
 # without touching production state (does NOT overwrite report_latest.html, does NOT
 # push to git, does NOT publish to GitHub Pages). Output is uploaded as a downloadable
 # workflow artifact instead — safe to run anytime without risk to the live report.
-#
-# For the adhoc spotlight report, use "SAFE — Generate Adhoc Report (Manual, Past Wave)"
-# instead — main report and adhoc spotlight are treated as two separate outputs/workflows.
 on:
   workflow_dispatch:
     inputs:

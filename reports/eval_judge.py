@@ -7,7 +7,7 @@ manually before publishing or after a major prompt change, NOT in CI.
 Usage:
     source .env
     python reports/eval_judge.py --wave 37
-    python reports/eval_judge.py --wave 37 --section adhoc_spotlight
+    python reports/eval_judge.py --wave 37 --section business_situation
 """
 
 import argparse

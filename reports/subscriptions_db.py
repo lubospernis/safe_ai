@@ -4,7 +4,7 @@ Replaces the old GitHub-committed newsletter/subscribers.json file (single
 flat list, no per-newsletter distinction). Subscriptions now live in the
 Supabase `public.subscriptions` table (one row per (email, newsletter_id) —
 see web/supabase-setup.sql), keyed on the same newsletter_id values the web
-app uses ("safe-regular", "safe-adhoc").
+app uses ("safe-regular").
 
 lang is NOT stored on subscriptions — it lives solely on public.allowed_emails
 (the same table that gates login) and is looked up here by email, since every
@@ -24,7 +24,6 @@ from urllib.parse import urlsplit, urlunsplit
 from supabase import create_client, Client
 
 NEWSLETTER_REGULAR = "safe-regular"
-NEWSLETTER_ADHOC = "safe-adhoc"
 
 
 def _get_client() -> Client:

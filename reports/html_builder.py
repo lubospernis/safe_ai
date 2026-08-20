@@ -77,17 +77,11 @@ _SK_UI = {
         "v grafe môžu byť vzdialené viac než jeden štvrťrok. Skutočné obdobie zisťovania "
         "nájdete v popiskoch bodov.</p>"
     ),
-    "adhoc_special_focus":   "Špeciálna téma",
-    "adhoc_read_more":       "Čítaj viac:",
-    "adhoc_ecb_article":     "Článok ECB Economic Bulletin",
-    "adhoc_all_questions":   "Všetky adhoc otázky",
     "annex_summary":       "Otázky zbierané na 3-mesačnej báze",
     "annex_col_topic":     "Téma",
     "annex_col_id":        "ID",
     "annex_col_question":  "Otázka",
     "annex_col_module":    "Modul",
-    "key_finding_label":   "Kľúčové zistenie:",
-    "interest_label":      " (záujem: {score}/5)",
     "chart_alt_suffix":    "graf",
     "annex_groups": {
         "Business situation":                 "Obchodná situácia",
@@ -146,8 +140,6 @@ HTML_PAGE = textwrap.dedent("""
   ul          {{ padding-left: 20px; margin: 0 0 16px 0; }}
   li          {{ margin-bottom: 6px; font-size: 13.5px; line-height: 1.5; }}
   .chart-img  {{ display: block; max-width: 560px; width: 100%; margin-top: 8px; }}
-  .chart-img.chart-img--adhoc {{ margin: 8px 0 10px; }}
-  .chart-img.chart-img--flex-third {{ max-width: calc(34% - 0.5rem); min-width: 220px; flex: 1 1 220px; }}
   .footnote   {{ font-size: 11px; color: #888; margin-top: 10px; line-height: 1.4; }}
   .footer     {{ color: #adadad; font-size: 11px; margin-top: 32px; text-align: center; }}
   .feedback-link {{ color: #888; font-size: 12px; margin-top: 8px; text-align: center; }}
@@ -207,8 +199,7 @@ HTML_PAGE = textwrap.dedent("""
     .exec-flex      {{ flex-direction: column; gap: 14px; }}
     .exec-painting  {{ order: 2; max-width: 220px; margin: 0 auto; }}
     .exec-summary   {{ order: 1; flex: none; width: 100%; padding: 16px 18px; }}
-    .chart-img,
-    .chart-img.chart-img--flex-third {{ max-width: 100%; min-width: 0; }}
+    .chart-img      {{ max-width: 100%; min-width: 0; }}
     .lang-switch    {{ float: none; display: inline-block; margin-bottom: 10px; }}
     #toc            {{ padding: 12px 16px; }}
     details         {{ padding: 12px 14px; }}
@@ -284,7 +275,7 @@ def render_section(
     section_class: str = "",
     sql_details_html: str = "",
 ) -> str:
-    """Canonical section shape used by every report — main and adhoc alike:
+    """Canonical section shape used by every report:
 
         <h3>headline</h3>          (the story — a full-sentence finding, never a raw label)
         <p class="section-subtitle">subtitle</p>   (topic/question this section is about)
@@ -550,33 +541,6 @@ def build_toc(rendered_sections: list[dict], ui: dict | None = None) -> str:
         )
         items.append(f"    <li><strong>{label}</strong>\n      <ul>\n{inner}\n      </ul>\n    </li>")
 
-    # Adhoc spotlight: since every question now renders as its own <section id="{qid}">,
-    # list each question as its own TOC entry (nested under the theme), rather than one
-    # link to the spotlight as a whole — mirrors how regular sections are grouped above.
-    adhoc_s = next((s for s in rendered_sections if s.get("section_id") == "adhoc_spotlight"), None)
-    if adhoc_s:
-        theme_label = adhoc_s.get("theme_label", "Special Focus")
-        special_focus_label = _ui.get("adhoc_special_focus", "Special Focus")
-        q_descs = adhoc_s.get("question_descriptions") or []
-        if q_descs:
-            def _toc_question_text(qd: dict) -> str:
-                qt = re.sub(r"^[-–•]\s*", "", qd.get("question_text", "")).strip()
-                return _clean_question_text(qt) if qt else ""
-
-            inner = "\n".join(
-                f'        <li><a href="#{qd["question_id"]}">{qd["question_id"].upper()}'
-                f'{" — " + _toc_question_text(qd) if _toc_question_text(qd) else ""}</a></li>'
-                for qd in q_descs
-            )
-            items.append(
-                f'    <li><strong>⭐ {special_focus_label}: {theme_label}</strong>\n'
-                f'      <ul>\n{inner}\n      </ul>\n    </li>'
-            )
-        else:
-            items.append(
-                f'    <li><a href="#adhoc_spotlight">⭐ {special_focus_label}: {theme_label}</a></li>'
-            )
-
     if not items:
         return ""
     rows = "\n".join(items)
@@ -625,11 +589,8 @@ def build_html(
     fn_agentic = _ui.get("footnote_agentic",  _AGENTIC_FOOTNOTE)
     fn_cadence = _ui.get("footnote_cadence",  CADENCE_FOOTNOTE)
 
-    adhoc_s = next((s for s in rendered_sections if s.get("section_id") == "adhoc_spotlight"), None)
-    regular_sections = [s for s in rendered_sections if s.get("section_id") != "adhoc_spotlight"]
-
     by_group: dict[str, list[dict]] = {}
-    for s in regular_sections:
+    for s in rendered_sections:
         g = s.get("group", "Other")
         by_group.setdefault(g, []).append(s)
 
@@ -662,165 +623,6 @@ def build_html(
                     sql_details_html=_sql_details_html(s.get("sql_file"), s.get("value_col")),
                 )
             )
-
-    if adhoc_s:
-        special_focus_label = _ui.get("adhoc_special_focus", "Special Focus")
-        read_more_label  = _ui.get("adhoc_read_more",    "Read more:")
-        ecb_article_label = _ui.get("adhoc_ecb_article", "ECB Economic Bulletin focus article")
-        ecb_link_html = ""
-        if adhoc_s.get("ecb_article_url"):
-            ecb_link_html = (
-                f'  <p class="footnote">{read_more_label} '
-                f'<a href="{adhoc_s["ecb_article_url"]}" target="_blank" rel="noopener">'
-                f'{ecb_article_label}</a></p>\n'
-            )
-        theme_label = adhoc_s.get("theme_label", "Special Focus")
-
-        if adhoc_s.get("sub_sections"):
-            sub_section_parts = []
-            for ss in adhoc_s["sub_sections"]:
-                ss_chart_html = ""
-                if ss.get("chart_png"):
-                    ss_b64 = base64.b64encode(ss["chart_png"]).decode()
-                    ss_chart_html = (
-                        f'<img class="chart-img chart-img--adhoc" src="data:image/png;base64,{ss_b64}" '
-                        f'alt="{ss["heading"]} {_ui.get("chart_alt_suffix", "chart")}">\n'
-                    )
-                ss_bullets = "\n".join(
-                    f"    <li>{_md_to_html(b.lstrip('• ').strip())}</li>"
-                    for b in ss.get("bullets", [])
-                )
-                sub_section_parts.append(textwrap.dedent(f"""
-                    <div class="ai-sub-section">
-                      <h3>{ss['heading']}</h3>
-                      <p class="section-subtitle">{ss['finding']}</p>
-                      {ss_chart_html}<ul>
-                    {ss_bullets}
-                      </ul>
-                    </div>
-                """).strip())
-            spotlight_html = textwrap.dedent(f"""
-                <section id="adhoc_spotlight" data-theme="{theme_label}">
-                  <h2>{special_focus_label}: {theme_label}</h2>
-                {"".join(sub_section_parts)}
-                {ecb_link_html}</section>
-            """).strip()
-        else:
-            # Per-question blocks: one heading + chart + bullets per selected question
-            selected_qids = adhoc_s.get("selected_question_ids", [])
-            bullets_by_q = adhoc_s.get("bullets_by_question", {})
-            q_descs_by_id = {
-                qd["question_id"]: qd
-                for qd in (adhoc_s.get("question_descriptions") or [])
-            }
-            chart_pngs = adhoc_s.get("chart_pngs") or (
-                [adhoc_s["chart_png"]] if adhoc_s.get("chart_png") else []
-            )
-
-            # If no per-question structure, fall back to flat bullets + all charts
-            if not selected_qids or not bullets_by_q:
-                flat_bullets_html = "\n".join(
-                    f"    <li>{_md_to_html(b.lstrip('• ').strip())}</li>"
-                    for b in adhoc_s.get("bullets", [])
-                )
-                all_charts_html = ""
-                if chart_pngs:
-                    img_tags = "".join(
-                        f'<img class="chart-img chart-img--flex-third" src="data:image/png;base64,{base64.b64encode(png).decode()}" '
-                        f'alt="{theme_label} {_ui.get("chart_alt_suffix", "chart")}">\n'
-                        for png in chart_pngs
-                    )
-                    all_charts_html = (
-                        f'<div style="display:flex;flex-wrap:wrap;gap:1rem;margin:10px 0 16px;">\n'
-                        f'{img_tags}</div>\n'
-                    )
-                inner_html = (
-                    f'    <h3>{adhoc_s["finding"]}</h3>\n'
-                    f'    <p class="section-subtitle">{adhoc_s["title"]}</p>\n'
-                    f'{all_charts_html}'
-                    f'    <ul>\n{flat_bullets_html}\n    </ul>\n'
-                )
-            else:
-                # Each question is its own independent <section>, matching the main
-                # report's regular sections (SECTION_TMPL) exactly: story headline (h3),
-                # question-text subtitle, bullets, then chart last — not nested inside
-                # one big adhoc-spotlight wrapper. Every question in this wave's adhoc
-                # module gets its own chart + bullets, not just a top-1-3 selection.
-                q_sections = []
-                for i, qid in enumerate(selected_qids):
-                    qd = q_descs_by_id.get(qid, {})
-                    qt = qd.get("question_text", "") or qid.upper()
-                    qt = re.sub(r"^[-–•]\s*", "", qt).strip()
-                    subtitle = f"{qid.upper()} — {qt}" if qt else qid.upper()
-                    headline = qd.get("description", "").strip() or subtitle
-
-                    chart_html = ""
-                    if i < len(chart_pngs):
-                        b64 = base64.b64encode(chart_pngs[i]).decode()
-                        chart_html = (
-                            f'<img class="chart-img chart-img--adhoc" src="data:image/png;base64,{b64}" '
-                            f'alt="{qid} {_ui.get("chart_alt_suffix", "chart")}">\n'
-                        )
-
-                    q_bullets = bullets_by_q.get(qid, [])
-
-                    q_sections.append(
-                        render_section(
-                            section_id=qid,
-                            headline=_md_to_html(headline),
-                            subtitle=subtitle,
-                            bullets=q_bullets,
-                            chart_html=chart_html,
-                            section_class="adhoc-question-section",
-                        )
-                    )
-
-                inner_html = (
-                    f'    <p class="section-subtitle" style="margin-bottom:1rem;">'
-                    f'{adhoc_s["finding"]}</p>\n'
-                    + "\n".join(q_sections) + "\n"
-                )
-
-            spotlight_html = textwrap.dedent(f"""
-                <div id="adhoc_spotlight" data-theme="{theme_label}">
-                  <h2>{special_focus_label}: {theme_label}</h2>
-                {inner_html}
-                {ecb_link_html}</div>
-            """).strip()
-
-        # Collapsible "All adhoc questions" fallback — every question already gets its
-        # own full subsection above (chart + bullets), so this only needs to render
-        # questions that DIDN'T make it into that loop (e.g. chart build or bullet
-        # write failed for that question) rather than duplicating every question.
-        q_descs = adhoc_s.get("question_descriptions") or []
-        rendered_qids = set(adhoc_s.get("selected_question_ids", []))
-        q_descs = [qd for qd in q_descs if qd.get("question_id") not in rendered_qids]
-        if q_descs:
-            q_items = []
-            for qd in q_descs:
-                score = qd.get("interest_score", "")
-                qtext = qd.get("question_text", "") or qd.get("question_id", "").upper()
-                desc = qd.get("description", "")
-                kf = qd.get("key_finding", "")
-                interest_tmpl = _ui.get("interest_label", " (interest: {score}/5)")
-                score_label = interest_tmpl.format(score=score) if isinstance(score, int) else ""
-                key_finding_label = _ui.get("key_finding_label", "Key finding:")
-                kf_html = f'<br><em>{key_finding_label} {_md_to_html(kf)}</em>' if kf else ""
-                q_items.append(
-                    f'<li><strong>{qd["question_id"].upper()}</strong>{score_label} '
-                    f'— {qtext}<br>{_md_to_html(desc)}{kf_html}</li>'
-                )
-            all_q_label = _ui.get("adhoc_all_questions", "All adhoc questions")
-            q_list_html = "<ul>" + "\n".join(q_items) + "</ul>"
-            spotlight_html += (
-                f'\n<details class="adhoc-all-questions" style="margin-top:0.5rem;">'
-                f'<summary style="cursor:pointer;font-size:0.9em;color:#555;">'
-                f'{all_q_label}</summary>'
-                f'<div style="font-size:0.88em;padding:0.5rem 0.5rem 0;">{q_list_html}</div>'
-                f'</details>'
-            )
-
-        sections_parts.append(spotlight_html)
 
     exec_h2 = _ui.get("exec_h2", "Executive Summary")
     painting_slot = (

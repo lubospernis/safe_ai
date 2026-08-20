@@ -24,7 +24,11 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install ecbdata duckdb pandas pyyaml
+        # duckdb is pinned to match requirements.txt: MotherDuck's extension caps out
+        # at 1.5.4 as of 2026-07-29 (1.5.5 broke CI — see requirements.txt comment).
+        # This workflow installs its own deps rather than requirements.txt (it only
+        # needs a handful of packages), so it must be kept in sync by hand.
+        run: pip install ecbdata "duckdb>=1.0,<=1.5.4" pandas pyyaml
 
       - name: Pre-cache MotherDuck extension
         run: |

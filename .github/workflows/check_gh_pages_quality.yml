@@ -61,7 +61,16 @@ jobs:
             python reports/quality_check.py --html "gh-pages/$f"
             status=$?
             echo "::endgroup::"
-            if [ $status -ne 0 ]; then
+            # quality_check.py's exit code is tiered (see its docstring): 0 = clean
+            # pass, 3 = tier-1 style issues only (non-blocking — bullet length,
+            # magnitude-word calibration, etc.), 1 = tier-2 content failure (should
+            # block). generate_report.yml/generate_adhoc_report.yml already treat
+            # exit 3 as non-blocking; this safety-net workflow must match, or it
+            # fails on essentially every real report (which almost always has a
+            # handful of tier-1 style nits) regardless of actual quality.
+            if [ $status -eq 3 ]; then
+              echo "PASSED (tier-1 style issues only, non-blocking): $f"
+            elif [ $status -ne 0 ]; then
               echo "FAILED: $f"
               failed=1
             else

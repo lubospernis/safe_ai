@@ -93,10 +93,30 @@ def _load_golden_sections(wave: int) -> list[dict]:
     return golden.get("sections", [])
 
 
-def _regenerate(wave: int, no_cache: bool) -> tuple[dict | None, str | None]:
+def _load_adhoc_run_log_entry(wave: int) -> dict | None:
+    """Most recent run_adhoc_log.json entry for the given wave. run_adhoc_report.py
+    logs to its own file, separate from run_report.py's run_log.json — mirrors
+    _load_run_log_entry above."""
+    log_path = OUTPUT_DIR / "run_adhoc_log.json"
+    if not log_path.exists():
+        return None
+    entries = json.loads(log_path.read_text())
+    for entry in reversed(entries):
+        if entry.get("wave_number") == wave:
+            return entry
+    return None
+
+
+def _regenerate(wave: int, no_cache: bool, needs_adhoc: bool = False) -> tuple[dict | None, str | None]:
     """Run run_report.py --wave N and return (sections_by_id, None) on success,
     or (None, error_message) on failure. Shared by run_wave and approve_wave so
-    there's exactly one way this repo regenerates a historical wave."""
+    there's exactly one way this repo regenerates a historical wave.
+
+    adhoc_spotlight is produced by the separate run_adhoc_report.py script (its own
+    run_adhoc_log.json, never run_report.py's run_log.json — see run_report.py's
+    docstring) — pass needs_adhoc=True to also regenerate it and merge its section(s)
+    in, whenever a golden file asserts on adhoc_spotlight. Without this, that
+    assertion could never pass no matter what the pipeline actually produces."""
     print(f"[wave {wave}] Regenerating report (run_report.py --wave {wave})...")
     cmd = [sys.executable, str(REPORTS_DIR / "run_report.py"), "--wave", str(wave)]
     if no_cache:
@@ -113,7 +133,24 @@ def _regenerate(wave: int, no_cache: bool) -> tuple[dict | None, str | None]:
     if not run_entry or "sections_summary" not in run_entry:
         return None, f"No sections_summary in run_log.json for wave {wave} after regeneration"
 
-    return {s["section_id"]: s for s in run_entry["sections_summary"]}, None
+    sections_by_id = {s["section_id"]: s for s in run_entry["sections_summary"]}
+
+    if needs_adhoc:
+        print(f"[wave {wave}] Regenerating adhoc spotlight (run_adhoc_report.py --wave {wave})...")
+        adhoc_cmd = [sys.executable, str(REPORTS_DIR / "run_adhoc_report.py"), "--wave", str(wave)]
+        if no_cache:
+            adhoc_cmd.append("--no-cache")
+        adhoc_proc = subprocess.run(adhoc_cmd, cwd=REPORTS_DIR)
+        if adhoc_proc.returncode != 0:
+            return None, (
+                f"run_adhoc_report.py --wave {wave} exited {adhoc_proc.returncode} — "
+                "see the log above for the real cause"
+            )
+        adhoc_entry = _load_adhoc_run_log_entry(wave)
+        if adhoc_entry and "sections_summary" in adhoc_entry:
+            sections_by_id.update({s["section_id"]: s for s in adhoc_entry["sections_summary"]})
+
+    return sections_by_id, None
 
 
 def _check_judge_scores(wave: int, gsec: dict, bullets: list[str]) -> list[str]:
@@ -156,7 +193,8 @@ def run_wave(wave: int, no_cache: bool = False) -> dict:
         print(f"  {msg}")
         return {"wave": wave, "ok": False, "errors": [msg]}
 
-    sections_by_id, err = _regenerate(wave, no_cache)
+    needs_adhoc = any(gsec["section_id"] == "adhoc_spotlight" for gsec in golden_sections)
+    sections_by_id, err = _regenerate(wave, no_cache, needs_adhoc=needs_adhoc)
     if err:
         return {"wave": wave, "ok": False, "errors": [err]}
 
@@ -207,7 +245,8 @@ def approve_wave(wave: int, no_cache: bool = False) -> None:
         print(f"No golden file for wave {wave} at {GOLDEN_DIR}/wave_{wave}.yaml")
         sys.exit(1)
 
-    sections_by_id, err = _regenerate(wave, no_cache)
+    needs_adhoc = any(gsec["section_id"] == "adhoc_spotlight" for gsec in golden_sections)
+    sections_by_id, err = _regenerate(wave, no_cache, needs_adhoc=needs_adhoc)
     if err:
         print(f"ERROR: {err}")
         sys.exit(1)

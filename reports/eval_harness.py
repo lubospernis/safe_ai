@@ -116,60 +116,6 @@ def _regenerate(wave: int, no_cache: bool) -> tuple[dict | None, str | None]:
     return {s["section_id"]: s for s in run_entry["sections_summary"]}, None
 
 
-def _load_adhoc_log_entry(wave: int) -> dict | None:
-    """Most recent run_adhoc_log.json entry for the given wave — the adhoc
-    pipeline logs to its own file, separate from run_log.json (see
-    run_adhoc_report.py)."""
-    log_path = OUTPUT_DIR / "run_adhoc_log.json"
-    if not log_path.exists():
-        return None
-    entries = json.loads(log_path.read_text())
-    for entry in reversed(entries):
-        if entry.get("wave_number") == wave:
-            return entry
-    return None
-
-
-def _regenerate_adhoc(wave: int, no_cache: bool) -> tuple[dict | None, str | None]:
-    """Run run_adhoc_report.py --wave N and return (sections_by_id, None) on
-    success, or (None, error_message) on failure.
-
-    adhoc_spotlight (and any future adhoc-only golden section) is produced by
-    this script, not run_report.py — _regenerate() only ever calls the main
-    pipeline, so a golden file referencing an adhoc section always came back
-    "missing from regenerated output" regardless of whether the adhoc report
-    itself was fine. A wave with no adhoc module that quarter (run_adhoc_report.py
-    deletes its own stale output in that case — see its docstring) is not an
-    error here, just an empty section set; the caller reports the golden
-    section as missing either way, same as it would for genuinely broken output.
-    """
-    print(f"[wave {wave}] Regenerating adhoc report (run_adhoc_report.py --wave {wave})...")
-    cmd = [sys.executable, str(REPORTS_DIR / "run_adhoc_report.py"), "--wave", str(wave)]
-    if no_cache:
-        cmd.append("--no-cache")
-    proc = subprocess.run(cmd, cwd=REPORTS_DIR)
-    if proc.returncode != 0:
-        return None, (
-            f"run_adhoc_report.py --wave {wave} exited {proc.returncode} — likely a "
-            "blocking grounding failure or other pipeline error; see the log above "
-            "for the real cause"
-        )
-
-    adhoc_entry = _load_adhoc_log_entry(wave)
-    if not adhoc_entry or "sections_summary" not in adhoc_entry:
-        # No adhoc module for this wave is a legitimate outcome, not a harness
-        # error — return an empty section map so the caller's own "section
-        # missing" check reports it clearly instead of this function raising.
-        return {}, None
-
-    return {s["section_id"]: s for s in adhoc_entry["sections_summary"]}, None
-
-
-# Section IDs produced by run_adhoc_report.py rather than run_report.py — golden
-# assertions referencing these need the adhoc regeneration path, not the main one.
-_ADHOC_SECTION_IDS = {"adhoc_spotlight"}
-
-
 def _check_judge_scores(wave: int, gsec: dict, bullets: list[str]) -> list[str]:
     """Compare fresh judge scores against gsec's stored judge_baseline. Returns
     an empty list (and makes no API call) if the section has no baseline yet —
@@ -214,15 +160,6 @@ def run_wave(wave: int, no_cache: bool = False) -> dict:
     if err:
         return {"wave": wave, "ok": False, "errors": [err]}
 
-    # Only pay for the adhoc regeneration (a second full run_adhoc_report.py
-    # subprocess) if a golden section actually needs it.
-    needs_adhoc = any(gsec["section_id"] in _ADHOC_SECTION_IDS for gsec in golden_sections)
-    if needs_adhoc:
-        adhoc_sections_by_id, adhoc_err = _regenerate_adhoc(wave, no_cache)
-        if adhoc_err:
-            return {"wave": wave, "ok": False, "errors": [adhoc_err]}
-        sections_by_id = {**sections_by_id, **adhoc_sections_by_id}
-
     errors: list[str] = []
     for gsec in golden_sections:
         sid = gsec["section_id"]
@@ -256,25 +193,6 @@ def run_wave(wave: int, no_cache: bool = False) -> dict:
             "— tier-2 content-quality failure, see quality_scores*.json"
         )
 
-    if needs_adhoc:
-        adhoc_html = OUTPUT_DIR / "report_adhoc_latest.html"
-        if adhoc_html.exists():
-            print(f"[wave {wave}] Adhoc quality gate (quality_check.py --html {adhoc_html.name})...")
-            aqc = subprocess.run(
-                [sys.executable, str(REPORTS_DIR / "quality_check.py"), "--html", str(adhoc_html)],
-                cwd=REPORTS_DIR,
-            )
-            if aqc.returncode == 3:
-                print(f"[wave {wave}] Adhoc quality gate: tier-1 style issues only (non-blocking)")
-            elif aqc.returncode != 0:
-                errors.append(
-                    f"quality_check.py --html {adhoc_html.name} failed (exit {aqc.returncode}) "
-                    "— tier-2 content-quality failure, see quality_scores_adhoc_latest.json"
-                )
-        else:
-            print(f"[wave {wave}] No {adhoc_html.name} produced — skipping adhoc quality gate "
-                  "(wave likely has no adhoc module this quarter)")
-
     return {"wave": wave, "ok": not errors, "errors": errors}
 
 
@@ -293,13 +211,6 @@ def approve_wave(wave: int, no_cache: bool = False) -> None:
     if err:
         print(f"ERROR: {err}")
         sys.exit(1)
-
-    if any(gsec["section_id"] in _ADHOC_SECTION_IDS for gsec in golden_sections):
-        adhoc_sections_by_id, adhoc_err = _regenerate_adhoc(wave, no_cache)
-        if adhoc_err:
-            print(f"ERROR: {adhoc_err}")
-            sys.exit(1)
-        sections_by_id = {**sections_by_id, **adhoc_sections_by_id}
 
     client = _anthropic_client()
     print(f"\n{'=' * 70}\nProposed judge_baseline for wave {wave} — review before pasting\n{'=' * 70}")

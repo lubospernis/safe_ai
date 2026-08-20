@@ -7,7 +7,7 @@ README je určený používateľovi, ktorý repozitár otvorí na GitHube a potr
 - pochopiť, čo projekt robí;
 - pripraviť lokálne prostredie;
 - nastaviť prístupy k databáze a modelom;
-- spustiť hlavný alebo adhoc report;
+- spustiť report;
 - spustiť testy a dbt transformácie;
 - pochopiť, čo sa publikuje automaticky cez GitHub Actions;
 - upraviť reportové sekcie, SQL alebo konfiguráciu.
@@ -41,7 +41,7 @@ Pipeline premieňa verejné údaje ECB SAFE na opakovateľný report:
 5. Grounding, kvalitatívne, štylistické a grafické kontroly overia výstup.
 6. Pipeline vytvorí HTML a JSON artefakty pre statický report a webový portál.
 
-Report obsahuje napríklad financovaciu medzeru, dostupnosť bankových úverov, úverové podmienky, podnikateľské problémy, očakávania a vývoj podnikania. Adhoc pipeline automaticky rozpozná špeciálny modul v novej vlne a vytvorí samostatný spotlight, ak sú také údaje dostupné.
+Report obsahuje napríklad financovaciu medzeru, dostupnosť bankových úverov, úverové podmienky, podnikateľské problémy, očakávania a vývoj podnikania.
 
 AI nemá voľný prístup k databáze. Agentické dohľadanie údajov používa nástroj `query_mart`, ktorý povoľuje iba schválené read-only `SELECT` dotazy nad whitelisted tabuľkami.
 
@@ -80,7 +80,6 @@ Dôležitá hranica: lokálne spustenie vytvorí súbory v `reports/output/`, al
 | `safe_microdata/` | dlt zdroje pre SAFE microdata a annex. |
 | `dbt_project/` | dbt projekt, staging, intermediate a mart modely. |
 | `reports/run_report.py` | Hlavná reportová pipeline. |
-| `reports/run_adhoc_report.py` | Pipeline pre adhoc spotlight. |
 | `reports/sql/` | Preddefinované SQL dotazy reportových sekcií. |
 | `reports/config.py` | Registrácia sekcií, názvy dotazov, signové pravidlá a grafy. |
 | `reports/db.py` | MotherDuck pripojenie, načítanie dát a validácia `query_mart`. |
@@ -246,15 +245,6 @@ python reports/run_report.py --rerun-sections financing_gap,bank_loan_terms
 
 Týmto sa vynútia vybrané sekcie. Následné fázy sa podľa hashov vstupov znovu vyhodnotia automaticky.
 
-### Adhoc report
-
-```powershell
-python reports/run_adhoc_report.py
-python reports/run_adhoc_report.py --wave 37
-```
-
-Ak aktuálna vlna nemá adhoc modul, skript skončí bez reportu. Ak modul existuje, vytvorí anglický a slovenský adhoc spotlight.
-
 ## dbt transformácie
 
 dbt transformácie sa štandardne spúšťajú po úspešnom načítaní microdata:
@@ -270,12 +260,8 @@ cd ..
 Pri novej vlne je odporúčaný postup:
 
 1. načítať microdata cez dlt;
-2. spustiť `dbt run --select mart_safe__adhoc_responses`, ak ide o adhoc modul;
-3. aktualizovať annex, ak sa zmenili otázky alebo odpovede;
-4. overiť novú vlnu spustením `reports/run_adhoc_report.py` alebo adhoc workflow podľa dostupnej konfigurácie;
-5. spustiť hlavný report.
-
-Nový neznámy adhoc modul zvyčajne nevyžaduje zmenu Python kódu. Generická pipeline ho môže rozpoznať z mart-u; manuálny fallback názov sa pridáva iba vtedy, ak automatická klasifikácia nie je dostatočná.
+2. aktualizovať annex, ak sa zmenili otázky alebo odpovede;
+3. spustiť hlavný report.
 
 ## Testy a validácia
 
@@ -302,7 +288,7 @@ Validácia porovnáva vybrané mart ukazovatele s publikovanými ECB sériami a 
 .\.venv\Scripts\python.exe reports/quality_check.py --html reports/output/report_latest_sk.html
 ```
 
-Hlavný report používa prah 7/10 a adhoc report prah 8/10. Tier-2 zlyhanie má blokovať publikovanie.
+Hlavný report používa prah 7/10. Tier-2 zlyhanie má blokovať publikovanie.
 
 ## GitHub Actions a publikovanie
 
@@ -313,7 +299,6 @@ Workflow sú uložené v `.github/workflows/`:
 | `safe_microdata.yml` | Načítanie ECB SAFE microdata cez dlt. |
 | `dbt_transform.yml` | Spustenie dbt modelov a dbt testov. |
 | `generate_report.yml` | Generovanie, kontrola a publikovanie hlavného reportu. |
-| `generate_adhoc_report.yml` | Generovanie a publikovanie adhoc reportu. |
 | `generate_report_manual.yml` | Manuálny retrospektívny report, určený na overenie bez produkčného publishu. |
 | `validate.yml` | Dátová validácia. |
 | `eval_harness.yml` | Evaluačné testy kvality modelových výstupov. |
@@ -344,7 +329,6 @@ Pri reportovom workflow GitHub Actions:
 
 ```bash
 gh workflow run generate_report.yml
-gh workflow run generate_adhoc_report.yml
 gh workflow run generate_report_manual.yml
 gh run list --limit 10
 gh run view <RUN_ID> --log-failed
@@ -424,10 +408,6 @@ Overte aj token odovzdaný ako `motherduck_token` a kompatibilnú verziu DuckDB/
 ### Report sa vytvoril lokálne, ale nie je online
 
 Lokálny `run_report.py` iba zapíše súbory do `reports/output/`. Skontrolujte GitHub Actions workflow, quality scores a stav publikačnej brány. Samotný lokálny beh nepushne branch `gh-pages`.
-
-### Adhoc report nevznikol
-
-Skript skončí úspešne aj vtedy, keď v najnovšej vlne nie sú adhoc údaje. Skontrolujte `mart_safe__adhoc_responses`, spustite príslušný dbt model a overte detekciu modulu.
 
 ## Príklady výstupov
 

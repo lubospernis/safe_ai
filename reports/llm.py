@@ -707,15 +707,10 @@ EXEC_SUMMARY_SYSTEM = textwrap.dedent(f"""
     Valid section_id values (use exactly as written):
     bank_loan_terms, financing_gap, loan_applications, availability_expectations,
     financing_purpose, financing_factors, business_situation, outlook,
-    expectations_quantitative, expectations_risk, business_problems, adhoc_spotlight
+    expectations_quantitative, expectations_risk, business_problems
 
     For cross-cutting bullets spanning multiple sections, use the most relevant section_id.
     No leading bullet character inside the bullet text.
-
-    Special rule for adhoc_spotlight: if adhoc_spotlight appears in the section findings,
-    you MUST include exactly one bullet for it, prefixed with the 🔍 emoji,
-    e.g. "🔍 **AI Peer Estimates:** Slovak firms estimated..."
-    This bullet counts toward your 3–4 total. Drop the weakest other bullet if needed.
 """).strip()
 
 SO_WHAT_SYSTEM = textwrap.dedent("""
@@ -1528,8 +1523,7 @@ def build_section_signals(
     ecb_emphasis: dict[str, dict] | None = None,
 ) -> dict[str, dict]:
     """Assemble the reasoning-channel signals for each rendered standard section.
-    Sections not present in sections_by_id (e.g. adhoc_spotlight, which has its
-    own guarantee mechanism in get_exec_summary) are skipped."""
+    Sections not present in sections_by_id are skipped."""
     ecb_emphasis = ecb_emphasis or {}
     signals: dict[str, dict] = {}
     for r in rendered:
@@ -1580,7 +1574,6 @@ def get_exec_summary(
     cost_tracker: dict,
     historical_context: str = "",
     section_signals: dict[str, dict] | None = None,
-    adhoc_section: dict | None = None,
     anthropic_client=None,
     mistral_client=None,
 ) -> list[dict]:
@@ -1695,24 +1688,10 @@ def get_exec_summary(
                     continue
                 bullet = str(item.get("bullet", "")).strip().lstrip("•- ")
                 sid = str(item.get("section_id", "")).strip()
-                if sid != "adhoc_spotlight":
-                    bullet = bullet.lstrip("🔍 ")
                 if bullet:
                     result.append({"bullet": bullet, "section_id": sid if sid in section_ids else ""})
             result = result[:4]
             break
-
-    # Guarantee one 🔍 adhoc bullet only when adhoc_spotlight was actually rendered
-    adhoc_was_rendered = adhoc_section is not None and any(
-        s.get("section_id") == "adhoc_spotlight" for s in rendered_sections
-    )
-    if adhoc_was_rendered and not any(r.get("section_id") == "adhoc_spotlight" for r in result):
-        theme = adhoc_section.get("theme_label", "Special Focus")
-        finding = adhoc_section.get("finding", "")
-        fallback_bullet = f"🔍 **{theme}:** {finding}" if finding else f"🔍 **{theme}:** See Special Focus section."
-        if len(result) >= 4:
-            result = result[:3]  # drop weakest (last) to stay at 4
-        result.append({"bullet": fallback_bullet, "section_id": "adhoc_spotlight"})
 
     # Auto-correct bullets mislabeled with the wrong section_id (numbers are real and
     # grounded, just attributed to the wrong section) before the provenance check —
@@ -2055,7 +2034,7 @@ TRANSLATE_SYSTEM = (
     "Translate the following ECB SAFE survey report content to Slovak. "
     "Keep all numbers, percentages, and proper nouns (Slovakia, Euro Area, Germany, ECB, "
     "SAFE) unchanged. Use formal economic Slovak (not colloquial). "
-    "For \"exec_bullets\", \"sections\" (finding/bullets/title), and \"adhoc\" content: "
+    "For \"exec_bullets\" and \"sections\" (finding/bullets/title) content: "
     "write IDIOMATIC, NATIVE Slovak — do not mirror the English sentence's clause order or "
     "structure word-for-word. A literal/calque translation that sounds grammatically odd "
     "in Slovak is a FAILURE even if every word is individually correct. In particular, "
@@ -2095,9 +2074,6 @@ def translate_to_slovak(
 ) -> tuple[list[dict], list[dict], dict, dict]:
     exec_bullet_texts = [item.get("bullet", "") for item in exec_bullets]
 
-    adhoc_s = next((s for s in rendered if s.get("section_id") == "adhoc_spotlight"), None)
-    regular = [s for s in rendered if s.get("section_id") != "adhoc_spotlight"]
-
     payload: dict = {
         "exec_bullets": exec_bullet_texts,
         "sections": [
@@ -2107,29 +2083,13 @@ def translate_to_slovak(
                 "finding": s["finding"],
                 "bullets": s["bullets"],
             }
-            for s in regular
+            for s in rendered
         ],
     }
     if question_texts:
         payload["annex_questions"] = question_texts
     if chart_question_captions:
         payload["chart_captions"] = chart_question_captions
-    if adhoc_s:
-        payload["adhoc"] = {
-            "theme_label": adhoc_s.get("theme_label", ""),
-            "title":       adhoc_s.get("title", ""),
-            "finding":     adhoc_s.get("finding", ""),
-            "bullets":     adhoc_s.get("bullets", []),
-            "bullets_by_question": adhoc_s.get("bullets_by_question", {}),
-            "sub_sections": [
-                {
-                    "heading": ss.get("heading", ""),
-                    "finding": ss.get("finding", ""),
-                    "bullets": ss.get("bullets", []),
-                }
-                for ss in adhoc_s.get("sub_sections", [])
-            ],
-        }
 
     prompt = TRANSLATE_SYSTEM + "\n\n" + json.dumps(payload, ensure_ascii=False)
     client = _mistral_client()
@@ -2167,42 +2127,13 @@ def translate_to_slovak(
         print(f"  [SK] {len(raw_sections) - len(valid_sections)} malformed section entr(y/ies) in "
               f"translation response (missing 'id') — falling back to English content for those")
     by_id = {s["id"]: s for s in valid_sections}
-    for s in regular:
+    for s in rendered:
         t = by_id.get(s["section_id"], {})
         sk_rendered.append({
             **s,
             "title":   t.get("title",   s.get("title", "")),
             "finding": t.get("finding", s["finding"]),
             "bullets": t.get("bullets", s["bullets"]),
-        })
-
-    # Reconstruct translated adhoc section
-    if adhoc_s:
-        sk_adhoc = translated.get("adhoc") or {}
-        orig_sub = adhoc_s.get("sub_sections", [])
-        t_sub    = sk_adhoc.get("sub_sections", [])
-        orig_bbq = adhoc_s.get("bullets_by_question", {})
-        t_bbq    = sk_adhoc.get("bullets_by_question") or {}
-        sk_rendered.append({
-            **adhoc_s,
-            "theme_label": sk_adhoc.get("theme_label", adhoc_s.get("theme_label", "")),
-            "title":       sk_adhoc.get("title",       adhoc_s.get("title", "")),
-            "finding":     sk_adhoc.get("finding",     adhoc_s.get("finding", "")),
-            "bullets":     sk_adhoc.get("bullets",     adhoc_s.get("bullets", [])),
-            # Fall back per-question (not all-or-nothing) so a translation gap for one
-            # question doesn't blank out every other question's Slovak bullets.
-            "bullets_by_question": {
-                qid: t_bbq.get(qid, orig_bbq.get(qid, [])) for qid in orig_bbq
-            },
-            "sub_sections": [
-                {
-                    **orig_ss,
-                    "heading": t_ss.get("heading", orig_ss.get("heading", "")),
-                    "finding": t_ss.get("finding", orig_ss.get("finding", "")),
-                    "bullets": t_ss.get("bullets", orig_ss.get("bullets", [])),
-                }
-                for orig_ss, t_ss in zip(orig_sub, t_sub)
-            ] if t_sub else orig_sub,
         })
 
     sk_bullet_texts = translated.get("exec_bullets", exec_bullet_texts)

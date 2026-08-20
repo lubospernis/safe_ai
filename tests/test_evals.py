@@ -194,24 +194,6 @@ def test_golden_assertions_catch_recovery_language():
     assert any("recovered" in e for e in errors), f"Expected recovery error, got: {errors}"
 
 
-def test_golden_assertions_catch_broadly_comparable():
-    bullets = [
-        "AI use in Slovakia is broadly comparable to the euro area average.",
-        "Slovak firms show moderate AI adoption at 46.5%.",
-    ]
-    errors = run_golden_assertions("adhoc_spotlight", bullets, wave=37)
-    assert any("broadly comparable" in e for e in errors), f"Expected phrase error, got: {errors}"
-
-
-def test_golden_assertions_catch_export_framing():
-    bullets = [
-        "Slovak firms estimate higher export shares to Germany, France and Italy.",
-        "QB1 data shows divergence from euro area peers.",
-    ]
-    errors = run_golden_assertions("adhoc_spotlight", bullets, wave=37)
-    assert any("export" in e for e in errors), f"Expected export error, got: {errors}"
-
-
 def test_golden_assertions_pass_clean_bullets():
     bullets = [
         "Slovak profit pressures eased — net -22pp (n=237), improving by 15pp from wave 36.",

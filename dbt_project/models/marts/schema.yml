@@ -1089,9 +1089,7 @@ models:
       One row per (module_id, question_period, answer_code): the label text for
       each response/answer code of a question (e.g. qa1.1 = "Not currently in
       use"). Use to resolve chart x-axis tick labels and response-code
-      descriptions instead of the PDF-parsed labels in
-      reports/questionnaire.py::fetch_adhoc_response_labels, which is kept only
-      as a fallback for gaps not covered here.
+      descriptions.
 
     config:
       tags: ["safe", "ecb", "survey", "mart", "annex"]
@@ -1127,7 +1125,7 @@ models:
       for multi-part questions (e.g. qb1.a = "In your country"). Fixes chart
       panel titles that previously fell back to a bare sub-item code ("a"/"b")
       whenever the annex-derived question_texts dict wasn't populated for a
-      sibling adhoc module.
+      sibling module.
 
       The source XLSX encodes item identity three different ways: some questions
       (e.g. qb1/qb2) letter-prefix the item text itself ("a) ..."); others (e.g.
@@ -1142,8 +1140,7 @@ models:
       Coverage is inherently sparse: only questions whose source XLSX rows use
       element='item' get a row here. A missing row does NOT imply "no
       sub-items" -- some sub-item letters (e.g. QA2's pick-order "a"/"b" slots)
-      are a microdata artifact with no annex representation at all; see
-      reports/adhoc.py for that fallback.
+      are a microdata artifact with no annex representation at all.
 
     config:
       tags: ["safe", "ecb", "survey", "mart", "annex"]

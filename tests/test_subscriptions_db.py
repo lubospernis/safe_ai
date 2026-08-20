@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from subscriptions_db import (
-    NEWSLETTER_ADHOC, NEWSLETTER_REGULAR, _normalize_supabase_url, get_subscribers,
+    NEWSLETTER_REGULAR, _normalize_supabase_url, get_subscribers,
 )
 
 
@@ -56,7 +56,7 @@ def test_get_subscribers_returns_empty_list_when_no_subscribers():
     client.table.return_value = _mock_table_chain([])
 
     with patch("subscriptions_db.create_client", return_value=client):
-        result = get_subscribers(NEWSLETTER_ADHOC)
+        result = get_subscribers(NEWSLETTER_REGULAR)
 
     assert result == []
 
@@ -87,10 +87,10 @@ def test_get_subscribers_queries_correct_newsletter_id():
     client.table.return_value = subs_table
 
     with patch("subscriptions_db.create_client", return_value=client):
-        get_subscribers("safe-adhoc")
+        get_subscribers("safe-regular")
 
     subs_table.select.assert_called_once_with("email")
-    subs_table.select.return_value.eq.assert_called_once_with("newsletter_id", "safe-adhoc")
+    subs_table.select.return_value.eq.assert_called_once_with("newsletter_id", "safe-regular")
 
 
 # ── _normalize_supabase_url ──────────────────────────────────────────────────

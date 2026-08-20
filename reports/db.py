@@ -23,7 +23,6 @@ ALLOWED_MART_TABLES = {
     "mart_safe__business_situation", "mart_safe__outlook",
     "mart_safe__availability_expectations", "mart_safe__expectations",
     "mart_safe__survey_participants", "mart_safe__question_coverage",
-    "mart_safe__adhoc_responses",
     "int_safe__core_questions_long",
 }
 _WRITE_RE = re.compile(

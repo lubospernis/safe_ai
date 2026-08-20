@@ -17,7 +17,6 @@ Schema (ref_safe__run_log):
   n_sections, duration_seconds, grounding_warning_count
   quality_readability, quality_substance, quality_coherence, quality_sign_convention
   quality_verdict, quality_reason
-  adhoc_grounding, adhoc_coverage, adhoc_readability, adhoc_chart_alignment, adhoc_verdict
 """
 
 import json
@@ -52,12 +51,7 @@ _DDL = """
         quality_coherence       FLOAT,
         quality_sign_convention FLOAT,
         quality_verdict         TEXT,
-        quality_reason          TEXT,
-        adhoc_grounding         FLOAT,
-        adhoc_coverage          FLOAT,
-        adhoc_readability       FLOAT,
-        adhoc_chart_alignment   FLOAT,
-        adhoc_verdict           TEXT
+        quality_reason          TEXT
     )
 """
 
@@ -67,9 +61,8 @@ _INSERT = """
         total_cost_usd, input_tokens, output_tokens, cache_read_tokens,
         cost_by_model, n_sections, duration_seconds, grounding_warning_count,
         quality_readability, quality_substance, quality_coherence, quality_sign_convention,
-        quality_verdict, quality_reason,
-        adhoc_grounding, adhoc_coverage, adhoc_readability, adhoc_chart_alignment, adhoc_verdict
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        quality_verdict, quality_reason
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 """
 
 
@@ -85,7 +78,6 @@ def main() -> None:
         else {"readability": None, "substance": None, "coherence": None,
               "sign_convention": None, "verdict": "unknown", "reason": "quality_scores.json missing"}
     )
-    adhoc_q = quality.get("adhoc", {})
 
     wave = cost["wave_number"]
     sha = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"]).decode().strip()
@@ -119,7 +111,6 @@ def main() -> None:
         "cost_by_model", "n_sections", "duration_seconds", "grounding_warning_count",
         "quality_readability", "quality_substance", "quality_coherence", "quality_sign_convention",
         "quality_verdict", "quality_reason",
-        "adhoc_grounding", "adhoc_coverage", "adhoc_readability", "adhoc_chart_alignment", "adhoc_verdict",
     }
     if not existing_cols >= target_cols:
         # Schema mismatch — recreate the table (old data was not important)
@@ -150,11 +141,6 @@ def main() -> None:
         quality["sign_convention"],
         quality["verdict"],
         quality.get("reason", ""),
-        adhoc_q.get("grounding"),
-        adhoc_q.get("coverage"),
-        adhoc_q.get("readability"),
-        adhoc_q.get("chart_alignment"),
-        adhoc_q.get("verdict"),
     ])
 
     print(

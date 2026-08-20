@@ -85,9 +85,9 @@ def test_track_cost_raises_on_accumulated_total_not_just_single_call(sample_cost
 
 
 def test_check_cost_ceiling_pre_emptive_gate_raises_on_shared_tracker():
-    # Explicit call site used by run_report.py/run_adhoc_report.py before
-    # starting each new parallel section — must raise directly (not only via
-    # _track_cost) against an already-over-ceiling shared tracker.
+    # Explicit call site used by run_report.py before starting each new
+    # parallel section — must raise directly (not only via _track_cost)
+    # against an already-over-ceiling shared tracker.
     tracker = {"usd": COST_CEILING_USD + 1.0}
     with pytest.raises(CostCeilingExceeded):
         check_cost_ceiling(tracker)

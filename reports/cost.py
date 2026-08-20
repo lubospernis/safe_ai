@@ -18,10 +18,10 @@ _PRICE = {
     "mistral-embed":             {"input": 0.10,  "output": 0.00},
 }
 
-# 2026-07-21: consolidated from run_report.py/run_adhoc_report.py, which each
-# independently defined an identical COST_CEILING_USD/CostCeilingExceeded/
-# _check_cost_ceiling() (2026-07-07). Same env var name and $15.00 default as
-# the mechanism this replaces, so no external config changes.
+# 2026-07-21: consolidated the previously-duplicated COST_CEILING_USD/
+# CostCeilingExceeded/_check_cost_ceiling() into one place (2026-07-07). Same
+# env var name and $15.00 default as the mechanism this replaces, so no
+# external config changes.
 COST_CEILING_USD = float(os.environ.get("COST_CEILING_USD", "15.0"))
 
 
@@ -36,12 +36,12 @@ def check_cost_ceiling(tracker: dict) -> None:
     """Raise CostCeilingExceeded if tracker["usd"] has crossed COST_CEILING_USD.
 
     Called automatically by _track_cost after every tracked call, so it's a
-    real guard everywhere cost is tracked (llm.py, adhoc.py, gap_agent.py, not
-    just wherever someone remembered to add a checkpoint). ALSO called
-    explicitly by run_report.py/run_adhoc_report.py as a pre-emptive gate
-    before starting each new section in the parallel (ThreadPoolExecutor)
-    phase, against the shared cumulative tracker — the per-call check inside
-    _track_cost alone isn't enough there, since parallel section generation
+    real guard everywhere cost is tracked (llm.py, gap_agent.py, not just
+    wherever someone remembered to add a checkpoint). ALSO called explicitly
+    by run_report.py as a pre-emptive gate before starting each new section
+    in the parallel (ThreadPoolExecutor) phase, against the shared cumulative
+    tracker — the per-call check inside _track_cost alone isn't enough there,
+    since parallel section generation
     uses a fresh thread-local tracker per section (merged into the shared one
     only after each section completes), so no single call in that phase would
     ever see the true running total on its own.

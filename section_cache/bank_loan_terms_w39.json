@@ -1,14 +1,14 @@
 {
   "section_id": "bank_loan_terms",
   "wave_number": 39,
-  "source_hash": "e7468280069d84ef",
-  "finding": "Slovak interest rate tightening rose sharply, reaching a net 43.8% in wave 39",
+  "source_hash": "e46f2104f8f3c88b",
+  "finding": "Slovak firms reported a net 43.8% experiencing interest rate tightening in wave 39",
   "bullets": [
-    "A net 43.8% of Slovak firms (n=76) reported higher interest rates in wave 39, rising 38.3 pp from a net 5.5% in wave 38 — the largest swing across all three geographies, signalling sharply higher financing costs.",
-    "Available loan or credit line size tightened for a net 12.4% of Slovak firms (n=74), up 6.3 pp from wave 38, with loan maturity conditions also tightening at a net 11.6% (n=76) — squeezing liquidity buffers.",
-    "Euro area interest rate tightening also intensified, with a net 40.0% of firms (n=1,906) reporting higher rates, up 12.7 pp from wave 38, leaving Slovakia 3.8 pp above the EA — widening the regional cost gap."
+    "A net 43.8% of Slovak firms (n=76) reported tighter interest rates, rising 38.3 pp from a net 5.5% in the previous wave, now above the EA (net 40.0%) and DE (net 42.5%) — increasing debt servicing costs.",
+    "A net 12.4% of Slovak firms (n=74) reported smaller available loan or credit line sizes, rising 6.3 pp from the previous wave, exceeding the EA (net 9.1%) and DE (net 7.9%) — limiting liquidity buffers.",
+    "Loan maturity conditions tightened for a net 11.6% of Slovak firms (n=76), compared with a net 4.4% in the EA and net 3.4% in DE — reducing financial flexibility."
   ],
-  "chart_subtitle": "Net 43.8% of Slovak firms reported higher interest rates.",
+  "chart_subtitle": "Net 43.8% of Slovak firms reported interest rate tightening.",
   "grounding_warnings": [],
   "grounding_dropped": [],
   "style_warnings": [],

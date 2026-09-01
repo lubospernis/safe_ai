@@ -1,14 +1,14 @@
 {
   "section_id": "business_situation",
   "wave_number": 39,
-  "source_hash": "a951242fe458d789",
-  "finding": "Slovak turnover still contracting despite 13 pp improvement in wave 39",
+  "source_hash": "bc982e261fcbda8f",
+  "finding": "Slovak turnover improved but remained negative, lagging the euro area",
   "bullets": [
-    "A net 12.83% of Slovak firms (n=242) reported declining turnover in wave 39, improving 13.39 pp from a net 26.22% decline in wave 38 — yet still signalling weak demand conditions.",
-    "A net 34.38% of Slovak firms (n=242) reported falling profits — 18.99 pp worse than the EA's net 15.39% — highlighting profitability pressures.",
-    "Labour costs continued to rise for a net 78.81% of Slovak firms (n=242), 19.85 pp above the EA's net 58.96% — squeezing margins further."
+    "A net 12.83% of Slovak firms (n=242) reported declining turnover in wave 39, improving 13.39 pp from wave 38, yet still contrasting with the EA's net 8.11% increase — suggesting weaker demand.",
+    "A net 34.38% of Slovak firms (n=242) reported falling profits, improving 5.42 pp from wave 38, while the EA's net decline stood at 15.39% — a gap of around 19 pp — limiting investment capacity.",
+    "Labour cost pressures remained elevated, with a net 78.81% of Slovak firms (n=242) reporting increases — 19.85 pp above the EA net — squeezing margins further."
   ],
-  "chart_subtitle": "A net 12.83% of Slovak firms still reported turnover declines.",
+  "chart_subtitle": "Slovak turnover net balance rose to −12.83% in wave 39.",
   "grounding_warnings": [],
   "grounding_dropped": [],
   "style_warnings": [],

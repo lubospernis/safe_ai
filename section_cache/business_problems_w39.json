@@ -1,14 +1,14 @@
 {
   "section_id": "business_problems",
   "wave_number": 39,
-  "source_hash": "83d28c405791c044",
-  "finding": "Skilled staff shortage tops Slovak business concerns in Wave 39",
+  "source_hash": "75c252cb01f2cc8d",
+  "finding": "Skilled staff and production costs dominate Slovak firms' business concerns",
   "bullets": [
-    "Skilled staff availability ranked as the most pressing problem among the seven tested for Slovak firms (n=239), scoring 6.64/10 — up from 6.07 in the previous wave, exceeding the EA's 6.57, signalling rising operational strain.",
-    "Costs of production or labour scored 6.62/10 (n=240), rising from 6.19 in the previous wave, though remaining below the EA average of 6.74 — highlighting cost pressures without yet matching peers.",
-    "Regulation scored 6.10/10 (n=236), easing 0.08 from the previous wave, yet still above the EA's 5.87 — suggesting persistent compliance burdens for Slovak firms."
+    "Among the seven problems tested, skilled staff availability was the top concern for Slovak firms (n=239), scoring 6.64/10 — up 0.57 points from wave 38, exceeding the EA's 6.57/10, highlighting a growing talent gap.",
+    "Costs of production or labour ranked second at 6.62/10 (n=240), rising 0.43 points from wave 38, just below the EA score of 6.74/10, squeezing margins further.",
+    "Regulation scored 6.10/10 (n=236), easing marginally by 0.08 points from wave 38, yet remaining above the EA average of 5.87/10, still burdening compliance efforts."
   ],
-  "chart_subtitle": "Skilled staff scores 6.64/10 for Slovak firms.",
+  "chart_subtitle": "Skilled staff scored 6.64/10 for Slovak firms in wave 39.",
   "grounding_warnings": [],
   "grounding_dropped": [],
   "style_warnings": [],

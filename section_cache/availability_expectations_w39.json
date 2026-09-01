@@ -1,14 +1,14 @@
 {
   "section_id": "availability_expectations",
   "wave_number": 39,
-  "source_hash": "89b1f9abafac1c2a",
-  "finding": "Slovak firms' bank loan availability expectations diverged from improving EA trend",
+  "source_hash": "395f5ef2ea6a0f02",
+  "finding": "Slovak firms' bank loan availability outlook diverged from improving EA trend",
   "bullets": [
-    "A net 6.5% of Slovak firms (n=104) expected bank loan availability to deteriorate in wave 39—suggesting tightening conditions ahead for local borrowers.",
-    "Slovak firms' trade credit expectations improved 4.0 pp to a net 6.2% expecting deterioration (n=90), while EA firms saw only a 1.0 pp rise to 1.9%.",
-    "Credit line availability expectations improved for both SK and EA firms, with Slovak firms' net deterioration share falling 3.2 pp to 3.9% (n=136)—signalling slightly better short-term liquidity prospects."
+    "A net 6.46% of Slovak firms (n=104) expected bank loan availability to deteriorate in wave 39—worsening by 1.30 pp from wave 38, while the EA improved by 1.45 pp to a net 2.35%, signalling tighter conditions ahead.",
+    "Credit line availability expectations eased by 3.16 pp to a net 3.87% of Slovak firms (n=136) expecting deterioration—compared with a net 2.25% for the EA, still pointing to cautious lender behavior.",
+    "Trade credit pessimism receded, with a net 6.18% of Slovak firms (n=90) expecting deterioration—improving by 4.04 pp from wave 38's net 10.22%, though remaining above the EA's net 1.87%, limiting supplier-backed financing options."
   ],
-  "chart_subtitle": "Net 6.5% of Slovak firms expect bank loan availability to deteriorate.",
+  "chart_subtitle": "A net 6.46% of Slovak firms expect bank loan availability to deteriorate.",
   "grounding_warnings": [],
   "grounding_dropped": [],
   "style_warnings": [],

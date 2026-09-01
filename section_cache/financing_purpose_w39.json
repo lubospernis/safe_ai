@@ -1,14 +1,14 @@
 {
   "section_id": "financing_purpose",
   "wave_number": 39,
-  "source_hash": "10c33aa3bc54d8b0",
-  "finding": "Slovak firms lead EA in working capital financing at 57%",
+  "source_hash": "71c4638e8c6ab37a",
+  "finding": "Slovak firms shifted toward fixed investment while working capital use remained elevated",
   "bullets": [
-    "Inventory and working capital remained the dominant financing purpose for Slovak firms, cited by 57.0% (n=242) — 16.2 pp above the euro area's 40.8% — compared with 55.7% in the previous wave, underlining their heavy reliance on short-term liquidity.",
-    "Fixed investment financing rose from 34.2% to 40.7% among Slovak firms (n=242), a gain of 6.5 pp that brought Slovakia above the euro area rate of 38.4%, suggesting growing capacity for long-term growth investments.",
-    "Refinancing or paying off obligations declined from 21.5% to 17.0% among Slovak firms (n=241), narrowing the gap with the euro area's 15.8%, indicating reduced debt servicing pressure."
+    "Fixed investment citation rose from 34.2% to 40.7% among Slovak firms (n=242), a 6.5 pp increase that brought Slovakia above the euro area's 38.4% — suggesting stronger long-term growth capacity.",
+    "Inventory and working capital remained the dominant financing purpose for Slovak firms (n=242) at 57.0%, 16.2 pp above the euro area's 40.8% — highlighting persistent liquidity needs.",
+    "The share of Slovak firms (n=241) citing refinancing or paying off obligations fell from 21.5% to 17.0%, easing 4.5 pp from the previous wave."
   ],
-  "chart_subtitle": "57% of Slovak firms cited working capital financing.",
+  "chart_subtitle": "57% of Slovak firms cited working capital as financing purpose.",
   "grounding_warnings": [],
   "grounding_dropped": [],
   "style_warnings": [],

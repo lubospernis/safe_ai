@@ -1,14 +1,14 @@
 {
   "section_id": "expectations_quantitative",
   "wave_number": 39,
-  "source_hash": "814c1e5c40e7152d",
-  "finding": "Slovak firms face margin compression as input costs outpace selling prices",
+  "source_hash": "59865739eca1e5f5",
+  "finding": "Slovak firms face persistent margin compression as input costs dwarf selling prices",
   "bullets": [
-    "Slovak firms (n=224) expected production input prices to rise 7.33% — versus only 3.75% for selling prices (n=222) and 5.35% across the EA, pointing to continued margin compression.",
-    "Slovak firms (n=233) anticipated 4.12% average wage growth over the next 12 months, compared with 2.60% across the EA (n=4,941), adding further cost pressure.",
-    "Twelve-month inflation expectations among Slovak firms (n=193) eased to 4.68% from 4.97% in the previous wave, remaining 0.80 pp above the EA mean of 3.88%."
+    "Slovak firms expected production input prices to rise by 7.33% (n=224) over the next 12 months, 1.98 pp above the EA's 5.35%, despite easing 0.98 pp from wave 38's 8.31%.",
+    "Average selling price expectations stood at 3.75% (n=222) in Slovakia — above the EA's 3.27% — leaving a 3.58 pp gap between anticipated cost increases and price pass-through capacity.",
+    "Slovak firms anticipated average wage growth of 4.12% (n=233), 1.52 pp above the EA's 2.60%, adding further pressure on operating margins alongside elevated input cost expectations."
   ],
-  "chart_subtitle": "Slovak firms expect +7.33% input price rise, vs EA's 5.35%.",
+  "chart_subtitle": "Slovak input price expectations at 7.33%, well above EA's 5.35%.",
   "grounding_warnings": [],
   "grounding_dropped": [],
   "style_warnings": [],

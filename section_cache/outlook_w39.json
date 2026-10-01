@@ -1,14 +1,14 @@
 {
   "section_id": "outlook",
   "wave_number": 39,
-  "source_hash": "8e94b54ca8b9bfb3",
-  "finding": "Slovak firms' turnover outlook fell sharply, diverging from euro area optimism",
+  "source_hash": "4135c55133b163c4",
+  "finding": "Slovak turnover expectations diverge from rising euro area optimism",
   "bullets": [
-    "Slovak firms' turnover expectations fell to a net 6.75% (n=228), trailing the euro area's net 25.88% by 19 pp in wave 38 — signalling weaker domestic demand.",
-    "Slovak turnover expectations declined by 14 pp from a net 20.90% two waves earlier, while the euro area's outlook rose from net 23.16% to net 25.88% — highlighting a growing competitiveness gap.",
-    "Fixed investment expectations bucked the turnover trend, rising to a net 14.67% (n=228) — above the euro area's net 9.45% — up 3.88 pp from the previous wave."
+    "Slovak firms' turnover expectations fell to a net 6.75% (n=228), down 14.15 pp from two waves earlier, against the euro area's net 25.88% (n=5,266) — a gap of 19 pp.",
+    "Slovak fixed investment expectations rose to a net 14.67% (n=228), up 3.88 pp from two waves earlier, outpacing the euro area's net 9.45%, which itself declined 3.13 pp.",
+    "Euro area and German turnover expectations both improved from two waves earlier, to net 25.88% and 19.08% respectively, underscoring Slovakia's divergent trajectory."
   ],
-  "chart_subtitle": "Slovak turnover outlook fell to net 6.75%, far below EA.",
+  "chart_subtitle": "Slovak turnover outlook fell to net 6.75% in wave 38.",
   "grounding_warnings": [],
   "grounding_dropped": [],
   "style_warnings": [],

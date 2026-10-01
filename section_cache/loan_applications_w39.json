@@ -1,0 +1,16 @@
+{
+  "section_id": "loan_applications",
+  "wave_number": 39,
+  "source_hash": "1e860ee3d916be3f",
+  "finding": "Slovak firms' discouragement rate fell below euro area level in wave 39",
+  "bullets": [
+    "The share of Slovak firms (n=131) that did not apply for bank loans fearing rejection fell from 5.76% (wave 38) to 1.81% (wave 39), below the EA's 2.37% (n=3,607).",
+    "Slovak firms' bank loan application rate remained well below the EA average (n=3,607), with the rejection rate too sparse to permit a reliable financing gap estimate for Slovakia.",
+    "The EA financing gap eased from 4.54% (wave 38) to 3.48% (n=3,607) in wave 39, as both EA discouragement and rejection rates declined."
+  ],
+  "chart_subtitle": "Slovak discouragement rate fell to 1.81% in wave 39.",
+  "grounding_warnings": [],
+  "grounding_dropped": [],
+  "style_warnings": [],
+  "tool_calls": 1
+}

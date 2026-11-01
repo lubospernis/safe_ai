@@ -1,0 +1,17 @@
+{
+  "section_id": "loan_applications",
+  "wave_number": 40,
+  "source_hash": "3f85093c9717008d",
+  "finding": "Slovak firms' bank credit access gap more than doubled the euro area rate",
+  "bullets": [
+    "A net 10.21% of Slovak firms (n=104) seeking bank loans were either discouraged from applying or turned down in wave 40, more than double the EA’s 4.67% (n=3,622)."
+  ],
+  "chart_subtitle": "10.21% of Slovak firms were discouraged or rejected for bank loans.",
+  "grounding_warnings": [],
+  "grounding_dropped": [
+    "Slovak applicants faced a rejection rate of 11.20% (n=104) versus 2.55% in the EA (n=3,622), making outright refusals the dominant driver of Slovakia’s elevated financing gap.",
+    "Slovakia’s bank loan application rate rose from 19.01% (wave 39, n=131) to 34.65% (wave 40, n=104), with discouragement also rising from 1.81% to 6.33% over the same period."
+  ],
+  "style_warnings": [],
+  "tool_calls": 1
+}

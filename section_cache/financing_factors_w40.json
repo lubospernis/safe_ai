@@ -1,0 +1,16 @@
+{
+  "section_id": "financing_factors",
+  "wave_number": 40,
+  "source_hash": "227a86f979ecaebf",
+  "finding": "Bank willingness to lend improved notably for Slovak firms in wave 40",
+  "bullets": [
+    "A net 18.3% of Slovak firms (n=236) reported improved bank willingness to provide credit, rising 10.5 pp from a net 7.8% in the previous wave and outpacing the EA's net 5.4%.",
+    "Slovak firms' (n=370) perception of the general economic outlook improved by 8.1 pp to a net 43.5% reporting deterioration, while the EA worsened by 2.4 pp to a net 31.8%.",
+    "Access to public financial support deteriorated for a net 25.1% of Slovak firms (n=318), worsening 3.9 pp from the previous wave's net 21.2%, and remaining below the EA's net 17.3%."
+  ],
+  "chart_subtitle": "Net 18.3% of Slovak firms reported improved bank lending willingness.",
+  "grounding_warnings": [],
+  "grounding_dropped": [],
+  "style_warnings": [],
+  "tool_calls": 0
+}

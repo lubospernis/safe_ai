@@ -1,0 +1,17 @@
+{
+  "section_id": "financing_gap",
+  "wave_number": 40,
+  "source_hash": "7a740d533b1b7d3c",
+  "finding": "Slovak bank loan and credit line stress reversed sharply as trade credit tightened",
+  "bullets": [
+    "The Slovak trade credit gap widened to +18.1pp (n=102) from -1.7pp in the previous wave, as need rose to +12.5pp and availability fell to -5.6pp, leaving Slovakia more stressed than the EA's +10.7pp.",
+    "The Slovak credit line gap improved from +15.3pp to -11.2pp (n=212), as need eased to +2.7pp and availability rose to +13.9pp, reversing from above the EA's prior +14.0pp to below its current +16.4pp."
+  ],
+  "chart_subtitle": "Slovak trade credit gap widened to +18.1pp in wave 40.",
+  "grounding_warnings": [],
+  "grounding_dropped": [
+    "The Slovak bank loan gap fell to -29.9pp (n=174) from -6.0pp in the previous wave, driven by need declining to -16.8pp and availability rising to +13.1pp — far below the EA's +6.0pp gap."
+  ],
+  "style_warnings": [],
+  "tool_calls": 0
+}

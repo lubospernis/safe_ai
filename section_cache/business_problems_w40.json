@@ -1,0 +1,16 @@
+{
+  "section_id": "business_problems",
+  "wave_number": 40,
+  "source_hash": "53d4d5408a22f3f5",
+  "finding": "Production costs and skilled staff top Slovak firms' business pressures",
+  "bullets": [
+    "Costs of production or labour scored 6.11/10 for Slovak firms (n=194) — the most pressing named problem among the seven tested — easing from 6.62 in the previous wave, compared with the EA's 6.73/10.",
+    "Availability of skilled staff or experienced managers scored 5.97/10 (n=193), the second most pressing named problem, falling from 6.64 in the previous wave, yet still below the EA average of 6.70/10.",
+    "Finding customers rose to 5.38/10 (n=192) from 5.24 in the previous wave, ranking third among named problems for Slovak firms, though remaining below the EA score of 6.09/10."
+  ],
+  "chart_subtitle": "Slovak firms score production costs at 6.11/10.",
+  "grounding_warnings": [],
+  "grounding_dropped": [],
+  "style_warnings": [],
+  "tool_calls": 0
+}

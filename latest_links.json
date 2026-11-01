@@ -1,10 +1,8 @@
 {
-  "wave": 39,
-  "en": "https://lubospernis.github.io/safe_ai/report_q39.html",
-  "sk": "https://lubospernis.github.io/safe_ai/report_q39_sk.html",
-  "report_json_en": "https://lubospernis.github.io/safe_ai/report_payload_q39.json",
-  "report_json_sk": "https://lubospernis.github.io/safe_ai/report_payload_q39_sk.json",
-  "last_updated": "2026-10-21",
-  "next_release": "2026-10-26",
-  "next_release_note": "Q3 2026 / H1 2026"
+  "wave": 40,
+  "en": "https://lubospernis.github.io/safe_ai/report_q40.html",
+  "sk": "https://lubospernis.github.io/safe_ai/report_q40_sk.html",
+  "report_json_en": "https://lubospernis.github.io/safe_ai/report_payload_q40.json",
+  "report_json_sk": "https://lubospernis.github.io/safe_ai/report_payload_q40_sk.json",
+  "last_updated": "2026-11-01"
 }

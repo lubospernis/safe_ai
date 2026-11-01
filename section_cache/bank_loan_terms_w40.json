@@ -1,0 +1,16 @@
+{
+  "section_id": "bank_loan_terms",
+  "wave_number": 40,
+  "source_hash": "0b6b803cce7bca09",
+  "finding": "Slovak interest rate tightening eased 12 pp as EA pressures intensified",
+  "bullets": [
+    "A net 31.8% of Slovak firms (n=58) reported tighter interest rates, down 12 pp from a net 43.8% in the previous wave — while the EA rose 8.2 pp to a net 48.2% (n=1,962).",
+    "A net 10.5% of Slovak firms (n=58) reported reduced loan or credit line availability, easing marginally by 1.9 pp from the previous wave's net 12.4%, remaining above the EA's net 7.0%.",
+    "EA collateral requirements tightened to a net 13.2% (n=1,992) and other terms to a net 17.8% (n=1,964), both rising from their previous-wave levels."
+  ],
+  "chart_subtitle": "Slovak interest rate tightening fell to net 31.8% in wave 40.",
+  "grounding_warnings": [],
+  "grounding_dropped": [],
+  "style_warnings": [],
+  "tool_calls": 0
+}

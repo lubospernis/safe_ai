@@ -1,0 +1,16 @@
+{
+  "section_id": "financing_purpose",
+  "wave_number": 40,
+  "source_hash": "5a21e0bd5876ecf4",
+  "finding": "Slovak firms shifted toward refinancing as fixed investment financing fell",
+  "bullets": [
+    "Refinancing or paying off obligations was cited by 21.1% of Slovak firms (n=192), rising 4.1 pp from 17.0% in the previous wave and exceeding the EA rate of 15.9%.",
+    "Fixed investment financing fell from 40.7% to 34.1% among Slovak firms (n=191), placing Slovakia 5.3 pp below the EA's 39.4% — a reversal from the prior wave when SK exceeded the EA.",
+    "Inventory and working capital remained the dominant financing purpose for Slovak firms at 55.8% (n=193), 15.1 pp above the EA's 40.7%, easing 1.2 pp from 57.0% in the previous wave."
+  ],
+  "chart_subtitle": "Slovak firms cited refinancing at 21.1%, up 4.1 pp.",
+  "grounding_warnings": [],
+  "grounding_dropped": [],
+  "style_warnings": [],
+  "tool_calls": 0
+}

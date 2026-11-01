@@ -1,0 +1,16 @@
+{
+  "section_id": "business_situation",
+  "wave_number": 40,
+  "source_hash": "918ea0ded27a470d",
+  "finding": "Slovak firms' profitability improved sharply as cost pressures eased in wave 40",
+  "bullets": [
+    "A net 16% of Slovak firms (n=194) reported falling profits, improving by 18 pp from the net 34% decline in the previous wave — outperforming the EA's net 21% deterioration.",
+    "Slovak turnover remained negative at a net 5% of firms (n=194), improving by 8 pp from the prior wave's net 13%, while the EA posted a positive net 4%.",
+    "Labour cost pressures eased by 19 pp to a net 59% of Slovak firms (n=194) reporting increases, converging with the EA's net 56% after exceeding it by 20 pp in wave 39."
+  ],
+  "chart_subtitle": "Slovak profit losses narrowed to a net 16% in wave 40.",
+  "grounding_warnings": [],
+  "grounding_dropped": [],
+  "style_warnings": [],
+  "tool_calls": 0
+}

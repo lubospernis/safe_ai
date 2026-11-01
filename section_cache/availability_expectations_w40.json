@@ -1,0 +1,16 @@
+{
+  "section_id": "availability_expectations",
+  "wave_number": 40,
+  "source_hash": "a5e8327eebb93940",
+  "finding": "Slovak firms' bank loan availability expectations turned positive, diverging from EA",
+  "bullets": [
+    "A net 2% of Slovak firms (n=87) expected bank loan availability to improve in wave 40, reversing from a net 6% expecting deterioration in wave 39, while EA expectations deteriorated to a net 8%.",
+    "Slovak firms' credit line expectations rose 11 pp to a net 7% expecting improvement (n=102), compared with a net 4% of EA firms expecting deterioration — an 11 pp SK–EA gap.",
+    "Trade credit expectations for Slovak firms held at a net 6% expecting deterioration (n=53), broadly unchanged from wave 39's net 6%."
+  ],
+  "chart_subtitle": "Slovak firms expect bank loan availability to improve at net 2%.",
+  "grounding_warnings": [],
+  "grounding_dropped": [],
+  "style_warnings": [],
+  "tool_calls": 0
+}

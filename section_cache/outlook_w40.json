@@ -1,0 +1,16 @@
+{
+  "section_id": "outlook",
+  "wave_number": 40,
+  "source_hash": "3b2a795409f9f096",
+  "finding": "Slovak turnover outlook recovered sharply, but investment expectations fell",
+  "bullets": [
+    "Slovak firms' turnover expectations rose to a net 21% (n=243), up 14 pp from the net 7% recorded two quarters earlier, though still trailing the EA's net 25%.",
+    "Fixed investment expectations declined from a net 15% to a net 9% in Slovakia (n=243), while the EA's improved from a net 9% to a net 14% — reversing their relative positions.",
+    "The SK–EA turnover expectations gap narrowed to 4 pp in wave 40, down from nearly 19 pp two quarters earlier, reflecting a convergence in near-term business confidence."
+  ],
+  "chart_subtitle": "Slovak turnover outlook rose to a net 21% in wave 40.",
+  "grounding_warnings": [],
+  "grounding_dropped": [],
+  "style_warnings": [],
+  "tool_calls": 0
+}
